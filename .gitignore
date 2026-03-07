@@ -1,0 +1,17 @@
+# Codex / Python
+**/scripts/.venv/
+**/__pycache__/
+*.py[cod]
+
+# Generated / large data
+**/output/*.csv
+**/output/*.json
+**/output/abstracts_resume*.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/

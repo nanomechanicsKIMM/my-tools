@@ -1,0 +1,25 @@
+# Python
+scripts/.venv/
+scripts/__pycache__/
+scripts/**/__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+
+# Generated / large data (keep small examples if desired)
+output/*.csv
+output/*.json
+output/abstracts_resume*.json
+output/*.txt
+# Keep guide/sample markdown in output (optional: remove to ignore all output/*.md)
+# output/*.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
