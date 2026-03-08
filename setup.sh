@@ -1,18 +1,131 @@
 #!/usr/bin/env bash
-# 도구 통합 레포에서 실행: skills/ 내용을 Codex 스킬 디렉터리로 복사
-set -e
+# my-tools setup: Codex skills + Claude Code plugins
+set -euo pipefail
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
-mkdir -p "$CODEX_SKILLS"
+PLUGINS_DIR="$HOME/.claude/plugins"
 
-SKILLS_SRC="$REPO_ROOT/skills"
-if [ ! -d "$SKILLS_SRC" ]; then echo "No skills/ folder found."; exit 1; fi
+# ─── 1. Skills → Codex ────────────────────────────────────────────────────────
+install_codex_skills() {
+    local codex_skills="${CODEX_HOME:-$HOME/.codex}/skills"
+    local skills_src="$REPO_ROOT/skills"
+    if [[ ! -d "$skills_src" ]]; then echo "No skills/ folder; skipping."; return; fi
+    mkdir -p "$codex_skills"
+    for dir in "$skills_src"/*/; do
+        [[ -d "$dir" ]] || continue
+        local name; name="$(basename "$dir")"
+        echo "Deploying skill: $name"
+        rm -rf "$codex_skills/$name"
+        cp -R "$dir" "$codex_skills/$name"
+    done
+    echo "Skills installed."
+}
 
-for dir in "$SKILLS_SRC"/*/; do
-  [ -d "$dir" ] || continue
-  name=$(basename "$dir")
-  echo "Deploying skill: $name -> $CODEX_SKILLS/$name"
-  rm -rf "$CODEX_SKILLS/$name"
-  cp -R "$dir" "$CODEX_SKILLS/$name"
-done
-echo "Done. Restart Codex to load skills."
+# ─── 2. Claude Code Plugins ───────────────────────────────────────────────────
+update_plugin_registries() {
+    local marketplace="$1" github_repo="$2" plugin_name="$3"
+    local version="$4" install_path="$5" sha="$6"
+    local plugin_key="${plugin_name}@${marketplace}"
+    local now; now="$(date -u '+%Y-%m-%dT%H:%M:%S.000Z')"
+    local ip_file="$PLUGINS_DIR/installed_plugins.json"
+    local km_file="$PLUGINS_DIR/known_marketplaces.json"
+    [[ -f "$ip_file" ]] || echo '{"version":2,"plugins":{}}' > "$ip_file"
+    [[ -f "$km_file" ]] || echo '{}' > "$km_file"
+
+    python3 - <<EOF
+import json
+
+# installed_plugins.json
+ip = json.load(open('$ip_file'))
+ip['plugins']['$plugin_key'] = [{
+    'scope': 'user',
+    'installPath': '$install_path',
+    'version': '$version',
+    'installedAt': '$now',
+    'lastUpdated': '$now',
+    'gitCommitSha': '$sha'
+}]
+json.dump(ip, open('$ip_file', 'w'), indent=2, ensure_ascii=False)
+
+# known_marketplaces.json
+km = json.load(open('$km_file'))
+km['$marketplace'] = {
+    'source': {'source': 'github', 'repo': '$github_repo'},
+    'installLocation': '$PLUGINS_DIR/marketplaces/$marketplace',
+    'lastUpdated': '$now'
+}
+json.dump(km, open('$km_file', 'w'), indent=2, ensure_ascii=False)
+EOF
+    echo "  Registry updated."
+}
+
+install_bkit() {
+    local marketplace="bkit-marketplace"
+    local repo="popup-studio-ai/bkit-claude-code"
+    local plugin_name="bkit"
+    local cache_dir="$PLUGINS_DIR/cache/$marketplace/$plugin_name"
+    local temp_dir; temp_dir="$(mktemp -d)"
+
+    echo; echo "Installing bkit plugin..."
+    git clone --depth 1 "https://github.com/$repo" "$temp_dir" --quiet
+
+    local sha; sha="$(git -C "$temp_dir" rev-parse HEAD)"
+    local version
+    local cfg="$temp_dir/bkit.config.json"
+    if [[ -f "$cfg" ]]; then
+        version="$(python3 -c "import json; print(json.load(open('$cfg'))['version'])")"
+    else
+        version="${sha:0:12}"
+    fi
+
+    local install_path="$cache_dir/$version"
+    if [[ -d "$install_path" ]]; then
+        echo "  bkit $version already installed — skipping."
+        rm -rf "$temp_dir"
+    else
+        mkdir -p "$install_path"
+        cp -r "$temp_dir/." "$install_path/"
+        rm -rf "$temp_dir"
+        echo "  Installed bkit $version -> $install_path"
+    fi
+
+    update_plugin_registries "$marketplace" "$repo" "$plugin_name" "$version" "$install_path" "$sha"
+}
+
+install_playwright() {
+    local marketplace="claude-plugins-official"
+    local repo="anthropics/claude-plugins-official"
+    local plugin_name="playwright"
+    local cache_dir="$PLUGINS_DIR/cache/$marketplace/$plugin_name"
+
+    echo; echo "Installing playwright plugin..."
+    local sha; sha="$(git ls-remote "https://github.com/$repo" HEAD | cut -f1)"
+    local version="${sha:0:12}"
+    local install_path="$cache_dir/$version"
+
+    if [[ -f "$install_path/.mcp.json" ]]; then
+        echo "  playwright $version already installed — skipping."
+    else
+        mkdir -p "$install_path"
+        cat > "$install_path/.mcp.json" <<'MCPEOF'
+{
+  "playwright": {
+    "command": "npx",
+    "args": ["@playwright/mcp@latest"]
+  }
+}
+MCPEOF
+        touch "$install_path/.claude-plugin"
+        echo "  Installed playwright $version -> $install_path"
+    fi
+
+    update_plugin_registries "$marketplace" "$repo" "$plugin_name" "$version" "$install_path" "$sha"
+}
+
+# ─── Main ─────────────────────────────────────────────────────────────────────
+echo "=== my-tools setup ==="
+install_codex_skills
+mkdir -p "$PLUGINS_DIR/cache"
+install_bkit
+install_playwright
+echo; echo "Done! Restart Claude Code to activate plugins."
