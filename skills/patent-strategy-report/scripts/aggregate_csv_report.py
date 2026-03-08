@@ -40,7 +40,10 @@ def parse_year(date_val: str) -> int | None:
     s = str(date_val).strip()
     # YYYY-MM-DD or YYYY/MM/DD or YYYY
     m = re.match(r"(\d{4})", s)
-    return int(m.group(1)) if m else None
+    if not m:
+        return None
+    year = int(m.group(1))
+    return year if 1900 <= year <= 2100 else None
 
 
 def col_find(row: dict, *candidates: str) -> str:
@@ -50,22 +53,21 @@ def col_find(row: dict, *candidates: str) -> str:
     return ""
 
 
-def aggregate_by_priority_year(rows: list[dict]) -> dict[int, int]:
+def aggregate_by_year(rows: list[dict], *col_candidates: str) -> dict[int, int]:
     by_year = Counter()
     for row in rows:
-        y = parse_year(col_find(row, "priority date", "Priority Date", "priority_date", "filing_date"))
+        y = parse_year(col_find(row, *col_candidates))
         if y:
             by_year[y] += 1
     return dict(sorted(by_year.items()))
+
+
+def aggregate_by_priority_year(rows: list[dict]) -> dict[int, int]:
+    return aggregate_by_year(rows, "priority date", "Priority Date", "priority_date", "filing_date")
 
 
 def aggregate_by_publication_year(rows: list[dict]) -> dict[int, int]:
-    by_year = Counter()
-    for row in rows:
-        y = parse_year(col_find(row, "publication date", "Publication Date", "publication_date", "pub_date"))
-        if y:
-            by_year[y] += 1
-    return dict(sorted(by_year.items()))
+    return aggregate_by_year(rows, "publication date", "Publication Date", "publication_date", "pub_date")
 
 
 # 법인 접미사만 단독으로 나온 경우 이전 토큰에 붙임 (회사명 일부)
@@ -78,56 +80,173 @@ CANONICAL_APPLICANT_EN = {
     # Samsung Display 계열
     "samsung display co. ltd.": "Samsung Display",
     "samsung display co.": "Samsung Display",
+    "samsung display": "Samsung Display",
     "삼성디스플레이 주식회사": "Samsung Display",
+    "삼성디스플레이주식회사": "Samsung Display",
     "삼성디스플레이": "Samsung Display",
     "三星显示有限公司": "Samsung Display",
     "三星显示": "Samsung Display",
     # Samsung Electronics 계열
     "samsung electronics co. ltd.": "Samsung Electronics",
     "samsung electronics co.": "Samsung Electronics",
+    "samsung electronics": "Samsung Electronics",
     "삼성전자주식회사": "Samsung Electronics",
+    "삼성전자 주식회사": "Samsung Electronics",
     "삼성전자": "Samsung Electronics",
     "三星电子株式会社": "Samsung Electronics",
     "三星电子": "Samsung Electronics",
-    # Apple
-    "apple inc.": "Apple Inc.",
-    "apple": "Apple Inc.",
-    "苹果公司": "Apple Inc.",
-    # 일본·중국 등 (영어 통일)
-    "株式会社大一商会": "Daiichi Shoji Co., Ltd.",
-    "株式会社半導体エネルギー研究所": "Semiconductor Energy Laboratory Co., Ltd.",
-    "semiconductor energy laboratory co., ltd.": "Semiconductor Energy Laboratory Co., Ltd.",
-    "semiconductor energy laboratory": "Semiconductor Energy Laboratory Co., Ltd.",
-    "京东方科技集团股份有限公司": "BOE Technology Group",
-    "京东方": "BOE Technology Group",
-    "huawei technologies co. ltd.": "Huawei Technologies",
-    "huawei technologies": "Huawei Technologies",
-    "google llc": "Google LLC",
-    "google": "Google LLC",
-    "intel corporation": "Intel Corporation",
+    # LG Display 계열
     "lg display co. ltd.": "LG Display",
+    "lg display co.": "LG Display",
     "lg display": "LG Display",
+    "엘지디스플레이 주식회사": "LG Display",
+    "엘지디스플레이": "LG Display",
+    "乐金显示有限公司": "LG Display",
+    "乐金显示": "LG Display",
+    # LG Electronics 계열
     "엘지전자 주식회사": "LG Electronics",
     "엘지전자": "LG Electronics",
     "lg전자": "LG Electronics",
+    "lg electronics co. ltd.": "LG Electronics",
     "lg electronics": "LG Electronics",
+    # BOE Technology 계열
+    "京东方科技集团股份有限公司": "BOE Technology Group",
+    "京东方科技集团": "BOE Technology Group",
+    "京东方": "BOE Technology Group",
+    "boe technology group co. ltd.": "BOE Technology Group",
+    "boe technology group": "BOE Technology Group",
+    # Govisionox (昆山国显光电)
+    "昆山国显光电有限公司": "Govisionox",
+    "昆山国显光电": "Govisionox",
+    "国显光电": "Govisionox",
+    "govisionox (chongqing) co. ltd.": "Govisionox",
+    "govisionox": "Govisionox",
+    # NHK (日本放送協会)
+    "日本放送協会": "NHK",
+    "nippon hoso kyokai <nhk>": "NHK",
+    "nippon hoso kyokai": "NHK",
+    "nhk": "NHK",
+    # OPPO 계열
+    "oppo广东移动通信有限公司": "OPPO",
+    "广东欧珀移动通信有限公司": "OPPO",
+    "oppo mobile telecommunications": "OPPO",
+    "oppo": "OPPO",
+    # Huawei 계열
+    "huawei technologies co. ltd.": "Huawei Technologies",
+    "huawei technologies co.": "Huawei Technologies",
+    "huawei technologies": "Huawei Technologies",
+    "华为技术有限公司": "Huawei Technologies",
+    "华为": "Huawei Technologies",
+    # Apple
+    "apple inc.": "Apple",
+    "apple": "Apple",
+    "苹果公司": "Apple",
+    # Google
+    "google llc": "Google",
+    "google": "Google",
+    # Intel
+    "intel corporation": "Intel",
+    "intel": "Intel",
+    # 일본 기타
+    "株式会社大一商会": "Daiichi Shoji",
+    "株式会社半導体エネルギー研究所": "Semiconductor Energy Laboratory",
+    "semiconductor energy laboratory co., ltd.": "Semiconductor Energy Laboratory",
+    "semiconductor energy laboratory": "Semiconductor Energy Laboratory",
     # 三洋物産 (일본)
-    "株式会社三洋物産": "Sanyo Bussan Co., Ltd.",
-    "三洋物産": "Sanyo Bussan Co., Ltd.",
+    "株式会社三洋物産": "Sanyo Bussan",
+    "三洋物産": "Sanyo Bussan",
+    # Tianma Microelectronics (天马)
+    "上海天马微电子有限公司": "Tianma Microelectronics",
+    "天马微电子有限公司": "Tianma Microelectronics",
+    "厦门天马微电子有限公司": "Tianma Microelectronics",
+    "tianma microelectronics co. ltd.": "Tianma Microelectronics",
+    "tianma microelectronics": "Tianma Microelectronics",
+    # Visionox (维信诺)
+    "合肥维信诺科技有限公司": "Visionox",
+    "维信诺科技股份有限公司": "Visionox",
+    "维信诺": "Visionox",
+    "visionox co. ltd.": "Visionox",
+    "visionox": "Visionox",
+    # Innolux
+    "innolux corporation": "Innolux",
+    "innolux": "Innolux",
+    "群創光電股份有限公司": "Innolux",
+    # AU Optronics
+    "au optronics corporation": "AU Optronics",
+    "au optronics": "AU Optronics",
+    "友達光電股份有限公司": "AU Optronics",
+    # Sharp
+    "sharp corporation": "Sharp",
+    "sharp kabushiki kaisha": "Sharp",
+    "シャープ株式会社": "Sharp",
+    # Japan Display
+    "japan display inc.": "Japan Display",
+    "japan display": "Japan Display",
+    "株式会社ジャパンディスプレイ": "Japan Display",
+    # TCL / CSOT
+    "tcl china star optoelectronics technology co. ltd.": "TCL CSOT",
+    "tcl华星光电技术有限公司": "TCL CSOT",
+    "深圳市华星光电技术有限公司": "TCL CSOT",
+    # Royole
+    "royole corporation": "Royole",
+    "柔宇科技": "Royole",
+    # 한국 대학·연구기관
+    "서울대학교산학협력단": "Seoul National University",
+    "한국과학기술원": "KAIST",
+    "포항공과대학교": "POSTECH",
+    "연세대학교 산학협력단": "Yonsei University",
+    "성균관대학교산학협력단": "Sungkyunkwan University",
+    "한국전자통신연구원": "ETRI",
+    "한국화학연구원": "KRICT",
 }
 
 
+_COMPACT_SUFFIX_PATTERNS = tuple(
+    re.compile(p, re.IGNORECASE)
+    for p in (
+        r",?\s*Co\.?\s*,\s*Ltd\.?\s*$",
+        r",?\s*Co\.?\s*Ltd\.?\s*$",
+        r",?\s*Ltd\.?\s*$",
+        r",?\s*LLC\s*$",
+        r",?\s*Inc\.?\s*$",
+        r",?\s*Gmb[Hh]\s*$",
+        r",?\s*Corporation\s*$",
+        r",?\s*Corp\.?\s*$",
+    )
+)
+_COMPACT_GMBH_MID = re.compile(r"\s+Gmb[Hh]\s+", re.IGNORECASE)
+_COMPACT_SPACES = re.compile(r"\s+")
+
+
+def compact_applicant_display(name: str) -> str:
+    """출원인 표시명에서 LLC, Inc., Ltd., Co., Ltd., Gmbh, Corporation 등 일반 접미사 제거."""
+    if not name or not name.strip():
+        return name
+    s = name.strip()
+    for p in _COMPACT_SUFFIX_PATTERNS:
+        s = p.sub("", s)
+    # 중간의 Gmbh 제거 (예: Cilag Gmbh International → Cilag International)
+    s = _COMPACT_GMBH_MID.sub(" ", s)
+    s = s.strip().rstrip(".,")
+    s = _COMPACT_SPACES.sub(" ", s).strip()
+    return s if s else name.strip()
+
+
+# 모듈 로드 시 canonical 표시명을 한 번만 계산 (매 호출마다 compact_applicant_display 재실행 방지)
+_CANONICAL_DISPLAY: dict[str, str] = {k: compact_applicant_display(v) for k, v in CANONICAL_APPLICANT_EN.items()}
+
+
 def _canonical_assignee_english(raw: str) -> str:
-    """동일 회사 통합 + 영어 통일. 매핑에 없으면 법인 접미사만 제거한 형태로 반환. 반환값은 compact(접미사 제거) 적용."""
+    """동일 회사 통합 + 영어 통일. 매핑에 없으면 법인 접미사만 제거한 형태로 반환."""
     if not raw or not raw.strip():
         return "Unknown"
     n = raw.strip()
     key = n.lower()
-    if key in CANONICAL_APPLICANT_EN:
-        return compact_applicant_display(CANONICAL_APPLICANT_EN[key])
+    if key in _CANONICAL_DISPLAY:
+        return _CANONICAL_DISPLAY[key]
     # 접두사 매칭: Semiconductor Energy Laboratory 계열 통합
     if key.startswith("semiconductor energy laboratory"):
-        return compact_applicant_display("Semiconductor Energy Laboratory Co., Ltd.")
+        return "Semiconductor Energy Laboratory"
     # 매핑 없음: 법인 접미사 제거
     suffixes = (" co. ltd.", " co., ltd.", " ltd.", " inc.", " llc.", " llc", " co.", " corp.", " gmbh", " ag")
     for suf in suffixes:
@@ -144,43 +263,12 @@ def _canonical_assignee_english(raw: str) -> str:
     return compact_applicant_display(n)
 
 
-def normalize_assignee(name: str) -> str:
-    """Display용 정규화; 영어 통일·동일 회사 합산은 aggregate 단계에서 canonical_assignee_english 사용."""
-    if not name:
-        return "Unknown"
-    return name.strip()
-
-
-def compact_applicant_display(name: str) -> str:
-    """출원인 표시명에서 LLC, Inc., Ltd., Co., Ltd., Gmbh, Corporation 등 일반 접미사 제거."""
-    if not name or not name.strip():
-        return name
-    s = name.strip()
-    # 끝부분 접미사 제거 (쉼표·공백 허용)
-    patterns = [
-        r",?\s*Co\.?\s*,\s*Ltd\.?\s*$",
-        r",?\s*Co\.?\s*Ltd\.?\s*$",
-        r",?\s*Ltd\.?\s*$",
-        r",?\s*LLC\s*$",
-        r",?\s*Inc\.?\s*$",
-        r",?\s*Gmb[Hh]\s*$",
-        r",?\s*Corporation\s*$",
-        r",?\s*Corp\.?\s*$",
-    ]
-    for p in patterns:
-        s = re.sub(p, "", s, flags=re.IGNORECASE)
-    # 중간의 Gmbh 제거 (예: Cilag Gmbh International → Cilag International)
-    s = re.sub(r"\s+Gmb[Hh]\s+", " ", s, flags=re.IGNORECASE)
-    s = s.strip().rstrip(".,")
-    s = re.sub(r"\s+", " ", s).strip()
-    return s if s else name.strip()
-
-
 def _parse_assignee_cell(cell: str) -> list[str]:
-    """Split assignee cell by delimiters; merge legal-suffix-only tokens with previous (e.g. 'Ltd.', 'Inc.')."""
+    """Split assignee cell by delimiters; merge legal-suffix-only tokens with previous (e.g. 'Ltd.', 'Inc.').
+    Splits only on ';' and '|' to avoid breaking names with internal commas (e.g. 'Co., Ltd.')."""
     if not cell or not cell.strip():
         return []
-    parts = [p.strip() for p in re.split(r"[,;|]", cell) if p.strip()]
+    parts = [p.strip() for p in re.split(r"[;|]", cell) if p.strip()]
     result = []
     for p in parts:
         if p in LEGAL_SUFFIXES:
@@ -200,7 +288,7 @@ def aggregate_applicants(rows: list[dict], top_n: int = 10) -> list[dict]:
             a = col_find(row, "assignees", "Applicants")
         if a:
             for name in _parse_assignee_cell(a):
-                canonical = _canonical_assignee_english(normalize_assignee(name))
+                canonical = _canonical_assignee_english(name)
                 assignees[canonical] += 1
     top = assignees.most_common(top_n)
     total = sum(assignees.values())
@@ -318,7 +406,7 @@ def main():
     by_priority = aggregate_by_priority_year(rows)
     by_pub = aggregate_by_publication_year(rows)
     applicants = aggregate_applicants(rows, 10)
-    countries = aggregate_countries(rows)
+    countries = aggregate_countries_for_report(rows)
 
     table_pri_str, table_pri_data = table_priority_by_year(by_priority)
     table_pub_str = table_publication_by_year(by_pub)
@@ -378,3 +466,7 @@ def main():
     print(md_path)
     print("TOTAL_COUNT:", total)
     print("DATE_RANGE:", date_range)
+
+
+if __name__ == "__main__":
+    main()

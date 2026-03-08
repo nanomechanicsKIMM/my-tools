@@ -1,140 +1,365 @@
 #!/usr/bin/env python3
 """
 Search Google Patents with a query URL and download the results as CSV using Playwright.
-Usage: python google_patents_download.py <search_url> [--output-dir DIR] [--headless]
-Requires: pip install playwright && playwright install chromium
+Usage: python google_patents_download.py <search_url> [--output-dir DIR] [--retries N]
+Requires: playwright>=1.40.0  (pip install playwright && playwright install chromium)
+
+How it works (2026-03-07):
+  Google's XHR download endpoint requires valid Google session cookies.
+  Without cookies → 429 Too Many Requests. A fresh Playwright context has no cookies.
+
+  RECOMMENDED: CDP mode (--cdp)
+    Connect to the user's already-running Chrome (which has real cookies).
+    Chrome must be started with: --remote-debugging-port=9222
+    (Create a desktop shortcut with that flag, use it when running the script.)
+
+  FALLBACK: Persistent-context mode (default)
+    Uses a dedicated Chrome profile that accumulates cookies over time.
+    First runs may get 429; success rate improves after profile has visit history.
+
+Selectors confirmed via DOM inspection 2026-03-07:
+  DOWNLOAD_LINK_ANY = "a[href*='download=true']"   (the "Download" dropdown button)
+  DOWNLOAD_LINK_CSV = "a[data-proto='DOWNLOAD_CSV']" (the CSV option)
 """
 import argparse
 import os
-import re
+import shutil
 import sys
+import time
 from pathlib import Path
 
 try:
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 except ImportError:
     print("Install Playwright: pip install playwright && playwright install chromium", file=sys.stderr)
     sys.exit(1)
 
+PAGE_SETTLE_MS = 8000
+DOWNLOAD_LINK_ANY = "a[href*='download=true']"
+DOWNLOAD_LINK_CSV = "a[data-proto='DOWNLOAD_CSV']"
 
-# Selectors for Google Patents (update if UI changes)
-SELECTORS = {
-    "search_input": "input[type='search'], input[name='q'], input[aria-label*='Search']",
-    # Download (CSV) button: text or role
-    "download_csv": "button:has-text('Download'), a:has-text('Download'), [aria-label*='Download'], [aria-label*='CSV'], button:has-text('CSV'), a:has-text('CSV')",
-}
+_PLAYWRIGHT_PROFILE = Path.home() / ".playwright-chrome-profile"
+_CDP_URL = "http://localhost:9222"
 
+
+# ── Public entry point ────────────────────────────────────────────────────────
 
 def download_csv(
     search_url: str,
     output_dir: str | Path | None = None,
-    headless: bool = True,
-    timeout_ms: int = 60000,
+    retries: int = 2,
+    timeout_ms: int = 90000,
+    use_cdp: bool = False,
+    cdp_url: str = _CDP_URL,
+    profile_dir: str | Path | None = None,
 ) -> str:
     """
-    Open search_url on Google Patents, trigger CSV download, wait for file.
-    Returns the path to the downloaded CSV file.
+    Download Google Patents search results as CSV.
+    Returns the absolute path of the saved CSV.
+
+    use_cdp=True: connect to the user's running Chrome (recommended).
+                  Chrome must be started with --remote-debugging-port=9222.
+    use_cdp=False: use a persistent Playwright Chrome profile (may get 429).
     """
-    output_dir = Path(output_dir or os.getcwd())
-    output_dir = output_dir.resolve()
+    output_dir = Path(output_dir or os.getcwd()).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless)
-        context = browser.new_context(
-            accept_downloads=True,
-            locale="en-US",
-        )
-        page = context.new_page()
-
-        # Navigate directly to the search URL (includes query and date filters)
-        page.goto(search_url, wait_until="domcontentloaded", timeout=timeout_ms)
-        page.wait_for_load_state("networkidle", timeout=20000)
-
-        # Wait for results area to be present
-        page.wait_for_timeout(3000)
-        for selector in [
-            "search-result-item", "[data-result]", ".result", "article", "patent-result",
-            "main", "[role='main']", "body",
-        ]:
-            try:
-                page.wait_for_selector(selector, timeout=3000)
-                break
-            except Exception:
-                pass
-
-        # Click Download (CSV) and wait for download event with a single timeout
-        clicked = False
-        download_future = None
-        with page.expect_download(timeout=60000) as download_info:
-            for selector in [
-                "button:has-text('Download (CSV)')",
-                "a:has-text('Download (CSV)')",
-                "[aria-label*='Download (CSV)']",
-                "a:has-text('Download')",
-                "button:has-text('Download')",
-            ]:
-                try:
-                    btn = page.locator(selector).first
-                    if btn.is_visible(timeout=2000):
-                        btn.click()
-                        clicked = True
-                        break
-                except Exception:
-                    continue
-            if not clicked:
-                try:
-                    page.get_by_role("button", name=re.compile(r"Download", re.I)).first.click()
-                    clicked = True
-                except Exception:
-                    pass
-            if not clicked:
-                try:
-                    page.get_by_text(re.compile(r"Download\s*\(?CSV\)?", re.I)).first.click()
-                    clicked = True
-                except Exception:
-                    pass
-
-        if not clicked:
-            raise RuntimeError(
-                "Could not find Download (CSV) button. Run with --no-headless and check the page; "
-                "update selectors in scripts/google_patents_download.py or reference.md."
-            )
-
+    last_error: Exception | None = None
+    for attempt in range(1, retries + 2):
         try:
-            download = download_info.value
-            name = download.suggested_filename or "google_patents_results.csv"
-            download_path = output_dir / name
-            download.save_as(download_path)
+            if use_cdp:
+                return _download_via_cdp(search_url, output_dir, timeout_ms, cdp_url)
+            else:
+                profile_path = Path(profile_dir) if profile_dir else _PLAYWRIGHT_PROFILE
+                profile_path.mkdir(parents=True, exist_ok=True)
+                return _download_via_profile(search_url, output_dir, timeout_ms, profile_path)
         except Exception as e:
-            # Save screenshot to help debug when run with --no-headless
-            try:
-                screenshot_path = output_dir / "google_patents_screenshot_on_failure.png"
-                page.screenshot(path=str(screenshot_path))
-            except Exception:
-                pass
+            last_error = e
+            if attempt <= retries:
+                wait_sec = 30 * attempt
+                print(f"[attempt {attempt}/{retries+1}] failed: {e}  – retrying in {wait_sec}s …", file=sys.stderr)
+                time.sleep(wait_sec)
+
+    raise RuntimeError(
+        f"CSV download failed after {retries + 1} attempt(s). Last error: {last_error}\n"
+        "\nFallback options:\n"
+        "  1) Open the search URL in Chrome, click 'Download' → 'Download (CSV)',\n"
+        "     save the file to the output folder, then re-run the pipeline.\n"
+        "  2) Use --cdp mode: start Chrome with --remote-debugging-port=9222,\n"
+        "     then run this script with --cdp flag."
+    ) from last_error
+
+
+# ── CDP mode: connect to the user's running Chrome ────────────────────────────
+
+def _download_via_cdp(
+    search_url: str,
+    output_dir: Path,
+    timeout_ms: int,
+    cdp_url: str,
+) -> str:
+    """
+    Connect to a Chrome instance started with --remote-debugging-port=9222.
+    That Chrome has the user's real Google session cookies → no 429.
+    Downloads land in Chrome's default Downloads folder; we copy them to output_dir.
+    """
+    with sync_playwright() as p:
+        try:
+            browser = p.chromium.connect_over_cdp(cdp_url, timeout=10000)
+        except Exception as e:
             raise RuntimeError(
-                f"CSV download did not complete or save failed: {e}. "
-                "You can manually open the search URL in a browser, click 'Download (CSV)' above the results, "
-                "save the file to the output folder as google_patents_results.csv, then run run_15yr_pipeline.py."
+                f"Cannot connect to Chrome at {cdp_url}.\n"
+                "Start Chrome with the flag --remote-debugging-port=9222:\n"
+                '  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" '
+                "--remote-debugging-port=9222\n"
+                f"Original error: {e}"
             ) from e
 
-        if not Path(download_path).exists():
-            raise RuntimeError("CSV file was not saved to output directory.")
+        print(f"[info] Connected to Chrome via CDP ({cdp_url})", file=sys.stderr)
 
-        browser.close()
-        return str(download_path)
+        # Open a new tab in the running Chrome
+        context = browser.contexts[0] if browser.contexts else browser.new_context()
+        page = context.new_page()
+
+        try:
+            # 1. Load search results page
+            print("[1/3] Loading search page …", file=sys.stderr)
+            page.goto(search_url, wait_until="domcontentloaded", timeout=timeout_ms)
+
+            # 2. Wait for Download link
+            try:
+                page.wait_for_selector(DOWNLOAD_LINK_ANY, timeout=40000)
+            except PlaywrightTimeout:
+                _save_screenshot(page, output_dir, "gp_no_download_link.png")
+                raise RuntimeError("Download link not found within 40s (no results or CAPTCHA?).")
+
+            page.wait_for_timeout(PAGE_SETTLE_MS)
+
+            # 3. Get the CSV href
+            href = page.locator(DOWNLOAD_LINK_CSV).get_attribute("href", timeout=10000)
+            if not href:
+                raise RuntimeError("CSV download link href is empty – UI may have changed.")
+            download_url = (
+                f"https://patents.google.com{href}" if href.startswith("/") else href
+            )
+            print("[2/3] Navigating to download URL in Chrome …", file=sys.stderr)
+
+            # 4. Watch the Downloads folder for a new CSV file
+            downloads_folder = Path.home() / "Downloads"
+            before = set(downloads_folder.glob("*.csv")) if downloads_folder.exists() else set()
+
+            # Navigate to the download URL in the real Chrome context
+            # Chrome will download it to the Downloads folder with real cookies.
+            page.goto(download_url, wait_until="commit", timeout=timeout_ms)
+
+        except Exception:
+            _save_screenshot(page, output_dir, "gp_error.png")
+            try:
+                page.close()
+            except Exception:
+                pass
+            raise
+
+        # 5. Wait for the new CSV to appear in Downloads
+        waited = 0
+        poll_ms = 500
+        new_csv: Path | None = None
+        while waited < timeout_ms:
+            if downloads_folder.exists():
+                after = set(downloads_folder.glob("*.csv"))
+                new_files = after - before
+                # Also look for partial downloads that just finished
+                completed = {f for f in new_files if not f.suffix == ".crdownload"}
+                if completed:
+                    new_csv = max(completed, key=lambda f: f.stat().st_mtime)
+                    break
+            time.sleep(poll_ms / 1000)
+            waited += poll_ms
+
+        try:
+            page.close()
+        except Exception:
+            pass
+
+        if new_csv is None:
+            raise RuntimeError(
+                f"No new CSV appeared in {downloads_folder} within {timeout_ms//1000}s. "
+                "Google may have returned 429 – the Chrome session may need more cookies. "
+                "Open Chrome, browse patents.google.com for a minute, then retry."
+            )
+
+        # 6. Copy to output_dir
+        dest = output_dir / new_csv.name
+        shutil.copy2(new_csv, dest)
+        size = dest.stat().st_size
+        print(f"[3/3] Saved: {dest}  ({size:,} bytes)", file=sys.stderr)
+        return str(dest)
+
+
+# ── Persistent-profile mode ───────────────────────────────────────────────────
+
+def _download_via_profile(
+    search_url: str,
+    output_dir: Path,
+    timeout_ms: int,
+    profile_path: Path,
+) -> str:
+    """
+    Use a dedicated (non-default) Chrome profile with accumulated cookies.
+    Chrome allows CDP on non-default profiles.
+    May get 429 on fresh profiles; improves with repeated use.
+    """
+    with sync_playwright() as p:
+        print(f"[info] Chrome profile: {profile_path}", file=sys.stderr)
+        try:
+            context = p.chromium.launch_persistent_context(
+                user_data_dir=str(profile_path),
+                channel="chrome",
+                headless=False,
+                accept_downloads=True,
+                locale="en-US",
+                args=["--disable-blink-features=AutomationControlled"],
+            )
+        except Exception as e:
+            print(f"[warn] Chrome launch failed ({e}), trying bundled Chromium …", file=sys.stderr)
+            context = p.chromium.launch_persistent_context(
+                user_data_dir=str(profile_path),
+                headless=False,
+                accept_downloads=True,
+                locale="en-US",
+            )
+
+        page = context.new_page()
+        page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+
+        try:
+            print("[1/3] Loading search page …", file=sys.stderr)
+            page.goto(search_url, wait_until="domcontentloaded", timeout=timeout_ms)
+
+            try:
+                page.wait_for_selector(DOWNLOAD_LINK_ANY, timeout=40000)
+            except PlaywrightTimeout:
+                _save_screenshot(page, output_dir, "gp_no_download_link.png")
+                raise RuntimeError("Download link not found within 40s.")
+
+            page.wait_for_timeout(PAGE_SETTLE_MS)
+
+            href = page.locator(DOWNLOAD_LINK_CSV).get_attribute("href", timeout=10000)
+            if not href:
+                raise RuntimeError("CSV download link href is empty – UI may have changed.")
+            download_url = (
+                f"https://patents.google.com{href}" if href.startswith("/") else href
+            )
+            print("[2/3] Clicking Download (CSV) …", file=sys.stderr)
+
+            # Click the dropdown first, then the CSV option
+            page.locator(DOWNLOAD_LINK_ANY).first.click()
+            page.wait_for_timeout(800)
+
+            with page.expect_download(timeout=timeout_ms) as dl_info:
+                page.locator(DOWNLOAD_LINK_CSV).click(force=True)
+            download = dl_info.value
+
+        except Exception:
+            _save_screenshot(page, output_dir, "gp_error.png")
+            try:
+                context.close()
+            except Exception:
+                pass
+            raise
+
+        if download.failure():
+            context.close()
+            raise RuntimeError(f"Download failure: {download.failure()}")
+
+        name = download.suggested_filename or "google_patents_results.csv"
+        save_path = output_dir / name
+        download.save_as(save_path)
+
+        if not save_path.exists():
+            context.close()
+            raise RuntimeError(f"File not found after save: {save_path}")
+        size = save_path.stat().st_size
+        if size < 200:
+            save_path.unlink(missing_ok=True)
+            context.close()
+            raise RuntimeError(
+                f"Saved file too small ({size} bytes) – likely a 429 error response. "
+                "Try --cdp mode or wait and retry."
+            )
+
+        context.close()
+        print(f"[3/3] Saved: {save_path}  ({size:,} bytes)", file=sys.stderr)
+        return str(save_path)
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _save_screenshot(page, output_dir: Path, name: str) -> None:
+    try:
+        path = output_dir / name
+        page.screenshot(path=str(path))
+        print(f"Screenshot saved: {path}", file=sys.stderr)
+    except Exception:
+        pass
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Download Google Patents search results as CSV")
-    parser.add_argument("search_url", help="Full Google Patents search URL (with q= and date params)")
-    parser.add_argument("--output-dir", "-o", default=os.getcwd(), help="Directory to save CSV")
-    parser.add_argument("--headless", action="store_true", default=True, help="Run browser headless")
-    parser.add_argument("--no-headless", action="store_false", dest="headless", help="Show browser window")
+    parser = argparse.ArgumentParser(
+        description="Download Google Patents search results as CSV via Playwright",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+RECOMMENDED USAGE (CDP mode):
+  1) Start Chrome with remote debugging:
+       "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port=9222
+  2) Run this script with --cdp:
+       python google_patents_download.py <URL> --cdp --output-dir <DIR>
+
+  Chrome must remain open while the script runs.
+  The script uses your real Google session cookies → no 429 errors.
+""",
+    )
+    parser.add_argument(
+        "search_url",
+        help="Full Google Patents search URL (with q= and date params)",
+    )
+    parser.add_argument(
+        "--output-dir", "-o",
+        default=os.getcwd(),
+        help="Directory to save the CSV (default: current directory)",
+    )
+    parser.add_argument(
+        "--retries",
+        type=int, default=2,
+        help="Number of retry attempts on failure (default: 2)",
+    )
+    parser.add_argument(
+        "--cdp",
+        action="store_true",
+        help="Connect to running Chrome via CDP (recommended). "
+             "Start Chrome with --remote-debugging-port=9222 first.",
+    )
+    parser.add_argument(
+        "--cdp-url",
+        default=_CDP_URL,
+        help=f"Chrome DevTools Protocol URL (default: {_CDP_URL})",
+    )
+    parser.add_argument(
+        "--profile-dir",
+        default=None,
+        help=f"Chrome profile directory for persistent-context mode "
+             f"(default: {_PLAYWRIGHT_PROFILE})",
+    )
     args = parser.parse_args()
 
-    path = download_csv(args.search_url, output_dir=args.output_dir, headless=args.headless)
+    path = download_csv(
+        args.search_url,
+        output_dir=args.output_dir,
+        retries=args.retries,
+        use_cdp=args.cdp,
+        cdp_url=args.cdp_url,
+        profile_dir=args.profile_dir,
+    )
     print(path)
 
 

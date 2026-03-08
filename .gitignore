@@ -12,6 +12,11 @@
 .DS_Store
 Thumbs.db
 
-# IDE
+# IDE / local tools
 .idea/
 .vscode/
+.obsidian/
+.bkit/
+
+# Debug screenshots
+**/output/*.png
