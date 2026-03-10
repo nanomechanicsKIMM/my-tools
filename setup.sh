@@ -1,11 +1,27 @@
 #!/usr/bin/env bash
-# my-tools setup: Codex skills + Claude Code plugins
+# my-tools setup: Claude Code skills + Codex skills + plugins
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGINS_DIR="$HOME/.claude/plugins"
 
-# ─── 1. Skills → Codex ────────────────────────────────────────────────────────
+# ─── 1. Skills → Claude Code ──────────────────────────────────────────────────
+install_claude_skills() {
+    local claude_skills="$HOME/.claude/skills"
+    local skills_src="$REPO_ROOT/skills"
+    if [[ ! -d "$skills_src" ]]; then echo "No skills/ folder; skipping."; return; fi
+    mkdir -p "$claude_skills"
+    for dir in "$skills_src"/*/; do
+        [[ -d "$dir" ]] || continue
+        local name; name="$(basename "$dir")"
+        echo "Deploying Claude skill: $name"
+        rm -rf "$claude_skills/$name"
+        cp -R "$dir" "$claude_skills/$name"
+    done
+    echo "Claude Code skills installed."
+}
+
+# ─── 2. Skills → Codex ────────────────────────────────────────────────────────
 install_codex_skills() {
     local codex_skills="${CODEX_HOME:-$HOME/.codex}/skills"
     local skills_src="$REPO_ROOT/skills"
@@ -14,14 +30,14 @@ install_codex_skills() {
     for dir in "$skills_src"/*/; do
         [[ -d "$dir" ]] || continue
         local name; name="$(basename "$dir")"
-        echo "Deploying skill: $name"
+        echo "Deploying Codex skill: $name"
         rm -rf "$codex_skills/$name"
         cp -R "$dir" "$codex_skills/$name"
     done
-    echo "Skills installed."
+    echo "Codex skills installed."
 }
 
-# ─── 2. Claude Code Plugins ───────────────────────────────────────────────────
+# ─── 3. Claude Code Plugins ───────────────────────────────────────────────────
 update_plugin_registries() {
     local marketplace="$1" github_repo="$2" plugin_name="$3"
     local version="$4" install_path="$5" sha="$6"
@@ -124,6 +140,7 @@ MCPEOF
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 echo "=== my-tools setup ==="
+install_claude_skills
 install_codex_skills
 mkdir -p "$PLUGINS_DIR/cache"
 install_bkit

@@ -1,8 +1,23 @@
-# my-tools setup: Codex skills + Claude Code plugins
+# my-tools setup: Claude Code skills + Codex skills + plugins
 $ErrorActionPreference = "Stop"
 $RepoRoot = $PSScriptRoot
 
-# ─── 1. Skills → Codex ────────────────────────────────────────────────────────
+# ─── 1. Skills → Claude Code ──────────────────────────────────────────────────
+function Install-ClaudeSkills {
+    $ClaudeSkills = Join-Path $env:USERPROFILE ".claude\skills"
+    $SkillsSrc = Join-Path $RepoRoot "skills"
+    if (-not (Test-Path $SkillsSrc)) { Write-Host "No skills/ folder; skipping."; return }
+    New-Item -ItemType Directory -Path $ClaudeSkills -Force | Out-Null
+    Get-ChildItem -Path $SkillsSrc -Directory | ForEach-Object {
+        $dest = Join-Path $ClaudeSkills $_.Name
+        Write-Host "Deploying Claude skill: $($_.Name) -> $dest"
+        if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+        Copy-Item -Path $_.FullName -Destination $dest -Recurse -Force
+    }
+    Write-Host "Claude Code skills installed."
+}
+
+# ─── 2. Skills → Codex ────────────────────────────────────────────────────────
 function Install-CodexSkills {
     $CodexSkills = if ($env:CODEX_HOME) { Join-Path $env:CODEX_HOME "skills" } else { Join-Path $env:USERPROFILE ".codex\skills" }
     $SkillsSrc = Join-Path $RepoRoot "skills"
@@ -10,14 +25,14 @@ function Install-CodexSkills {
     New-Item -ItemType Directory -Path $CodexSkills -Force | Out-Null
     Get-ChildItem -Path $SkillsSrc -Directory | ForEach-Object {
         $dest = Join-Path $CodexSkills $_.Name
-        Write-Host "Deploying skill: $($_.Name) -> $dest"
+        Write-Host "Deploying Codex skill: $($_.Name) -> $dest"
         if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
         Copy-Item -Path $_.FullName -Destination $dest -Recurse -Force
     }
-    Write-Host "Skills installed."
+    Write-Host "Codex skills installed."
 }
 
-# ─── 2. Claude Code Plugins ───────────────────────────────────────────────────
+# ─── 3. Claude Code Plugins ───────────────────────────────────────────────────
 function Update-PluginRegistries {
     param(
         [string]$PluginsDir,
@@ -142,6 +157,7 @@ function Install-PlaywrightPlugin {
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 Write-Host "=== my-tools setup ===" -ForegroundColor Cyan
+Install-ClaudeSkills
 Install-CodexSkills
 New-Item -ItemType Directory -Path (Join-Path $env:USERPROFILE ".claude\plugins\cache") -Force | Out-Null
 Install-BkitPlugin
