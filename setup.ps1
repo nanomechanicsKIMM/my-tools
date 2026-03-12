@@ -123,6 +123,55 @@ function Install-BkitPlugin {
         -GitCommitSha    $sha
 }
 
+function Install-VisualGeneratorPlugin {
+    $marketplace  = "honeypot"
+    $repo         = "nanomechanicsKIMM/my-tools"
+    $pluginName   = "visual-generator"
+    $PluginsDir   = Join-Path $env:USERPROFILE ".claude\plugins"
+    $pluginSrc    = Join-Path $RepoRoot "plugins\visual-generator"
+    $CacheDir     = Join-Path $PluginsDir "cache\$marketplace\$pluginName"
+    $MktDir       = Join-Path $PluginsDir "marketplaces\$marketplace\plugins\$pluginName"
+
+    Write-Host "`nInstalling visual-generator plugin..."
+
+    if (-not (Test-Path $pluginSrc)) {
+        Write-Host "  plugins/visual-generator not found; skipping."
+        return
+    }
+
+    $pluginJson = Get-Content (Join-Path $pluginSrc ".claude-plugin\plugin.json") -Raw | ConvertFrom-Json
+    $version     = $pluginJson.version
+    $installPath = Join-Path $CacheDir $version
+
+    # cache에 복사
+    if (Test-Path $installPath) {
+        Write-Host "  visual-generator $version already installed — reinstalling."
+        Remove-Item $installPath -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $installPath -Force | Out-Null
+    Get-ChildItem $pluginSrc -Force | Copy-Item -Destination $installPath -Recurse -Force
+    Write-Host "  Installed visual-generator $version -> $installPath"
+
+    # marketplace 디렉토리에도 복사
+    if (Test-Path $MktDir) { Remove-Item $MktDir -Recurse -Force }
+    New-Item -ItemType Directory -Path $MktDir -Force | Out-Null
+    Get-ChildItem $pluginSrc -Force | Copy-Item -Destination $MktDir -Recurse -Force
+    Write-Host "  Marketplace entry -> $MktDir"
+
+    # SHA: 현재 git commit 사용
+    $sha = (& git -C $RepoRoot rev-parse HEAD 2>$null)
+    if (-not $sha) { $sha = "bundled" } else { $sha = $sha.Trim() }
+
+    Update-PluginRegistries `
+        -PluginsDir      $PluginsDir `
+        -MarketplaceName $marketplace `
+        -GitHubRepo      $repo `
+        -PluginName      $pluginName `
+        -Version         $version `
+        -InstallPath     $installPath `
+        -GitCommitSha    $sha
+}
+
 function Install-PlaywrightPlugin {
     $marketplace = "claude-plugins-official"
     $repo        = "anthropics/claude-plugins-official"
@@ -162,4 +211,5 @@ Install-CodexSkills
 New-Item -ItemType Directory -Path (Join-Path $env:USERPROFILE ".claude\plugins\cache") -Force | Out-Null
 Install-BkitPlugin
 Install-PlaywrightPlugin
+Install-VisualGeneratorPlugin
 Write-Host "`nDone! Restart Claude Code to activate plugins." -ForegroundColor Green

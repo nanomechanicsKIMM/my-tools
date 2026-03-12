@@ -11,6 +11,15 @@
 | **hwpx** | HWPX 문서 생성·편집 (python-hwpx API 기반) | python-hwpx |
 | **hwpx-xml** | HWPX XML 직접 작성 방식 생성·편집 (세밀한 서식 제어) | `lxml` |
 
+## 포함된 플러그인
+
+| 플러그인 | 버전 | 설명 | 의존성 |
+|---------|:----:|------|--------|
+| **visual-generator** | 3.0.0 | 문서 → 슬라이드 이미지 자동 생성 파이프라인 (gov/seminar/concept/pitch/whatif/comparison 테마, 24종 레이아웃) | Gemini API 키 (렌더링 시) |
+
+> **visual-generator 사용 방법**: Claude Code에서 `/visual-generator:visual-generate` 명령으로 호출.
+> 렌더링(이미지 생성)에는 Gemini API 키가 필요하며, 프롬프트 생성까지만 실행하는 경우 API 없이도 사용 가능.
+
 ## 새 PC에서 환경 구성
 
 1. **저장소 클론**
@@ -41,9 +50,10 @@
 
 | 경로 | 설명 |
 |------|------|
-| `skills/` | Codex 스킬. 각 하위 폴더 = 스킬 하나 (예: `skills/patent-strategy-report/`) |
+| `skills/` | Claude Code / Codex 스킬. 각 하위 폴더 = 스킬 하나 |
+| `plugins/` | Claude Code 플러그인. 각 하위 폴더 = 플러그인 하나 (예: `plugins/visual-generator/`) |
 | `cursor/` | (선택) Cursor 규칙 등 |
-| `setup.ps1` / `setup.sh` | clone 후 한 번 실행해 도구를 Codex 경로로 배포 |
+| `setup.ps1` / `setup.sh` | clone 후 한 번 실행해 스킬·플러그인을 배포 |
 
 ## 업데이트
 

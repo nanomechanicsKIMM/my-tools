@@ -108,6 +108,46 @@ install_bkit() {
     update_plugin_registries "$marketplace" "$repo" "$plugin_name" "$version" "$install_path" "$sha"
 }
 
+install_visual_generator() {
+    local marketplace="honeypot"
+    local repo="nanomechanicsKIMM/my-tools"
+    local plugin_name="visual-generator"
+    local plugin_src="$REPO_ROOT/plugins/visual-generator"
+    local cache_dir="$PLUGINS_DIR/cache/$marketplace/$plugin_name"
+    local mkt_dir="$PLUGINS_DIR/marketplaces/$marketplace/plugins/$plugin_name"
+
+    echo; echo "Installing visual-generator plugin..."
+
+    if [[ ! -d "$plugin_src" ]]; then
+        echo "  plugins/visual-generator not found; skipping."
+        return
+    fi
+
+    local version
+    version="$(python3 -c "import json; print(json.load(open('$plugin_src/.claude-plugin/plugin.json'))['version'])")"
+    local install_path="$cache_dir/$version"
+
+    # cache에 복사
+    if [[ -d "$install_path" ]]; then
+        echo "  visual-generator $version already installed — reinstalling."
+        rm -rf "$install_path"
+    fi
+    mkdir -p "$install_path"
+    cp -R "$plugin_src/." "$install_path/"
+    echo "  Installed visual-generator $version -> $install_path"
+
+    # marketplace 디렉토리에도 복사 (Claude Code 활성화에 필요)
+    mkdir -p "$mkt_dir"
+    cp -R "$plugin_src/." "$mkt_dir/"
+    echo "  Marketplace entry -> $mkt_dir"
+
+    # SHA: 현재 git commit 사용
+    local sha
+    sha="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "bundled")"
+
+    update_plugin_registries "$marketplace" "$repo" "$plugin_name" "$version" "$install_path" "$sha"
+}
+
 install_playwright() {
     local marketplace="claude-plugins-official"
     local repo="anthropics/claude-plugins-official"
@@ -145,4 +185,5 @@ install_codex_skills
 mkdir -p "$PLUGINS_DIR/cache"
 install_bkit
 install_playwright
+install_visual_generator
 echo; echo "Done! Restart Claude Code to activate plugins."
