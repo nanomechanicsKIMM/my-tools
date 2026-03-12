@@ -4,9 +4,12 @@
 
 ## 포함된 스킬
 
-- **patent-strategy-report**: RFP 기반 특허 전략 보고서 (Google Patents CSV → 집계·Obsidian 보고서). 다양한 기술 분야 적용 가능.
-
-(다른 스킬을 추가하면 여기에 목록을 적어 두세요.)
+| 스킬 | 설명 | 의존성 |
+|------|------|--------|
+| **patent-strategy-report** | RFP 기반 특허 전략 보고서 (Google Patents CSV → 집계·Obsidian 보고서) | requirements.txt |
+| **tor** | 한국기계연구원 과업지시서(TOR) HWPX 자동 생성. 샘플 양식 머리글 재사용, 10개 섹션 치환 | `lxml` |
+| **hwpx** | HWPX 문서 생성·편집 (python-hwpx API 기반) | python-hwpx |
+| **hwpx-xml** | HWPX XML 직접 작성 방식 생성·편집 (세밀한 서식 제어) | `lxml` |
 
 ## 새 PC에서 환경 구성
 
@@ -25,11 +28,14 @@
    새 스킬을 인식시키기 위해 한 번 재시작합니다.
 
 4. **스킬별 의존성** (해당 스킬을 쓸 때만)
-   - **patent-strategy-report**:  
-     `skills/patent-strategy-report/scripts/`로 이동 후  
-     `uv venv && uv pip install -r requirements.txt`  
-     (또는 `python -m venv .venv && .venv\Scripts\pip install -r requirements.txt`)
-   - 다른 스킬도 각자 `scripts/requirements.txt` 등이 있으면 동일하게 설치합니다.
+
+   | 스킬 | 의존성 설치 명령 |
+   |------|----------------|
+   | patent-strategy-report | `cd skills/patent-strategy-report/scripts && uv pip install -r requirements.txt` |
+   | tor | `uv pip install lxml` (또는 `pip install lxml`) |
+   | hwpx-xml | `uv pip install lxml` (또는 `pip install lxml`) |
+
+   > **Windows 환경 권장**: `uv` 사용. `PYTHONUTF8=1` 환경변수 설정 필수 (한국어 인코딩)
 
 ## 레포 구조
 
