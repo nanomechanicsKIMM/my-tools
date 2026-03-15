@@ -250,15 +250,27 @@ def _download_via_profile(
             download_url = (
                 f"https://patents.google.com{href}" if href.startswith("/") else href
             )
-            print("[2/3] Clicking Download (CSV) …", file=sys.stderr)
+            print("[2/3] Navigating to download URL …", file=sys.stderr)
 
-            # Click the dropdown first, then the CSV option
-            page.locator(DOWNLOAD_LINK_ANY).first.click()
-            page.wait_for_timeout(800)
-
-            with page.expect_download(timeout=timeout_ms) as dl_info:
-                page.locator(DOWNLOAD_LINK_CSV).click(force=True)
-            download = dl_info.value
+            # Navigate directly to the XHR download URL.
+            # Use a short timeout so a 429 page fails fast instead of waiting 90s.
+            try:
+                with page.expect_download(timeout=15000) as dl_info:
+                    page.goto(download_url, wait_until="commit", timeout=timeout_ms)
+                download = dl_info.value
+            except PlaywrightTimeout:
+                # Timed out waiting for a download event → probably a 429 or redirect page.
+                content = page.content()
+                if "429" in content or "That's an error" in content:
+                    raise RuntimeError(
+                        "429 Too Many Requests – Google requires valid session cookies.\n"
+                        "Use --cdp mode: start Chrome with --remote-debugging-port=9222\n"
+                        "while logged in to Google, then re-run with --cdp flag."
+                    )
+                raise RuntimeError(
+                    "No download started within 15s. The page may have redirected or shown an error.\n"
+                    "Try --cdp mode for reliable downloads with real session cookies."
+                )
 
         except Exception:
             _save_screenshot(page, output_dir, "gp_error.png")

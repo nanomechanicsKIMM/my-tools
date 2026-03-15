@@ -123,9 +123,23 @@ CANONICAL_APPLICANT_EN = {
     "govisionox": "Govisionox",
     # NHK (日本放送協会)
     "日本放送協会": "NHK",
+    "日本放送協会, nippon hoso kyokai <nhk>": "NHK",
     "nippon hoso kyokai <nhk>": "NHK",
     "nippon hoso kyokai": "NHK",
     "nhk": "NHK",
+    # LG Chem 계열
+    "주식회사 엘지화학": "LG Chem",
+    "엘지화학 주식회사": "LG Chem",
+    "엘지화학": "LG Chem",
+    "lg화학": "LG Chem",
+    "lg chem ltd.": "LG Chem",
+    "lg chem": "LG Chem",
+    "乐金化学": "LG Chem",
+    # Lenovo 계열
+    "联想(北京)有限公司": "Lenovo",
+    "联想": "Lenovo",
+    "lenovo (beijing) co. ltd.": "Lenovo",
+    "lenovo": "Lenovo",
     # OPPO 계열
     "oppo广东移动通信有限公司": "OPPO",
     "广东欧珀移动通信有限公司": "OPPO",
