@@ -28,6 +28,11 @@ Usage:
 
   # With PDF input:
   python run_pipeline.py --rfp rfp.pdf --main-csv main.csv ... (auto-converts PDF to MD)
+
+
+Supports two CSV acquisition modes:
+  1. Manual: User downloads CSVs from Google Patents (--main-csv, --sub-tech-csvs)
+  2. Auto:   EPO OPS API downloads CSVs automatically (--auto-download)
 """
 from __future__ import annotations
 
@@ -243,6 +248,13 @@ def main():
     ap.add_argument("--skip-fetch", action="store_true", help="Skip abstract fetch if CSV exists")
     ap.add_argument("--fetch-delay", type=float, default=1.0, help="Delay between fetches (sec)")
     ap.add_argument("--core-n", type=int, default=5, help="Core patents per sub-tech (default 5)")
+    ap.add_argument("--auto-download", action="store_true",
+                    help="Auto-download CSVs via EPO OPS API (no manual Google Patents download needed). "
+                         "Requires EPO_OPS_KEY and EPO_OPS_SECRET env vars.")
+    ap.add_argument("--split-by-year", action="store_true",
+                    help="Split EPO searches by year for queries with >2000 results")
+    ap.add_argument("--global-required-terms", type=str, default=None,
+                    help="Comma-separated required terms for sub-tech queries (AND gate)")
     args = ap.parse_args()
 
     out_dir = Path(args.output_dir)
@@ -250,11 +262,56 @@ def main():
 
     include_terms = [t.strip() for t in (args.include_terms or "").split(",") if t.strip()]
     exclude_terms = [t.strip() for t in (args.exclude_terms or "").split(",") if t.strip()]
+    global_required = [t.strip() for t in (args.global_required_terms or "").split(",") if t.strip()]
 
     # Phase 1: PDF → MD if needed
     rfp_path = Path(args.rfp)
     rfp_md = convert_pdf_if_needed(rfp_path, out_dir)
     print(f"\nRFP: {rfp_md}")
+
+    # ── Auto-download via EPO OPS API ────────────────────────────────────
+    if args.auto_download:
+        print("\n" + "=" * 60)
+        print("[Auto-Download] EPO OPS API mode")
+        print("=" * 60)
+
+        from search_patents_epo import create_client, search_main, search_sub_techs
+        client = create_client()
+        rfp_text = rfp_md.read_text(encoding="utf-8")
+
+        # Download main CSV
+        main_csv_path = out_dir / f"gp-search-{datetime.now().strftime('%Y%m%d')}_main.csv"
+        print(f"\n[Main Query] Downloading via EPO OPS ...")
+        search_main(
+            client, rfp_text, main_csv_path,
+            years=args.years,
+            required_terms=include_terms or None,
+            exclude_terms=exclude_terms or None,
+            split_by_year=args.split_by_year,
+        )
+        args.main_csv = str(main_csv_path)
+
+        # Download sub-tech CSVs
+        if args.sub_tech_json:
+            print(f"\n[Sub-tech Queries] Downloading via EPO OPS ...")
+            csv_map = search_sub_techs(
+                client,
+                sub_techs_path=Path(args.sub_tech_json),
+                rfp_text=rfp_text,
+                output_dir=out_dir,
+                years=args.years,
+                global_required=global_required or include_terms or None,
+                global_exclude=exclude_terms or None,
+                split_by_year=args.split_by_year,
+            )
+            # Build comma-separated CSV paths in sub_techs order
+            sub_data = json.loads(Path(args.sub_tech_json).read_text(encoding="utf-8"))
+            sub_ids = [st["id"] for st in sub_data.get("sub_technologies", [])]
+            csv_paths = [csv_map.get(sid, "") for sid in sub_ids]
+            args.sub_tech_csvs = ",".join(csv_paths)
+            print(f"\n✓ EPO OPS auto-download complete.")
+
+        print("=" * 60)
 
     # Phase 3: Main CSV stats
     if args.main_csv:

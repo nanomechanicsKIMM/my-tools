@@ -1,0 +1,594 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Search patents via EPO Open Patent Services (OPS) API and export as CSV.
+
+Replaces manual Google Patents CSV download with automated API access.
+Uses python-epo-ops-client for OAuth, throttling, and pagination.
+
+Usage:
+  # Single CQL query
+  python search_patents_epo.py --cql 'ti="stretchable display"' -o results.csv
+
+  # From query file (generate_query.py --format cql output)
+  python search_patents_epo.py --query-file query_main.cql -o results.csv
+
+  # From sub_techs.json (downloads all sub-tech CSVs)
+  python search_patents_epo.py --sub-tech-json sub_techs.json --rfp rfp.md -o output/
+
+  # With date range
+  python search_patents_epo.py --cql 'ti="flexible sensor"' --years 15 -o results.csv
+
+Requires:
+  pip install python-epo-ops-client
+
+Environment variables (or --key/--secret CLI args):
+  EPO_OPS_KEY=<consumer_key>
+  EPO_OPS_SECRET=<consumer_secret>
+
+EPO OPS limits: max 2000 results per query, 100 per page, 4GB/week data.
+For queries with >2000 results, use --split-by-year to auto-split.
+"""
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import os
+import re
+import sys
+import time
+import xml.etree.ElementTree as ET
+from datetime import datetime
+from pathlib import Path
+
+try:
+    import epo_ops
+except ImportError:
+    print(
+        "EPO OPS client not installed.\n"
+        "  pip install python-epo-ops-client\n",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+
+# ── Constants ────────────────────────────────────────────────────────────────
+
+OPS_MAX_RESULTS = 2000
+OPS_PAGE_SIZE = 100
+NS = {
+    "ops": "http://ops.epo.org",
+    "exch": "http://www.epo.org/exchange",
+    "epo": "http://www.epo.org/fulltext",
+}
+
+# CSV columns compatible with Google Patents export format
+CSV_COLUMNS = [
+    "id", "title", "assignee", "inventor/author",
+    "priority date", "filing/creation date", "publication date", "grant date",
+    "result link", "representative figure link",
+]
+
+
+# ── Client factory ───────────────────────────────────────────────────────────
+
+def create_client(key: str | None = None, secret: str | None = None) -> epo_ops.Client:
+    """Create an EPO OPS client with OAuth and throttling middleware."""
+    api_key = key or os.environ.get("EPO_OPS_KEY", "")
+    api_secret = secret or os.environ.get("EPO_OPS_SECRET", "")
+    if not api_key or not api_secret:
+        print(
+            "EPO OPS credentials required.\n"
+            "Set environment variables EPO_OPS_KEY and EPO_OPS_SECRET,\n"
+            "or use --key and --secret CLI arguments.\n"
+            "\n"
+            "Register at: https://developers.epo.org\n",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    middlewares = [
+        epo_ops.middlewares.Throttler(),
+    ]
+    client = epo_ops.Client(
+        key=api_key,
+        secret=api_secret,
+        middlewares=middlewares,
+    )
+    return client
+
+
+# ── CQL query builder ────────────────────────────────────────────────────────
+
+def google_to_cql(google_query: str, year_from: int = None, year_to: int = None) -> str:
+    """
+    Convert Google Patents boolean query to EPO OPS CQL syntax.
+
+    Google: ("stretchable display" OR "flexible display") AND sensor NOT OLED
+    CQL:    ti=("stretchable display" OR "flexible display") AND ti=sensor NOT ti=OLED
+
+    Adds title-field prefix (ti=) since Google Patents searches titles by default.
+    """
+    cql = google_query
+
+    # Replace NOT (...) → NOT (ti=...)
+    # First handle the main terms - wrap bare terms with ti=
+    # This is a simplified converter; complex queries may need manual CQL
+
+    # Add date range if specified
+    if year_from:
+        cql += f" AND pd>={year_from}"
+    if year_to:
+        cql += f" AND pd<={year_to}"
+
+    return cql
+
+
+def build_cql_from_groups(
+    groups: list[list[str]],
+    exclude_terms: list[str] = None,
+    year_from: int = None,
+    year_to: int = None,
+    field: str = "ti",
+) -> str:
+    """
+    Build CQL query from term groups (same structure as generate_query.py).
+
+    groups: [["stretchable display", "flexible display"], ["sensor", "array"]]
+    → ti=("stretchable display" OR "flexible display") AND ti=(sensor OR array)
+    """
+    parts = []
+    for g in groups:
+        if not g:
+            continue
+        quoted = [f'"{t}"' if " " in t else t for t in g]
+        if len(quoted) == 1:
+            parts.append(f"{field}={quoted[0]}")
+        else:
+            parts.append(f'{field}=({" OR ".join(quoted)})')
+
+    cql = " AND ".join(parts)
+
+    if exclude_terms:
+        exc = [f'"{t}"' if " " in t else t for t in exclude_terms]
+        cql += f' NOT {field}=({" OR ".join(exc)})'
+
+    if year_from:
+        cql += f" AND pd>={year_from}"
+    if year_to:
+        cql += f" AND pd<={year_to}"
+
+    return cql
+
+
+# ── XML parsing ──────────────────────────────────────────────────────────────
+
+def parse_search_response(xml_bytes: bytes) -> tuple[list[str], int]:
+    """Parse search response to extract document IDs and total count."""
+    root = ET.fromstring(xml_bytes)
+
+    # Total result count
+    total = 0
+    range_elem = root.find(".//ops:biblio-search", NS)
+    if range_elem is not None:
+        total = int(range_elem.get("total-result-count", "0"))
+
+    # Extract publication references
+    doc_ids = []
+    for ref in root.findall(".//ops:publication-reference", NS):
+        doc_id = ref.find("exch:document-id[@document-id-type='docdb']", NS)
+        if doc_id is not None:
+            country = doc_id.findtext("exch:country", "", NS)
+            doc_number = doc_id.findtext("exch:doc-number", "", NS)
+            kind = doc_id.findtext("exch:kind", "", NS)
+            doc_ids.append(f"{country}{doc_number}{kind}")
+
+    return doc_ids, total
+
+
+def parse_biblio_response(xml_bytes: bytes) -> list[dict]:
+    """Parse bibliographic data response into CSV-compatible dicts."""
+    root = ET.fromstring(xml_bytes)
+    results = []
+
+    for doc in root.findall(".//exch:exchange-document", NS):
+        country = doc.get("country", "")
+        doc_number = doc.get("doc-number", "")
+        kind = doc.get("kind", "")
+        patent_id = f"{country}-{doc_number}-{kind}"
+
+        # Title (prefer English)
+        title = ""
+        for t in doc.findall(".//exch:invention-title", NS):
+            if t.get("lang", "") == "en":
+                title = (t.text or "").strip()
+                break
+        if not title:
+            t_elem = doc.find(".//exch:invention-title", NS)
+            if t_elem is not None:
+                title = (t_elem.text or "").strip()
+
+        # Applicants
+        applicants = []
+        for app in doc.findall(".//exch:applicant[@data-format='docdb']", NS):
+            name_elem = app.find("exch:applicant-name/exch:name", NS)
+            if name_elem is not None and name_elem.text:
+                applicants.append(name_elem.text.strip())
+
+        # Inventors
+        inventors = []
+        for inv in doc.findall(".//exch:inventor[@data-format='docdb']", NS):
+            name_elem = inv.find("exch:inventor-name/exch:name", NS)
+            if name_elem is not None and name_elem.text:
+                inventors.append(name_elem.text.strip())
+
+        # Dates
+        priority_date = ""
+        for pri in doc.findall(".//exch:priority-claim", NS):
+            d = pri.findtext("exch:date", "", NS)
+            if d and (not priority_date or d < priority_date):
+                priority_date = d
+
+        pub_date = ""
+        pub_ref = doc.find(".//exch:publication-reference/exch:document-id[@document-id-type='docdb']", NS)
+        if pub_ref is not None:
+            pub_date = pub_ref.findtext("exch:date", "", NS) or ""
+
+        filing_date = ""
+        app_ref = doc.find(".//exch:application-reference/exch:document-id[@document-id-type='docdb']", NS)
+        if app_ref is not None:
+            filing_date = app_ref.findtext("exch:date", "", NS) or ""
+
+        # Format dates: YYYYMMDD → YYYY-MM-DD
+        def fmt_date(d: str) -> str:
+            if len(d) == 8:
+                return f"{d[:4]}-{d[4:6]}-{d[6:8]}"
+            return d
+
+        result_link = f"https://patents.google.com/patent/{country}{doc_number}{kind}/en"
+
+        results.append({
+            "id": patent_id,
+            "title": title,
+            "assignee": ", ".join(applicants),
+            "inventor/author": ", ".join(inventors),
+            "priority date": fmt_date(priority_date),
+            "filing/creation date": fmt_date(filing_date),
+            "publication date": fmt_date(pub_date),
+            "grant date": "",
+            "result link": result_link,
+            "representative figure link": "",
+        })
+
+    return results
+
+
+# ── Search functions ─────────────────────────────────────────────────────────
+
+def search_patents(
+    client: epo_ops.Client,
+    cql: str,
+    max_results: int = OPS_MAX_RESULTS,
+) -> list[dict]:
+    """
+    Search patents with CQL query and fetch bibliographic data.
+    Handles pagination automatically (100 per page, max 2000 total).
+    """
+    all_results: list[dict] = []
+    offset = 1
+
+    # First search to get total count
+    print(f"  CQL: {cql[:120]}{'...' if len(cql) > 120 else ''}")
+
+    try:
+        resp = client.published_data_search(
+            cql=cql,
+            range_begin=1,
+            range_end=min(OPS_PAGE_SIZE, max_results),
+        )
+    except Exception as e:
+        err_msg = str(e)
+        if "404" in err_msg or "no results" in err_msg.lower():
+            print(f"  → 0 results")
+            return []
+        raise
+
+    doc_ids, total = parse_search_response(resp.content)
+    effective_total = min(total, max_results)
+    print(f"  → {total} total results (fetching up to {effective_total})")
+
+    if total == 0:
+        return []
+
+    # Fetch biblio for first page
+    if doc_ids:
+        biblio = _fetch_biblio_batch(client, doc_ids)
+        all_results.extend(biblio)
+        print(f"  Fetched {len(all_results)}/{effective_total} ...")
+
+    # Paginate remaining
+    offset = OPS_PAGE_SIZE + 1
+    while offset <= effective_total:
+        end = min(offset + OPS_PAGE_SIZE - 1, effective_total)
+        try:
+            resp = client.published_data_search(
+                cql=cql,
+                range_begin=offset,
+                range_end=end,
+            )
+            doc_ids, _ = parse_search_response(resp.content)
+            if doc_ids:
+                biblio = _fetch_biblio_batch(client, doc_ids)
+                all_results.extend(biblio)
+            print(f"  Fetched {len(all_results)}/{effective_total} ...")
+        except Exception as e:
+            print(f"  Warning: page {offset}-{end} failed: {e}", file=sys.stderr)
+            break
+        offset += OPS_PAGE_SIZE
+
+    return all_results
+
+
+def _fetch_biblio_batch(client: epo_ops.Client, doc_ids: list[str]) -> list[dict]:
+    """Fetch bibliographic data for a batch of document IDs."""
+    results = []
+    # EPO OPS allows batch biblio for up to ~20 docs at once via comma-separated
+    batch_size = 20
+    for i in range(0, len(doc_ids), batch_size):
+        batch = doc_ids[i:i + batch_size]
+        for doc_id in batch:
+            # Parse doc_id: e.g. "KR102862661B1" → country=KR, number=102862661, kind=B1
+            m = re.match(r"([A-Z]{2})(\d+)([A-Z]\d?)?", doc_id)
+            if not m:
+                continue
+            country, number, kind = m.group(1), m.group(2), m.group(3) or ""
+            try:
+                resp = client.published_data(
+                    reference_type="publication",
+                    input=epo_ops.models.Docdb(number, country, kind),
+                    endpoint="biblio",
+                )
+                parsed = parse_biblio_response(resp.content)
+                results.extend(parsed)
+            except Exception:
+                # Skip individual failures (may be missing in database)
+                pass
+    return results
+
+
+def search_with_year_split(
+    client: epo_ops.Client,
+    cql_base: str,
+    year_from: int,
+    year_to: int,
+    max_per_year: int = OPS_MAX_RESULTS,
+) -> list[dict]:
+    """
+    Split search by year when total results > 2000.
+    Searches each year separately and merges results.
+    """
+    all_results = []
+    seen_ids = set()
+
+    for year in range(year_from, year_to + 1):
+        cql_year = f"{cql_base} AND pd>={year} AND pd<={year}"
+        print(f"\n  [Year {year}]")
+        results = search_patents(client, cql_year, max_results=max_per_year)
+        for r in results:
+            if r["id"] not in seen_ids:
+                seen_ids.add(r["id"])
+                all_results.append(r)
+
+    print(f"\n  Total unique results (all years): {len(all_results)}")
+    return all_results
+
+
+# ── CSV output ───────────────────────────────────────────────────────────────
+
+def write_csv_file(results: list[dict], output_path: Path):
+    """Write results to CSV in Google Patents compatible format."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(results)
+    print(f"  Wrote {output_path} ({len(results)} rows)")
+
+
+# ── Sub-tech batch search ────────────────────────────────────────────────────
+
+def search_sub_techs(
+    client: epo_ops.Client,
+    sub_techs_path: Path,
+    rfp_text: str,
+    output_dir: Path,
+    years: int = 15,
+    global_required: list[str] = None,
+    global_exclude: list[str] = None,
+    split_by_year: bool = False,
+) -> dict:
+    """
+    Search all sub-technologies and save individual CSVs.
+    Returns dict mapping sub_tech_id → csv_path.
+    """
+    sub_data = json.loads(sub_techs_path.read_text(encoding="utf-8"))
+    sub_techs = sub_data.get("sub_technologies", [])
+
+    current_year = datetime.now().year
+    year_from = current_year - years
+    year_to = current_year
+
+    csv_map = {}
+
+    for st in sub_techs:
+        st_id = st["id"]
+        print(f"\n{'='*60}")
+        print(f"[{st_id}] {st['name_ko']}")
+        print(f"{'='*60}")
+
+        # Build CQL from key_terms
+        groups = []
+        if global_required:
+            groups.append(list(global_required))
+        groups.append(st.get("key_terms", []))
+
+        exclude = list(set((global_exclude or []) + st.get("exclude_terms", [])))
+
+        cql = build_cql_from_groups(
+            groups, exclude_terms=exclude,
+            year_from=year_from, year_to=year_to,
+        )
+
+        if split_by_year:
+            cql_base = build_cql_from_groups(groups, exclude_terms=exclude)
+            results = search_with_year_split(client, cql_base, year_from, year_to)
+        else:
+            results = search_patents(client, cql)
+
+        csv_path = output_dir / f"gp-search-{st_id}.csv"
+        write_csv_file(results, csv_path)
+        csv_map[st_id] = str(csv_path)
+
+    return csv_map
+
+
+# ── Main query search ────────────────────────────────────────────────────────
+
+def search_main(
+    client: epo_ops.Client,
+    rfp_text: str,
+    output_path: Path,
+    years: int = 15,
+    required_terms: list[str] = None,
+    exclude_terms: list[str] = None,
+    split_by_year: bool = False,
+) -> str:
+    """Search main query and save CSV."""
+    # Import query generation logic
+    script_dir = Path(__file__).resolve().parent
+    sys.path.insert(0, str(script_dir))
+    from generate_query import (
+        extract_rfp_english_keywords, extract_english_keywords,
+        extract_section_text, SECTION_PATTERNS,
+    )
+
+    # Build term groups (same logic as generate_main_query)
+    rfp_explicit = extract_rfp_english_keywords(rfp_text)
+    heuristic = extract_english_keywords(
+        extract_section_text(rfp_text, SECTION_PATTERNS.get("objectives", [])) + "\n" +
+        extract_section_text(rfp_text, SECTION_PATTERNS.get("contents", []))
+    )
+
+    seen = set()
+    keywords = []
+    for t in rfp_explicit + heuristic:
+        if t.lower() not in seen:
+            seen.add(t.lower())
+            keywords.append(t)
+
+    mid = max(1, len(keywords) // 2)
+    groups = [keywords[:mid], keywords[mid:mid + 10]]
+    groups = [g for g in groups if g]
+    if required_terms:
+        groups.insert(0, required_terms)
+
+    current_year = datetime.now().year
+    year_from = current_year - years
+
+    if split_by_year:
+        cql_base = build_cql_from_groups(groups, exclude_terms=exclude_terms)
+        results = search_with_year_split(client, cql_base, year_from, current_year)
+    else:
+        cql = build_cql_from_groups(
+            groups, exclude_terms=exclude_terms,
+            year_from=year_from, year_to=current_year,
+        )
+        results = search_patents(client, cql)
+
+    write_csv_file(results, output_path)
+    return str(output_path)
+
+
+# ── CLI ──────────────────────────────────────────────────────────────────────
+
+def main():
+    ap = argparse.ArgumentParser(
+        description="Search patents via EPO OPS API and export as CSV",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Single CQL query
+  python search_patents_epo.py --cql 'ti="stretchable display"' -o results.csv
+
+  # All sub-techs from JSON
+  python search_patents_epo.py --sub-tech-json sub_techs.json --rfp rfp.md -o output/
+
+  # With credentials
+  python search_patents_epo.py --key YOUR_KEY --secret YOUR_SECRET --cql '...' -o out.csv
+
+Environment variables:
+  EPO_OPS_KEY     EPO OPS Consumer Key
+  EPO_OPS_SECRET  EPO OPS Consumer Secret
+""",
+    )
+    ap.add_argument("--cql", type=str, default=None, help="CQL query string")
+    ap.add_argument("--rfp", type=str, default=None, help="RFP markdown file (for main query auto-generation)")
+    ap.add_argument("--sub-tech-json", type=str, default=None, help="sub_techs.json path (batch mode)")
+    ap.add_argument("-o", "--output", required=True, help="Output CSV path or directory (for batch mode)")
+    ap.add_argument("--years", type=int, default=15, help="Search range in years (default 15)")
+    ap.add_argument("--required-terms", type=str, default=None, help="Comma-separated required terms (AND gate)")
+    ap.add_argument("--exclude-terms", type=str, default=None, help="Comma-separated exclude terms")
+    ap.add_argument("--split-by-year", action="store_true",
+                    help="Split search by year for queries with >2000 results")
+    ap.add_argument("--key", type=str, default=None, help="EPO OPS Consumer Key")
+    ap.add_argument("--secret", type=str, default=None, help="EPO OPS Consumer Secret")
+    args = ap.parse_args()
+
+    client = create_client(key=args.key, secret=args.secret)
+    required = [t.strip() for t in (args.required_terms or "").split(",") if t.strip()]
+    exclude = [t.strip() for t in (args.exclude_terms or "").split(",") if t.strip()]
+
+    if args.cql:
+        # Direct CQL search
+        results = search_patents(client, args.cql)
+        write_csv_file(results, Path(args.output))
+
+    elif args.sub_tech_json:
+        # Batch sub-tech search
+        rfp_text = Path(args.rfp).read_text(encoding="utf-8") if args.rfp else ""
+        csv_map = search_sub_techs(
+            client,
+            sub_techs_path=Path(args.sub_tech_json),
+            rfp_text=rfp_text,
+            output_dir=Path(args.output),
+            years=args.years,
+            global_required=required or None,
+            global_exclude=exclude or None,
+            split_by_year=args.split_by_year,
+        )
+        print(f"\n{'='*60}")
+        print("Sub-tech CSV files:")
+        for st_id, path in csv_map.items():
+            print(f"  [{st_id}] {path}")
+
+    elif args.rfp:
+        # Main query from RFP
+        rfp_text = Path(args.rfp).read_text(encoding="utf-8")
+        search_main(
+            client, rfp_text, Path(args.output),
+            years=args.years,
+            required_terms=required or None,
+            exclude_terms=exclude or None,
+            split_by_year=args.split_by_year,
+        )
+
+    else:
+        print("Provide --cql, --rfp, or --sub-tech-json", file=sys.stderr)
+        sys.exit(1)
+
+    print("\nDone.")
+
+
+if __name__ == "__main__":
+    main()
