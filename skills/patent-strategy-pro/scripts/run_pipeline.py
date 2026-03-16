@@ -175,6 +175,7 @@ def run_sub_tech_analysis(
     rfp_md: Path, sub_tech: dict, csv_path: Path,
     out_subdir: Path, include_terms: list[str], exclude_terms: list[str],
     fetch_delay: float = 1.0, skip_fetch: bool = False, core_n: int = 5,
+    epo_client=None,
 ) -> Path:
     """Process one sub-technology: score → top 100 → abstracts → core 5."""
     _add_legacy_path()
@@ -201,6 +202,15 @@ def run_sub_tech_analysis(
 
     if skip_fetch and abstracts_path.exists():
         print(f"  [{st_id}] Skipping fetch (--skip-fetch), using existing {abstracts_path.name}")
+    elif epo_client is not None:
+        # EPO OPS path: fetch abstracts only (abstract-only scoring; claims skipped
+        # because EPO OPS claims are EP-only and cause 404 for US/CN/KR/JP patents)
+        print(f"  [{st_id}] Fetching abstracts via EPO OPS API (abstract-only mode) ...")
+        from search_patents_epo import fetch_abstracts_bulk
+        rows_title, _ = load_csv(top100_path)
+        enriched = fetch_abstracts_bulk(epo_client, rows_title, delay=fetch_delay, fetch_claims=False)
+        write_csv(enriched, abstracts_path)
+        print(f"  [{st_id}] EPO abstracts saved: {abstracts_path.name}")
     else:
         ok = run_step(
             f"[{st_id}] Fetch abstracts",
@@ -269,6 +279,8 @@ def main():
     rfp_md = convert_pdf_if_needed(rfp_path, out_dir)
     print(f"\nRFP: {rfp_md}")
 
+    _epo_client = None  # set in auto-download block below
+
     # ── Auto-download via EPO OPS API ────────────────────────────────────
     if args.auto_download:
         print("\n" + "=" * 60)
@@ -313,6 +325,20 @@ def main():
 
         print("=" * 60)
 
+    # Store EPO client for sub-tech abstract fetching.
+    # Always create client if EPO credentials are available (even without --auto-download),
+    # so abstracts are fetched via EPO OPS instead of the legacy Espacenet scraper (403 errors).
+    if args.auto_download:
+        _epo_client = client
+    else:
+        import os as _os
+        if _os.environ.get("EPO_OPS_KEY") and _os.environ.get("EPO_OPS_SECRET"):
+            from search_patents_epo import create_client as _create_client
+            _epo_client = _create_client()
+            print("[EPO OPS] Credentials detected — will use EPO OPS for abstract fetching.")
+        else:
+            _epo_client = None
+
     # Phase 3: Main CSV stats
     if args.main_csv:
         main_csv = Path(args.main_csv)
@@ -348,6 +374,7 @@ def main():
                 fetch_delay=args.fetch_delay,
                 skip_fetch=args.skip_fetch,
                 core_n=args.core_n,
+                epo_client=_epo_client,
             )
             core_paths.append({"sub_tech": st, "core_csv": str(core_path)})
 

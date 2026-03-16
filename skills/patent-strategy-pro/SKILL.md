@@ -123,9 +123,9 @@ EPO OPS 계정이 없거나 Google Patents CSV를 이미 가지고 있는 경우
 - 각 세부 기술 CSV에 대해 `score_title_relevance.py` 실행 → 상위 100건
 
 **Step 7 — 초록+대표청구항 수집**
-- 각 세부 기술의 상위 100건에 대해 `fetch_abstracts.py` 실행
+- **EPO OPS 자동 모드** (`--auto-download`): `search_patents_epo.fetch_abstracts_bulk()` 가 EPO OPS API로 직접 수집 (사용자 개입 불필요)
+- **수동 모드** (Google Patents CSV): `fetch_abstracts.py` 실행 후 수동 보완
 - 초록(abstract) + 대표청구항(representative_claim) 컬럼 추가
-- `--resume` 옵션으로 중단 후 재개 가능
 
 **Step 8 — 초록+대표청구항 연관성 점수**
 - `score_abstract_relevance.py` 실행 → 상위 5건 핵심 특허 선정

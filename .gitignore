@@ -18,5 +18,9 @@ Thumbs.db
 .obsidian/
 .bkit/
 
+# Confidential
+.env
+.credential
+
 # Debug screenshots
 **/output/*.png

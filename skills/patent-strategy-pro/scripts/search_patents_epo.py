@@ -133,31 +133,42 @@ def build_cql_from_groups(
     field: str = "ti",
 ) -> str:
     """
-    Build CQL query from term groups (same structure as generate_query.py).
+    Build CQL query from term groups using correct EPO OPS per-field OR syntax.
 
-    groups: [["stretchable display", "flexible display"], ["sensor", "array"]]
-    → ti=("stretchable display" OR "flexible display") AND ti=(sensor OR array)
+    EPO OPS requires:   (ti="p1" OR ti="p2") AND ti=sensor
+    NOT:                ti=("p1" OR "p2") AND ti=sensor  ← causes 413/404
+
+    groups: [["stretchable display", "flexible display"], ["sensor"]]
+    → (ti="stretchable display" OR ti="flexible display") AND ti=sensor
     """
     parts = []
     for g in groups:
         if not g:
             continue
-        quoted = [f'"{t}"' if " " in t else t for t in g]
-        if len(quoted) == 1:
-            parts.append(f"{field}={quoted[0]}")
+        field_terms = [f'{field}="{t}"' if " " in t else f"{field}={t}" for t in g]
+        if len(field_terms) == 1:
+            parts.append(field_terms[0])
         else:
-            parts.append(f'{field}=({" OR ".join(quoted)})')
+            parts.append(f'({" OR ".join(field_terms)})')
 
     cql = " AND ".join(parts)
 
     if exclude_terms:
-        exc = [f'"{t}"' if " " in t else t for t in exclude_terms]
-        cql += f' NOT {field}=({" OR ".join(exc)})'
+        exc_terms = [f'{field}="{t}"' if " " in t else f"{field}={t}" for t in exclude_terms]
+        if len(exc_terms) == 1:
+            cql += f" NOT {exc_terms[0]}"
+        else:
+            cql += f' NOT ({" OR ".join(exc_terms)})'
 
-    if year_from:
-        cql += f" AND pd>={year_from}"
-    if year_to:
-        cql += f" AND pd<={year_to}"
+    # EPO OPS requires `pd within "YYYYMMDD,YYYYMMDD"` — the pd>=X AND pd<=Y form
+    # triggers CLIENT.FuzzyDateRanges (HTTP 413) regardless of result count.
+    if year_from or year_to:
+        def _pad_date(v, suffix: str) -> str:
+            s = str(v)
+            return s if len(s) == 8 else s + suffix
+        d_from = _pad_date(year_from, "0101") if year_from else "20000101"
+        d_to = _pad_date(year_to, "1231") if year_to else "20991231"
+        cql += f' AND pd within "{d_from},{d_to}"'
 
     return cql
 
@@ -209,36 +220,52 @@ def parse_biblio_response(xml_bytes: bytes) -> list[dict]:
             if t_elem is not None:
                 title = (t_elem.text or "").strip()
 
-        # Applicants
+        # Applicants — EPO OPS returns data-format="epodoc" (not "docdb")
         applicants = []
-        for app in doc.findall(".//exch:applicant[@data-format='docdb']", NS):
+        seen_app = set()
+        for app in doc.findall(".//exch:applicant[@data-format='epodoc']", NS):
             name_elem = app.find("exch:applicant-name/exch:name", NS)
             if name_elem is not None and name_elem.text:
-                applicants.append(name_elem.text.strip())
+                n = name_elem.text.strip()
+                if n not in seen_app:
+                    applicants.append(n)
+                    seen_app.add(n)
 
-        # Inventors
+        # Inventors — same epodoc format
         inventors = []
-        for inv in doc.findall(".//exch:inventor[@data-format='docdb']", NS):
+        seen_inv = set()
+        for inv in doc.findall(".//exch:inventor[@data-format='epodoc']", NS):
             name_elem = inv.find("exch:inventor-name/exch:name", NS)
             if name_elem is not None and name_elem.text:
-                inventors.append(name_elem.text.strip())
+                n = name_elem.text.strip()
+                if n not in seen_inv:
+                    inventors.append(n)
+                    seen_inv.add(n)
 
-        # Dates
+        # Dates — priority date is in document-id[@document-id-type='epodoc']/date
         priority_date = ""
         for pri in doc.findall(".//exch:priority-claim", NS):
-            d = pri.findtext("exch:date", "", NS)
+            epodoc_id = pri.find("exch:document-id[@document-id-type='epodoc']", NS)
+            d = (epodoc_id.findtext("exch:date", "", NS) if epodoc_id is not None else "") or \
+                pri.findtext("exch:date", "", NS)  # fallback: direct date child
             if d and (not priority_date or d < priority_date):
                 priority_date = d
 
         pub_date = ""
-        pub_ref = doc.find(".//exch:publication-reference/exch:document-id[@document-id-type='docdb']", NS)
-        if pub_ref is not None:
-            pub_date = pub_ref.findtext("exch:date", "", NS) or ""
+        for id_type in ("docdb", "epodoc"):
+            pub_ref = doc.find(f".//exch:publication-reference/exch:document-id[@document-id-type='{id_type}']", NS)
+            if pub_ref is not None:
+                pub_date = pub_ref.findtext("exch:date", "", NS) or ""
+                if pub_date:
+                    break
 
         filing_date = ""
-        app_ref = doc.find(".//exch:application-reference/exch:document-id[@document-id-type='docdb']", NS)
-        if app_ref is not None:
-            filing_date = app_ref.findtext("exch:date", "", NS) or ""
+        for id_type in ("epodoc", "docdb"):
+            app_ref = doc.find(f".//exch:application-reference/exch:document-id[@document-id-type='{id_type}']", NS)
+            if app_ref is not None:
+                filing_date = app_ref.findtext("exch:date", "", NS) or ""
+                if filing_date:
+                    break
 
         # Format dates: YYYYMMDD → YYYY-MM-DD
         def fmt_date(d: str) -> str:
@@ -246,7 +273,7 @@ def parse_biblio_response(xml_bytes: bytes) -> list[dict]:
                 return f"{d[:4]}-{d[4:6]}-{d[6:8]}"
             return d
 
-        result_link = f"https://patents.google.com/patent/{country}{doc_number}{kind}/en"
+        result_link = f"https://worldwide.espacenet.com/patent/search/family/{country}/{doc_number}/{kind}"
 
         results.append({
             "id": patent_id,
@@ -262,6 +289,143 @@ def parse_biblio_response(xml_bytes: bytes) -> list[dict]:
         })
 
     return results
+
+
+# ── Abstract / claim fetching ────────────────────────────────────────────────
+
+def fetch_abstracts_bulk(
+    client: epo_ops.Client,
+    rows: list[dict],
+    delay: float = 0.5,
+    fetch_claims: bool = False,
+) -> list[dict]:
+    """
+    Enrich patent rows with 'abstract' (and optionally 'representative_claim') via EPO OPS.
+    Replaces Google Patents scraper (fetch_abstracts.py) for the analysis pipeline.
+
+    Expects rows with 'id' column in "CC-NNNNNN-KK" format (from parse_biblio_response).
+    Adds 'abstract' column; empty string on any failure.
+
+    fetch_claims: if True, also fetch first claim text (EP patents only; non-EP returns empty).
+                  Default False — abstract-only scoring is sufficient for EPO OPS mode and
+                  avoids 404 errors for non-EP patents (US, CN, KR, JP, etc.).
+    """
+    enriched = []
+    total = len(rows)
+
+    for i, row in enumerate(rows):
+        new_row = dict(row)
+        new_row.setdefault("abstract", "")
+        new_row.setdefault("representative_claim", "")
+
+        patent_id = row.get("id", "")
+        # Support "KR-102862661-B1" and "KR102862661B1"
+        m = re.match(r"([A-Z]{2})-(\d+)(?:-([A-Z]\d*))?", patent_id)
+        if not m:
+            m = re.match(r"([A-Z]{2})(\d+)([A-Z]\d*)?", patent_id)
+
+        if m:
+            country, number, kind = m.group(1), m.group(2), m.group(3) or ""
+
+            # Fetch abstract
+            try:
+                resp = client.published_data(
+                    reference_type="publication",
+                    input=epo_ops.models.Docdb(number, country, kind),
+                    endpoint="abstract",
+                )
+                root = ET.fromstring(resp.content)
+                paragraphs = [
+                    elem.text.strip()
+                    for elem in root.iter()
+                    if elem.tag.endswith("}p") and elem.text and elem.text.strip()
+                ]
+                new_row["abstract"] = " ".join(paragraphs)
+            except Exception:
+                pass
+
+            # Fetch representative claim (EP patents only; skip by default)
+            if fetch_claims:
+                try:
+                    resp = client.published_data(
+                        reference_type="publication",
+                        input=epo_ops.models.Docdb(number, country, kind),
+                        endpoint="claims",
+                    )
+                    root = ET.fromstring(resp.content)
+                    for elem in root.iter():
+                        if elem.tag.endswith("}claim-text") and elem.text and elem.text.strip():
+                            new_row["representative_claim"] = elem.text.strip()
+                            break
+                except Exception:
+                    pass
+
+            if delay > 0 and i < total - 1:
+                time.sleep(delay)
+
+        enriched.append(new_row)
+        if (i + 1) % 10 == 0 or i + 1 == total:
+            print(f"  EPO OPS abstracts: {i + 1}/{total}")
+
+    return enriched
+
+
+# ── 413 narrowing helper ─────────────────────────────────────────────────────
+
+def _narrow_413(
+    client: epo_ops.Client,
+    cql: str,
+    max_results: int,
+) -> tuple[str, object | None]:
+    """
+    Handle EPO OPS 413 "result set too large" by progressively trimming the CQL.
+
+    EPO OPS evaluates each AND operand independently before intersecting them.
+    If ANY OR-group has >~10,000 intermediate results, it returns 413 even if
+    the final AND intersection would be small.
+
+    Strategy (tries in order until one succeeds):
+      1. Keep only the first 3 terms of each OR-group (shortest broadest path)
+      2. Keep only the first 2 terms of each OR-group
+      3. Keep only the first term of each OR-group (single-term AND chain)
+    Returns (final_cql, response) or (original_cql, None) on full failure.
+    """
+    # Parse OR-groups: matches (ti="..." OR ti=... OR ...) patterns
+    def trim_cql_groups(cql: str, keep: int) -> str:
+        """Keep only the first `keep` ti= terms in every OR-group."""
+        def _trim_group(m: re.Match) -> str:
+            content = m.group(1)
+            # Split on ' OR ' to get individual ti=... terms
+            terms = re.split(r"\s+OR\s+", content)
+            trimmed = terms[:keep]
+            if len(trimmed) == 1:
+                return trimmed[0]
+            return f'({" OR ".join(trimmed)})'
+
+        # Match (ti=... OR ti=... OR ...) groups (with or without outer parens)
+        result = re.sub(r"\(([^()]+(?:\s+OR\s+[^()]+)+)\)", _trim_group, cql)
+        return result
+
+    for keep in [3, 2, 1]:
+        narrowed = trim_cql_groups(cql, keep)
+        if narrowed == cql and keep < 3:
+            continue  # no change — skip
+        print(f"  ⚠ 413: trimming OR-groups to {keep} term(s) each ...")
+        print(f"  CQL (trimmed): {narrowed[:150]}")
+        try:
+            resp = client.published_data_search(
+                cql=narrowed,
+                range_begin=1,
+                range_end=min(OPS_PAGE_SIZE, max_results),
+            )
+            return narrowed, resp
+        except Exception as e:
+            if "413" not in str(e):
+                print(f"  Error (keep={keep}): {e}", file=sys.stderr)
+                break  # non-413 error — stop trying
+
+    print(f"  All narrowing attempts failed for CQL: {cql[:80]}", file=sys.stderr)
+    return cql, None
 
 
 # ── Search functions ─────────────────────────────────────────────────────────
@@ -292,7 +456,15 @@ def search_patents(
         if "404" in err_msg or "no results" in err_msg.lower():
             print(f"  → 0 results")
             return []
-        raise
+        if "413" in err_msg:
+            # EPO OPS returns 413 when an intermediate OR-group result set exceeds
+            # the server limit (~10,000 records), even if the final AND result is small.
+            # Strategy: progressively drop terms from OR groups until the query fits.
+            cql, resp = _narrow_413(client, cql, max_results)
+            if resp is None:
+                return []
+        else:
+            raise
 
     doc_ids, total = parse_search_response(resp.content)
     effective_total = min(total, max_results)
@@ -372,7 +544,7 @@ def search_with_year_split(
     seen_ids = set()
 
     for year in range(year_from, year_to + 1):
-        cql_year = f"{cql_base} AND pd>={year} AND pd<={year}"
+        cql_year = f'{cql_base} AND pd within "{year}0101,{year}1231"'
         print(f"\n  [Year {year}]")
         results = search_patents(client, cql_year, max_results=max_per_year)
         for r in results:
@@ -407,10 +579,20 @@ def search_sub_techs(
     global_required: list[str] = None,
     global_exclude: list[str] = None,
     split_by_year: bool = False,
+    max_per_term: int = 200,
 ) -> dict:
     """
     Search all sub-technologies and save individual CSVs.
     Returns dict mapping sub_tech_id → csv_path.
+
+    Strategy: search each key_term individually to avoid EPO OPS 413 errors
+    caused by large OR-group intermediate result sets. Results are merged
+    and deduplicated (cap: max_per_term per term, 500 total per sub-tech).
+
+    The global_required domain anchor is NOT applied to title searches because
+    patents rarely include both a domain term ("stretchable display") and a
+    sub-tech term ("stretchable TFT") in the same title — combining them yields
+    zero results. Domain relevance is handled at abstract scoring time instead.
     """
     sub_data = json.loads(sub_techs_path.read_text(encoding="utf-8"))
     sub_techs = sub_data.get("sub_technologies", [])
@@ -427,27 +609,37 @@ def search_sub_techs(
         print(f"[{st_id}] {st['name_ko']}")
         print(f"{'='*60}")
 
-        # Build CQL from key_terms
-        groups = []
-        if global_required:
-            groups.append(list(global_required))
-        groups.append(st.get("key_terms", []))
-
+        key_terms = st.get("key_terms", [])
         exclude = list(set((global_exclude or []) + st.get("exclude_terms", [])))
 
-        cql = build_cql_from_groups(
-            groups, exclude_terms=exclude,
-            year_from=year_from, year_to=year_to,
-        )
+        all_results: list[dict] = []
+        seen_ids: set[str] = set()
 
-        if split_by_year:
-            cql_base = build_cql_from_groups(groups, exclude_terms=exclude)
-            results = search_with_year_split(client, cql_base, year_from, year_to)
-        else:
-            results = search_patents(client, cql)
+        for term in key_terms:
+            # Search each key_term individually to avoid OR-group 413.
+            # Exclude terms are NOT applied here: common excludes like "touch sensor"
+            # or "glass TFT" have millions of hits and cause 413 in NOT clauses.
+            # Irrelevant results are filtered out at abstract scoring time instead.
+            term_q = f'"{term}"' if " " in term else term
+            # EPO OPS requires pd within "YYYYMMDD,YYYYMMDD" — the pd>=X form triggers 413
+            cql = f'ti={term_q} AND pd within "{year_from}0101,{year_to}1231"'
+
+            print(f"  [{term}] searching ...")
+            results = search_patents(client, cql, max_results=max_per_term)
+            added = 0
+            for r in results:
+                if r["id"] not in seen_ids:
+                    seen_ids.add(r["id"])
+                    all_results.append(r)
+                    added += 1
+            print(f"  [{term}] +{added} unique (total: {len(all_results)})")
+
+            if len(all_results) >= 500:
+                print(f"  Reached 500 results cap, stopping early")
+                break
 
         csv_path = output_dir / f"gp-search-{st_id}.csv"
-        write_csv_file(results, csv_path)
+        write_csv_file(all_results, csv_path)
         csv_map[st_id] = str(csv_path)
 
     return csv_map

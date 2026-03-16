@@ -26,7 +26,9 @@ from urllib.parse import quote_plus
 
 
 # ── Term limits ───────────────────────────────────────────────────────────────
-MAX_TERMS_PER_GROUP = 10
+# EPO OPS returns 413 when an OR group's intermediate result set exceeds ~10,000.
+# Keeping groups to ≤5 terms avoids this while still covering the key concepts.
+MAX_TERMS_PER_GROUP = 5
 MAX_GROUPS = 3
 
 
@@ -68,8 +70,9 @@ def extract_rfp_english_keywords(rfp_text: str) -> list[str]:
     Returns deduplicated list; multi-word phrases kept as-is.
     """
     # Pattern 1: table cell with 영문 key (PDF→MD typical format)
+    # Handles both "| 영문 | value |" and "| 영문 |  | value |" (empty cell between)
     m = re.search(
-        r"영문[^\n|]{0,15}[|：:]\s*([A-Za-z][^|\n]{5,300})",
+        r"영문(?:[^\n|]{0,15}\|){1,3}\s*([A-Za-z][^|\n]{5,300})",
         rfp_text,
         re.IGNORECASE,
     )
@@ -132,6 +135,48 @@ def extract_english_keywords(text: str, max_terms: int = MAX_TERMS_PER_GROUP) ->
             break
 
     return all_terms[:max_terms]
+
+
+def build_cql_groups(
+    groups: list[list[str]],
+    exclude_terms: list[str] = None,
+    field: str = "ti",
+    year_from: str = None,
+    year_to: str = None,
+) -> str:
+    """
+    Build EPO CQL query from term groups using correct EPO OPS syntax.
+
+    EPO OPS requires per-field OR syntax, NOT the ti=(...) grouped form:
+      CORRECT:   (ti="stretchable display" OR ti="flexible display") AND ti=sensor
+      INCORRECT: ti=("stretchable display" OR "flexible display") AND ti=sensor
+
+    The incorrect form either returns 0 results or triggers 413 on EPO OPS v3.2.
+    """
+    parts = []
+    for g in groups:
+        if not g:
+            continue
+        terms = g[:MAX_TERMS_PER_GROUP]
+        field_terms = [f'{field}="{t}"' if " " in t else f"{field}={t}" for t in terms]
+        if len(field_terms) == 1:
+            parts.append(field_terms[0])
+        else:
+            parts.append(f'({" OR ".join(field_terms)})')
+    cql = " AND ".join(parts)
+    if exclude_terms:
+        exc_terms = [f'{field}="{t}"' if " " in t else f"{field}={t}" for t in exclude_terms]
+        if len(exc_terms) == 1:
+            cql += f" NOT {exc_terms[0]}"
+        else:
+            cql += f' NOT ({" OR ".join(exc_terms)})'
+    # EPO OPS requires pd within "YYYYMMDD,YYYYMMDD" — the pd>=X AND pd<=Y form
+    # triggers CLIENT.FuzzyDateRanges (HTTP 413).
+    if year_from or year_to:
+        d_from = str(year_from) if year_from else "20000101"
+        d_to = str(year_to) if year_to else "20991231"
+        cql += f' AND pd within "{d_from},{d_to}"'
+    return cql
 
 
 def build_and_groups(groups: list[list[str]], exclude_terms: list[str] = None) -> str:
@@ -208,10 +253,12 @@ def generate_main_query(rfp_text: str, years: int = 10,
     query = build_and_groups(groups, exclude_terms)
     url = build_search_url(query, years)
     after, before = date_range_params(years)
+    cql = build_cql_groups(groups, exclude_terms, year_from=after, year_to=before)
 
     return {
         "type": "main",
         "query": query,
+        "cql": cql,
         "url": url,
         "years": years,
         "date_from": after,
@@ -274,6 +321,7 @@ def generate_sub_tech_query(sub_tech: dict, rfp_text: str,
     query = build_and_groups(groups, exclude)
     url = build_search_url(query, years)
     after, before = date_range_params(years)
+    cql = build_cql_groups(groups, exclude, year_from=after, year_to=before)
 
     return {
         "type": "sub_tech",
@@ -281,6 +329,7 @@ def generate_sub_tech_query(sub_tech: dict, rfp_text: str,
         "name_ko": sub_tech["name_ko"],
         "name_en": sub_tech.get("name_en", ""),
         "query": query,
+        "cql": cql,
         "url": url,
         "years": years,
         "date_from": after,
@@ -291,24 +340,29 @@ def generate_sub_tech_query(sub_tech: dict, rfp_text: str,
 
 
 def format_queries_md(main_result: dict, sub_results: list[dict]) -> str:
-    """Format all queries as Obsidian-compatible Markdown."""
+    """Format all queries as Obsidian-compatible Markdown (EPO CQL primary)."""
     today = datetime.now().strftime("%Y-%m-%d")
     lines = [
         f"---",
         f"title: 특허 검색식 모음",
         f"created: {today}",
-        f"tags: [특허검색, 검색식]",
+        f"tags: [특허검색, 검색식, EPO-OPS]",
         f"---",
         f"",
         f"# 특허 검색식 모음",
         f"",
+        f"> [!note] 검색 방법",
+        f"> **EPO OPS (권장)**: `python search_patents_epo.py --cql '...' -o results.csv` 로 자동 검색",
+        f"> **run_pipeline.py `--auto-download`**: 전체 자동 실행 (검색+초록 수집 포함)",
+        f"",
         f"## 메인 검색식 (전체 RFP 범위)",
         f"",
-        f"```",
-        main_result["query"],
+        f"### EPO CQL (권장)",
+        f"",
+        f"```cql",
+        main_result.get("cql", main_result["query"]),
         f"```",
         f"",
-        f"**검색 URL**: {main_result['url']}",
         f"**기간**: 우선일 {main_result['date_from'][:4]}~{main_result['date_to'][:4]}년",
         f"",
         f"---",
@@ -323,11 +377,10 @@ def format_queries_md(main_result: dict, sub_results: list[dict]) -> str:
             f"**영문**: {r['name_en']}",
             f"**핵심 키워드**: {', '.join(r['key_terms'])}",
             f"",
+            f"**EPO CQL (권장)**",
+            f"```cql",
+            r.get("cql", r["query"]),
             f"```",
-            r["query"],
-            f"```",
-            f"",
-            f"**검색 URL**: {r['url']}",
             f"",
             f"---",
             f"",
