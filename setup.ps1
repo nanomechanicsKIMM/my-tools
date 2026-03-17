@@ -123,42 +123,39 @@ function Install-BkitPlugin {
         -GitCommitSha    $sha
 }
 
-function Install-VisualGeneratorPlugin {
-    $marketplace  = "honeypot"
-    $repo         = "nanomechanicsKIMM/my-tools"
-    $pluginName   = "visual-generator"
-    $PluginsDir   = Join-Path $env:USERPROFILE ".claude\plugins"
-    $pluginSrc    = Join-Path $RepoRoot "plugins\visual-generator"
-    $CacheDir     = Join-Path $PluginsDir "cache\$marketplace\$pluginName"
-    $MktDir       = Join-Path $PluginsDir "marketplaces\$marketplace\plugins\$pluginName"
+function Install-LocalPlugin {
+    param([string]$PluginName)
+    $marketplace = "my-tools"
+    $repo        = "nanomechanicsKIMM/my-tools"
+    $PluginsDir  = Join-Path $env:USERPROFILE ".claude\plugins"
+    $pluginSrc   = Join-Path $RepoRoot "plugins\$PluginName"
+    $CacheDir    = Join-Path $PluginsDir "cache\$marketplace\$PluginName"
+    $MktDir      = Join-Path $PluginsDir "marketplaces\$marketplace\plugins\$PluginName"
 
-    Write-Host "`nInstalling visual-generator plugin..."
+    Write-Host "`nInstalling $PluginName plugin..."
 
     if (-not (Test-Path $pluginSrc)) {
-        Write-Host "  plugins/visual-generator not found; skipping."
+        Write-Host "  plugins/$PluginName not found; skipping."
         return
     }
 
-    $pluginJson = Get-Content (Join-Path $pluginSrc ".claude-plugin\plugin.json") -Raw | ConvertFrom-Json
+    $pluginJson  = Get-Content (Join-Path $pluginSrc ".claude-plugin\plugin.json") -Raw | ConvertFrom-Json
     $version     = $pluginJson.version
     $installPath = Join-Path $CacheDir $version
 
-    # cache에 복사
     if (Test-Path $installPath) {
-        Write-Host "  visual-generator $version already installed — reinstalling."
+        Write-Host "  $PluginName $version already installed — reinstalling."
         Remove-Item $installPath -Recurse -Force
     }
     New-Item -ItemType Directory -Path $installPath -Force | Out-Null
     Get-ChildItem $pluginSrc -Force | Copy-Item -Destination $installPath -Recurse -Force
-    Write-Host "  Installed visual-generator $version -> $installPath"
+    Write-Host "  Installed $PluginName $version -> $installPath"
 
-    # marketplace 디렉토리에도 복사
     if (Test-Path $MktDir) { Remove-Item $MktDir -Recurse -Force }
     New-Item -ItemType Directory -Path $MktDir -Force | Out-Null
     Get-ChildItem $pluginSrc -Force | Copy-Item -Destination $MktDir -Recurse -Force
     Write-Host "  Marketplace entry -> $MktDir"
 
-    # SHA: 현재 git commit 사용
     $sha = (& git -C $RepoRoot rev-parse HEAD 2>$null)
     if (-not $sha) { $sha = "bundled" } else { $sha = $sha.Trim() }
 
@@ -166,11 +163,15 @@ function Install-VisualGeneratorPlugin {
         -PluginsDir      $PluginsDir `
         -MarketplaceName $marketplace `
         -GitHubRepo      $repo `
-        -PluginName      $pluginName `
+        -PluginName      $PluginName `
         -Version         $version `
         -InstallPath     $installPath `
         -GitCommitSha    $sha
 }
+
+function Install-VisualGeneratorPlugin { Install-LocalPlugin "visual-generator" }
+function Install-HwpxToolsPlugin       { Install-LocalPlugin "hwpx-tools" }
+function Install-PatentToolsPlugin     { Install-LocalPlugin "patent-tools" }
 
 function Install-PlaywrightPlugin {
     $marketplace = "claude-plugins-official"
@@ -212,4 +213,6 @@ New-Item -ItemType Directory -Path (Join-Path $env:USERPROFILE ".claude\plugins\
 Install-BkitPlugin
 Install-PlaywrightPlugin
 Install-VisualGeneratorPlugin
+Install-HwpxToolsPlugin
+Install-PatentToolsPlugin
 Write-Host "`nDone! Restart Claude Code to activate plugins." -ForegroundColor Green

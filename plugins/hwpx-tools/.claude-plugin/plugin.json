@@ -1,0 +1,9 @@
+{
+  "name": "hwpx-tools",
+  "version": "1.0.0",
+  "description": "HWPX 문서 생성·편집 도구 모음 (python-hwpx API, XML 직접 작성, 과업지시서 자동 생성)",
+  "author": {
+    "name": "nanomechanicsKIMM"
+  },
+  "license": "MIT"
+}

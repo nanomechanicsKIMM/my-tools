@@ -48,7 +48,7 @@ update_plugin_registries() {
     [[ -f "$ip_file" ]] || echo '{"version":2,"plugins":{}}' > "$ip_file"
     [[ -f "$km_file" ]] || echo '{}' > "$km_file"
 
-    python3 - <<EOF
+    (python3 2>/dev/null || python) - <<EOF
 import json
 
 # installed_plugins.json
@@ -89,7 +89,7 @@ install_bkit() {
     local version
     local cfg="$temp_dir/bkit.config.json"
     if [[ -f "$cfg" ]]; then
-        version="$(python3 -c "import json; print(json.load(open('$cfg'))['version'])")"
+        version="$(python3 -c "import json; print(json.load(open('$cfg'))['version'])" 2>/dev/null || python -c "import json; print(json.load(open('$cfg'))['version'])")"
     else
         version="${sha:0:12}"
     fi
@@ -108,45 +108,46 @@ install_bkit() {
     update_plugin_registries "$marketplace" "$repo" "$plugin_name" "$version" "$install_path" "$sha"
 }
 
-install_visual_generator() {
-    local marketplace="honeypot"
+install_local_plugin() {
+    local plugin_name="$1"
+    local marketplace="my-tools"
     local repo="nanomechanicsKIMM/my-tools"
-    local plugin_name="visual-generator"
-    local plugin_src="$REPO_ROOT/plugins/visual-generator"
+    local plugin_src="$REPO_ROOT/plugins/$plugin_name"
     local cache_dir="$PLUGINS_DIR/cache/$marketplace/$plugin_name"
     local mkt_dir="$PLUGINS_DIR/marketplaces/$marketplace/plugins/$plugin_name"
 
-    echo; echo "Installing visual-generator plugin..."
+    echo; echo "Installing $plugin_name plugin..."
 
     if [[ ! -d "$plugin_src" ]]; then
-        echo "  plugins/visual-generator not found; skipping."
+        echo "  plugins/$plugin_name not found; skipping."
         return
     fi
 
     local version
-    version="$(python3 -c "import json; print(json.load(open('$plugin_src/.claude-plugin/plugin.json'))['version'])")"
+    version="$(python3 -c "import json; print(json.load(open('$plugin_src/.claude-plugin/plugin.json'))['version'])" 2>/dev/null || python -c "import json; print(json.load(open('$plugin_src/.claude-plugin/plugin.json'))['version'])")"
     local install_path="$cache_dir/$version"
 
-    # cache에 복사
     if [[ -d "$install_path" ]]; then
-        echo "  visual-generator $version already installed — reinstalling."
+        echo "  $plugin_name $version already installed — reinstalling."
         rm -rf "$install_path"
     fi
     mkdir -p "$install_path"
     cp -R "$plugin_src/." "$install_path/"
-    echo "  Installed visual-generator $version -> $install_path"
+    echo "  Installed $plugin_name $version -> $install_path"
 
-    # marketplace 디렉토리에도 복사 (Claude Code 활성화에 필요)
     mkdir -p "$mkt_dir"
     cp -R "$plugin_src/." "$mkt_dir/"
     echo "  Marketplace entry -> $mkt_dir"
 
-    # SHA: 현재 git commit 사용
     local sha
     sha="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "bundled")"
 
     update_plugin_registries "$marketplace" "$repo" "$plugin_name" "$version" "$install_path" "$sha"
 }
+
+install_visual_generator() { install_local_plugin "visual-generator"; }
+install_hwpx_tools()       { install_local_plugin "hwpx-tools"; }
+install_patent_tools()     { install_local_plugin "patent-tools"; }
 
 install_playwright() {
     local marketplace="claude-plugins-official"
@@ -186,4 +187,6 @@ mkdir -p "$PLUGINS_DIR/cache"
 install_bkit
 install_playwright
 install_visual_generator
+install_hwpx_tools
+install_patent_tools
 echo; echo "Done! Restart Claude Code to activate plugins."
