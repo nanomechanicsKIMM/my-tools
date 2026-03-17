@@ -3,204 +3,284 @@ name: patent-strategy-pro
 description: Advanced patent strategy report with sub-technology decomposition, gap analysis, Objective-Solution matrix, and IP creation strategy. Supports PDF or MD RFP input. Generates Obsidian-format report. Use when user asks for 특허 전략 보고서, 세부 기술 분석, 공백 기술, OS 매트릭스, IP 창출 전략, 특허 분석 보고서, patent strategy.
 ---
 
-# Patent Strategy Pro Skill
+# Patent Strategy Pro – Orchestrator
 
 PDF 또는 MD 형식의 RFP를 입력받아 세부 기술별 특허 분석, 공백 기술 분석, Objective-Solution Matrix, IP 창출 전략을 포함한 종합 특허 전략 보고서(Obsidian MD)를 생성한다. **기술 분야에 무관하게** 반도체, 배터리, 바이오, AI, 통신, 로봇, 소재 등 어떤 RFP에도 적용 가능하다.
 
 ## When to Use
 
-- 사용자가 RFP(PDF 또는 MD)와 Google Patents CSV를 제공하고 특허 전략 보고서를 요청할 때
-- 기존 `/patent-strategy-report` 보다 심층 분석이 필요한 경우: 세부 기술별 특허 분석, 공백 기술, OS 매트릭스, IP 창출 전략 포함
+- 사용자가 RFP(PDF 또는 MD)와 특허 전략 보고서를 요청할 때
 - "특허 전략 보고서", "세부 기술 분석", "공백 기술", "OS 매트릭스", "IP 창출 전략", "RFP 특허 검색", "Google Patents 분석" 언급 시
+- 기존 `/patent-strategy-report` 보다 심층 분석이 필요한 경우
 
 ## Inputs
 
-1. **RFP 파일** (필수): PDF 또는 MD 형식. PDF이면 자동으로 MD 변환 진행.
-2. **메인 CSV** (필수): RFP 전체 범위 Google Patents 검색 결과 (사용자 직접 다운로드)
-3. **세부 기술별 CSV** (필수): 세부 기술 도출 후 각 세부 기술별 검색 결과 CSV (사용자 직접 다운로드, 3~5개)
-4. **옵션**: `--include-terms`, `--exclude-terms`, `--years` (기본 10년)
+1. **RFP 파일** (필수): PDF 또는 MD 형식
+2. **옵션**: `--include-terms`, `--exclude-terms`, `--years` (기본 10년)
 
-## Workflow (9단계)
-
-### Phase 1: RFP 전처리
-
-**Step 1 — RFP 변환 (PDF 입력 시)**
-- `pdf_to_md.py <rfp.pdf> -o <rfp.md>` 실행
-- pdfplumber 기반 구조 보존 변환 (제목, 표, 목록, 한글 텍스트)
-- 출력: YAML 프론트매터 포함 Obsidian MD 파일
-
-**Step 2-A — 세부 기술 자동 추출 (스크립트)**
-- `extract_sub_technologies.py <rfp.md> -o sub_techs.json [--domain-dict domain.json]` 실행
-- RFP의 과제목표·연구개발내용·성과지표에서 3~5개 세부 기술 추출
-- 내장 도메인 사전(14개 분야 190+개 매핑) + 선택적 외부 사전(`--domain-dict`)
-- 출력: JSON (name_ko, name_en, description, key_terms, exclude_terms, quality_warnings 포함)
-
-**Step 2-B — Claude RFP 분석 보정 (필수)**
-
-스크립트 자동 추출은 **초안**일 뿐이다. Claude는 반드시 다음 보정을 수행한다:
-
-1. **RFP 원문 독해**: 과제목표·단계별 목표·연구개발내용·성과지표를 직접 분석
-2. **스크립트 결과 대조**: 자동 추출 결과와 자체 분석을 비교하여 다음을 확인:
-   - 중복된 세부 기술이 있는가? (있으면 합치거나 제거)
-   - 빠진 핵심 기술 영역이 있는가? (있으면 추가)
-   - key_terms가 세부 기술 간 충분히 차별화되는가? (Jaccard > 50% 시 재설정)
-   - exclude_terms가 적절한가? (key_terms와 충돌하는 제외 단어 확인)
-3. **보정된 sub_techs.json 작성**: Claude가 직접 수정하여 JSON 파일 업데이트
-4. **품질 검증 결과 포함**: `quality_warnings`의 경고를 해결한 상태로 제시
-
-> **근거**: 한국어 RFP의 불릿 구조·표 셀 병합·기술 용어 다양성 때문에 스크립트 단독으로는 세부 기술 분류 품질이 불안정하다. Claude의 RFP 독해 능력과 스크립트의 구조적 추출을 결합하면 정확도가 크게 향상된다.
-
-**⛔ Step 2-B 완료 후 반드시 사용자 확인 — 승인 전 Phase 2 진행 금지**
-
-Claude는 **보정 완료된** 결과를 아래 형식으로 제시하고, 명시적 승인을 받은 뒤에만 다음 단계로 진행한다:
+## Skill Constants
 
 ```
-## 세부 기술 자동 추출 결과 확인
-
-| ID | 한국어 기술명 | Google Patents 검색 키워드 |
-|----|--------------|--------------------------|
-| sub1 | {name_ko} | {key_terms} |
-| sub2 | {name_ko} | {key_terms} |
-| ...  | ...         | ...                       |
-
-**검토 포인트**
-- [ ] 기술명이 RFP 연구개발내용 항목과 일치하는가?
-- [ ] 중요한 세부 기술이 빠져 있지 않은가?
-- [ ] key_terms가 Google Patents 검색에 적합한 영어 기술 용어인가?
-- [ ] 세부 기술별 key_terms가 서로 다른가? (모두 동일하면 검색 품질 저하)
-
-위 목록이 맞으면 **"확인"** 또는 수정 내용을 알려주세요.
-수정이 필요하면 output/sub_techs.json을 직접 편집하거나 수정 사항을 말씀해 주세요.
+SKILL_ROOT = ~/.claude/skills/patent-strategy-pro/
+SCRIPTS_DIR = SKILL_ROOT/scripts/
+AGENTS_DIR = SKILL_ROOT/agents/
 ```
 
-승인 방식:
-- 사용자가 "확인", "OK", "진행", "맞습니다" 등을 입력하면 Phase 2로 진행
-- 수정 요청 시 Claude가 sub_techs.json을 직접 편집 후 재확인 요청
-- 세부 기술명 교체, key_terms 수정, 항목 추가/삭제 모두 Claude가 즉시 반영
+## Output Directory
 
-### Phase 2: 검색식 생성 및 CSV 수집
+Ask the user for an output directory or default to a `output/` subdirectory next to the RFP file.
+Create it if it doesn't exist.
 
-두 가지 모드를 지원한다:
+---
 
-**Mode A — EPO OPS 자동 다운로드 (권장, 사용자 개입 없음)**
+## Step 0-A: Patent Database Selection
 
-`run_pipeline.py --auto-download` 사용 시 EPO Open Patent Services API로 CSV를 자동 생성한다.
-
-- 사전 준비: `https://developers.epo.org` 에서 계정 등록 → API Key 발급 → 환경변수 설정
-  ```
-  set EPO_OPS_KEY=<consumer_key>
-  set EPO_OPS_SECRET=<consumer_secret>
-  ```
-- `search_patents_epo.py`가 CQL 검색 → XML 파싱 → Google Patents 호환 CSV 변환
-- 메인 검색 + 세부 기술별 검색이 모두 자동 실행 (사용자 브라우저 조작 불필요)
-- EPO OPS 제한: 쿼리당 최대 2,000건. `--split-by-year`로 연도별 분할 검색 가능
-- 스로틀링은 `python-epo-ops-client` Throttler 미들웨어가 자동 처리
-
-**Mode B — Google Patents 수동 다운로드 (기존 방식)**
-
-EPO OPS 계정이 없거나 Google Patents CSV를 이미 가지고 있는 경우:
-
-**Step 3 — 메인 검색식 생성**
-- `generate_query.py <rfp.md> [--years 10] [--exclude-terms "..."]`
-- RFP 전체 범위 AND 그룹 검색식 생성
-- 사용자가 Google Patents에서 CSV 다운로드
-
-**Step 4 — 세부 기술별 검색식 생성**
-- `generate_query.py <rfp.md> --sub-tech-json sub_techs.json` 실행
-- 각 세부 기술별 특화 검색식 + URL 생성
-- 사용자가 세부 기술별 CSV를 각각 다운로드 (3~5개)
-
-### Phase 3: 메인 CSV 통계 분석
-
-**Step 5 — 제목 연관성 점수 (메인 CSV)**
-- `score_title_relevance.py <main.csv> <rfp.md> -o v1_top10000.csv --top 10000`
-- 상위 10,000건 추출 → 보고서 통계 기반 데이터
-- `aggregate_csv_report.py` 로 연도별·출원인·국가별 집계
-
-### Phase 4: 세부 기술별 심층 분석
-
-**Step 6 — 세부 기술별 제목 연관성 점수**
-- 각 세부 기술 CSV에 대해 `score_title_relevance.py` 실행 → 상위 100건
-
-**Step 7 — 초록+대표청구항 수집**
-- **EPO OPS 자동 모드** (`--auto-download`): `search_patents_epo.fetch_abstracts_bulk()` 가 EPO OPS API로 직접 수집 (사용자 개입 불필요)
-- **수동 모드** (Google Patents CSV): `fetch_abstracts.py` 실행 후 수동 보완
-- 초록(abstract) + 대표청구항(representative_claim) 컬럼 추가
-
-**Step 8 — 초록+대표청구항 연관성 점수**
-- `score_abstract_relevance.py` 실행 → 상위 5건 핵심 특허 선정
-- 세부 기술별 핵심 특허 5건 CSV 저장: `{sub_tech}_core5.csv`
-
-### Phase 5: 분석 및 보고서 생성
-
-**Step 9 — 종합 분석 및 보고서 작성**
-
-Claude가 다음 항목을 순서대로 작성:
-
-1. **통계 섹션** (§1~§4): 메인 10,000건 집계 데이터 기반
-2. **세부 기술별 특허 분석** (§5): 각 세부 기술의 핵심 특허 5건 분석
-   - 특허 개요 표 (번호, 출원인, 출원일, 제목)
-   - 대표청구항 요지 요약
-   - 기술적 특징 및 RFP 연관성
-3. **공백 기술 분석** (§6): RFP 요구사항 vs 기존 특허 커버리지 비교
-4. **Objective-Solution Matrix** (§7): RFP 목표 × 특허 솔루션 매핑
-5. **IP 창출 전략** (§8): 세부 기술별 출원 방향, 회피 전략, 선점 기회
-6. **종합 전략 시사점** (§9)
-
-## 보고서 작성 규칙
-
-### 출원인 표기
-- compact 형태 통일: `Apple Inc. → Apple`, `Google LLC → Google`, `Samsung Electronics Co., Ltd. → Samsung Electronics`
-- LLC, Inc., Ltd., Co., Ltd., GmbH, Corporation, Corp. 접미사 삭제
-- 한·중·일·영문 변형 → 영어 통일명으로 합산
-
-### 섹션별 규칙
-- **§3.3 주요 출원인 전략**: 반드시 표(table) 형태만. 헤더: `출원인 | 강점·주요 포트폴리오 | RFP 연관성 | 차별화·선행 회피 포인트`
-- **§5 세부 기술별 분석**: 각 세부 기술마다 개요 표 + 핵심 특허 분석 포함
-- **§6 공백 기술**: 표 형태: `기술 요구사항 | 특허 커버리지 | 공백 여부 | 제안 방향`
-- **§7 OS 매트릭스**: 행=RFP 목표, 열=특허 솔루션. ◎/○/△/× 표기
-- **§8 IP 창출 전략**: 세부 기술별로 독립항 전략, 종속항 전략, 회피 포인트 제시
-
-### 기술 단계 해석
-- 최근 2~3년 출원 감소 → 성숙기로 단정하지 않음 (공개 지연 고려)
-- 도입기 기술이면 "도입기"로 명시
-
-### 국가별 표기
-- 유럽 국가 통합 (EP, DE, GB, FR, ES, NL, DK, BE → "유럽")
-- 한글 명칭 사용: 미국, 중국, 일본, 한국, 유럽, PCT 등
-
-## Outputs
+Present this to the user **before launching any agent**:
 
 ```
-{output_dir}/
-├── rfp.md                          # PDF 변환 결과 (PDF 입력 시)
-├── sub_techs.json                  # 세부 기술 목록 (3~5개)
-├── query_main.txt                  # 메인 검색식
-├── queries_sub_techs.md            # 세부 기술별 검색식
-├── v1_top10000.csv                 # 메인 통계용 상위 10,000건
-├── aggregate_report_data.json      # 집계 데이터 JSON
-├── {sub_tech_1}/
-│   ├── top100_title_scored.csv
-│   ├── top100_with_abstracts.csv
-│   ├── top100_abstract_scored.csv
-│   └── core5_patents.csv
-├── {sub_tech_2}/
-│   └── ...
-├── analysis/
-│   ├── gap_analysis.md             # 공백 기술 분석
-│   ├── os_matrix.md                # Objective-Solution Matrix
-│   └── ip_strategy.md             # IP 창출 전략
-└── {YYYYMMDD}_{topic}_특허전략보고서.md  # 최종 보고서
+**특허 검색 DB를 선택하세요:**
+
+1. Google Patents (수동 CSV 다운로드)
+   - 브라우저에서 검색 URL 열기 → CSV 다운로드 → 파일 경로 제공
+   - EPO 계정 불필요
+
+2. EPO OPS (자동 검색, API 키 필요)
+   - 검색부터 초록 수집까지 자동 실행
+   - 사전 준비: https://developers.epo.org 에서 Consumer Key/Secret 발급
+   - 환경변수: EPO_OPS_KEY, EPO_OPS_SECRET
 ```
+
+Wait for user selection. Set `db_mode = "google"` or `db_mode = "epo"`.
+
+## Step 0-B: Input Collection
+
+Immediately after DB selection, collect:
+
+```
+다음 정보를 입력해 주세요:
+
+1. RFP 파일 경로 (PDF 또는 MD):
+2. 보고서 주제명 (한국어 슬러그, 예: "센서융합디스플레이"):
+3. 출력 디렉토리 경로 (기본: RFP 파일 옆 output/):
+4. 필수 포함 단어 (쉼표 구분, 선택): 예) "flexible display, OLED"
+5. 제외 단어 (쉼표 구분, 선택): 예) "lighting, signage"
+6. 검색 기간 (기본 10년): 5 / 10 / 15
+```
+
+Store collected values:
+- `rfp_input`: path to RFP file
+- `topic`: Korean slug (used in output filename)
+- `output_dir`: absolute path to output directory
+- `include_terms`: comma-separated string (empty string if none)
+- `exclude_terms`: comma-separated string (empty string if none)
+- `years`: integer
+- `date`: today's date as YYYYMMDD
+
+---
+
+## Orchestration Sequence
+
+### Phase 1 (serial)
+
+Launch Agent with `agents/phase1-rfp-prep.md`:
+
+```
+Task: Prepare RFP markdown
+Agent: phase1-rfp-prep
+Inputs:
+  rfp_input: {rfp_input}
+  output_dir: {output_dir}
+  scripts_dir: {SCRIPTS_DIR}
+```
+
+Wait for completion. Verify `{output_dir}/rfp.md` exists. On failure, stop and report error to user.
+
+---
+
+### Phase 2A (serial)
+
+Launch Agent with `agents/phase2a-sub-tech-extract.md`:
+
+```
+Task: Extract and correct sub-technologies
+Agent: phase2a-sub-tech-extract
+Inputs:
+  rfp_md: {output_dir}/rfp.md
+  output_dir: {output_dir}
+  scripts_dir: {SCRIPTS_DIR}
+  include_terms: {include_terms}
+  exclude_terms: {exclude_terms}
+```
+
+Wait for completion. The agent returns the approval table markdown.
+
+---
+
+### ⛔ USER APPROVAL GATE
+
+Present the approval table returned by the Phase 2A agent verbatim to the user.
+
+**Block here until the user explicitly approves.**
+
+Acceptable approval inputs: "확인", "OK", "ok", "진행", "맞습니다", "좋아요"
+
+If user requests corrections:
+- If the correction is a JSON edit: edit `{output_dir}/sub_techs.json` directly
+- If the correction is verbal: apply the change to the JSON file
+- Re-present the updated table and wait for approval again
+
+Do NOT proceed to Phase 2B until approval is received.
+
+---
+
+### Phase 2B (serial)
+
+Launch Agent with `agents/phase2b-query-gen.md`:
+
+```
+Task: Generate queries and acquire CSVs
+Agent: phase2b-query-gen
+Inputs:
+  rfp_md: {output_dir}/rfp.md
+  sub_techs_json: {output_dir}/sub_techs.json
+  output_dir: {output_dir}
+  scripts_dir: {SCRIPTS_DIR}
+  db_mode: {db_mode}
+  years: {years}
+  include_terms: {include_terms}
+  exclude_terms: {exclude_terms}
+  topic: {topic}
+  date: {date}
+```
+
+**Google Patents mode**: The agent presents download URLs. Present them to the user and wait for CSV file paths. Once received, pass them back to the agent for manifest writing.
+
+**EPO mode**: The agent runs fully automatically. Wait for completion.
+
+Verify `{output_dir}/acquisition_manifest.json` exists after completion.
+
+---
+
+### Phase 3 + Phase 4 (PARALLEL — launch all in a single message)
+
+Read `{output_dir}/sub_techs.json` to get the list of sub-tech IDs.
+
+Launch the following agents simultaneously in a single message (one Agent tool call per agent):
+
+**Agent 1: Phase 3 — Main Statistics**
+```
+Task: Compute main CSV statistics
+Agent: phase3-main-stats
+Inputs:
+  manifest_path: {output_dir}/acquisition_manifest.json
+  scripts_dir: {SCRIPTS_DIR}
+  include_terms: {include_terms}
+  exclude_terms: {exclude_terms}
+```
+
+**Agent 2..N+1: Phase 4 — Sub-Tech Analysis (one per sub-tech)**
+
+For each sub-tech with id `sub_id` at index `i` (0-based):
+```
+Task: Analyze sub-technology {sub_id}
+Agent: phase4-sub-tech-analysis
+Inputs:
+  manifest_path: {output_dir}/acquisition_manifest.json
+  sub_tech_id: {sub_id}
+  sub_tech_json_path: {output_dir}/sub_techs.json
+  scripts_dir: {SCRIPTS_DIR}
+  include_terms: {include_terms}
+  exclude_terms: {exclude_terms}
+  db_mode: {db_mode}
+  sub_index: {i}
+```
+
+Wait for ALL parallel agents to complete before proceeding.
+
+Verify:
+- `{output_dir}/aggregate_report_data.json` exists (Phase 3)
+- `{output_dir}/{sub_id}/core5_patents.csv` exists for every sub_id (Phase 4)
+- `{output_dir}/{sub_id}/analysis_complete.flag` exists for every sub_id (Phase 4)
+
+---
+
+### Phase 5 (serial, last)
+
+Launch Agent with `agents/phase5-report-writer.md`:
+
+```
+Task: Write complete patent strategy report
+Agent: phase5-report-writer
+Inputs:
+  manifest_path: {output_dir}/acquisition_manifest.json
+  sub_tech_json_path: {output_dir}/sub_techs.json
+  skill_root: {SKILL_ROOT}
+```
+
+Wait for completion. Verify the report file exists:
+`{output_dir}/{date}_{topic}_특허전략보고서.md`
+
+---
+
+## Final Status Report
+
+After Phase 5 completes, present to the user:
+
+```
+## 특허 전략 보고서 생성 완료
+
+**최종 보고서**: {output_dir}/{date}_{topic}_특허전략보고서.md
+
+**생성된 파일 목록**:
+- rfp.md — RFP 변환본
+- sub_techs.json — 세부 기술 정의 ({N}개)
+- queries_sub_techs.md — 검색식
+- acquisition_manifest.json — CSV 경로 매니페스트
+- v1_top10000.csv — 메인 상위 10,000건
+- aggregate_report_data.json — 통계 집계
+- sub1/core5_patents.csv ~ subN/core5_patents.csv — 세부 기술별 핵심 특허
+- analysis/gap_analysis.md — 공백 기술 분석
+- analysis/os_matrix.md — OS 매트릭스
+- analysis/ip_strategy.md — IP 창출 전략
+- {date}_{topic}_특허전략보고서.md — **최종 보고서 (§1~§9)**
+```
+
+---
 
 ## Files in This Skill
 
-- [SKILL.md](SKILL.md) – 본 스킬 정의 (이 파일)
-- [reference.md](reference.md) – 검색식 문법, 점수 알고리즘, 공백 분석·OS 매트릭스·IP 전략 방법론
-- [templates/report-template.md](templates/report-template.md) – 최종 보고서 템플릿 (§1~§9)
-- [templates/sub-tech-analysis-template.md](templates/sub-tech-analysis-template.md) – 세부 기술 분석 섹션 템플릿
-- [scripts/](scripts/) – `pdf_to_md.py`, `extract_sub_technologies.py`, `generate_query.py`, `score_relevance_weighted.py`, `score_title_relevance.py`, `score_abstract_relevance.py`, `fetch_abstracts.py`, `aggregate_csv_report.py`, `fill_report.py`, `run_pipeline.py`
-- [output/실행가이드.md](output/실행가이드.md) – 단계별 실행 가이드
+- [SKILL.md](SKILL.md) — 오케스트레이터 (이 파일)
+- [agents/phase1-rfp-prep.md](agents/phase1-rfp-prep.md) — Phase 1 에이전트
+- [agents/phase2a-sub-tech-extract.md](agents/phase2a-sub-tech-extract.md) — Phase 2A 에이전트
+- [agents/phase2b-query-gen.md](agents/phase2b-query-gen.md) — Phase 2B 에이전트
+- [agents/phase3-main-stats.md](agents/phase3-main-stats.md) — Phase 3 에이전트 (병렬)
+- [agents/phase4-sub-tech-analysis.md](agents/phase4-sub-tech-analysis.md) — Phase 4 에이전트 (병렬, N 인스턴스)
+- [agents/phase5-report-writer.md](agents/phase5-report-writer.md) — Phase 5 에이전트
+- [reference.md](reference.md) — 방법론, 알고리즘, 정규화 규칙
+- [templates/report-template.md](templates/report-template.md) — §1~§9 보고서 템플릿
+- [templates/sub-tech-analysis-template.md](templates/sub-tech-analysis-template.md) — §5 세부 기술 템플릿
+- [scripts/](scripts/) — Python 스크립트 (변경 없음)
+- [output/실행가이드.md](output/실행가이드.md) — 단계별 실행 가이드
+
+## Inter-Phase Handoff Contract
+
+`output/acquisition_manifest.json` is the single source of truth for CSV paths:
+
+```json
+{
+  "rfp_md": "output/rfp.md",
+  "topic": "string",
+  "date": "YYYYMMDD",
+  "db_mode": "google | epo",
+  "main_csv": "output/gp-search-{date}_main.csv",
+  "sub_tech_csvs": {
+    "sub1": "output/gp-search-{date}_sub1.csv",
+    "sub2": "output/gp-search-{date}_sub2.csv"
+  }
+}
+```
+
+Phase 3 and all Phase 4 agents read ONLY from this manifest — they never accept CSV paths as direct arguments.
 
 ## Dependencies
 
@@ -209,4 +289,5 @@ Claude가 다음 항목을 순서대로 작성:
 - `pandas` (집계)
 - `scikit-learn` (TF-IDF 유사도)
 - `requests`, `beautifulsoup4` (초록 수집)
+- `python-epo-ops-client` (EPO OPS 모드)
 - [scripts/requirements.txt](scripts/requirements.txt) 참고
