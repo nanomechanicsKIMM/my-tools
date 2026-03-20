@@ -88,6 +88,22 @@ def create_client(key: str | None = None, secret: str | None = None) -> epo_ops.
         )
         sys.exit(1)
 
+    # Disable SSL verification (needed for corporate proxies with self-signed certs)
+    try:
+        import requests
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        import requests.adapters as _ra
+        if not getattr(_ra.HTTPAdapter, "_ssl_patched", False):
+            _orig_send = _ra.HTTPAdapter.send
+            def _patched_send(self, request, **kwargs):
+                kwargs["verify"] = False
+                return _orig_send(self, request, **kwargs)
+            _ra.HTTPAdapter.send = _patched_send
+            _ra.HTTPAdapter._ssl_patched = True
+    except Exception:
+        pass
+
     middlewares = [
         epo_ops.middlewares.Throttler(),
     ]
@@ -568,6 +584,59 @@ def write_csv_file(results: list[dict], output_path: Path):
     print(f"  Wrote {output_path} ({len(results)} rows)")
 
 
+# ── Family deduplication ─────────────────────────────────────────────────────
+
+def deduplicate_by_family(rows: list[dict]) -> list[dict]:
+    """
+    Remove patent family duplicates from a list of results.
+
+    Pass 1 — same publication (country + doc_number, ignoring kind code):
+      US-20230123456-A1 and US-11234567-B2 are different doc_numbers so kept as-is.
+      US-1234567-A1 and US-1234567-B1 → same base → keep first seen.
+
+    Pass 2 — cross-country family approximation:
+      Patents with identical (priority_date month, normalized_title[:60]) are
+      likely the same invention filed in multiple countries → keep first seen.
+
+    Returns deduplicated list preserving original order (first occurrence wins).
+    """
+    seen_doc: set[tuple] = set()
+    seen_title: set[tuple] = set()
+    result: list[dict] = []
+
+    for row in rows:
+        patent_id = row.get("id", "")
+        # Parse "CC-NNNNNN-KK" or "CC-NNNNNN"
+        m = re.match(r"([A-Z]{2})-(\d+)", patent_id)
+        keep = True
+
+        if m:
+            country, number = m.group(1), m.group(2)
+            doc_key = (country, number)
+            if doc_key in seen_doc:
+                keep = False
+            else:
+                seen_doc.add(doc_key)
+
+        if keep:
+            title_raw = row.get("title", "")
+            priority = row.get("priority date", "")[:7]  # "YYYY-MM"
+            # Normalize: lowercase, collapse whitespace, strip punctuation
+            title_norm = re.sub(r"[^a-z0-9 ]", "", title_raw.lower())
+            title_norm = re.sub(r"\s+", " ", title_norm).strip()[:60]
+            if title_norm and len(title_norm) > 10 and priority:
+                title_key = (priority, title_norm)
+                if title_key in seen_title:
+                    keep = False
+                else:
+                    seen_title.add(title_key)
+
+        if keep:
+            result.append(row)
+
+    return result
+
+
 # ── Sub-tech batch search ────────────────────────────────────────────────────
 
 def search_sub_techs(
@@ -580,6 +649,7 @@ def search_sub_techs(
     global_exclude: list[str] = None,
     split_by_year: bool = False,
     max_per_term: int = 200,
+    only_ids: list[str] = None,
 ) -> dict:
     """
     Search all sub-technologies and save individual CSVs.
@@ -605,6 +675,12 @@ def search_sub_techs(
 
     for st in sub_techs:
         st_id = st["id"]
+
+        # Skip if only_ids filter is set and this ID is not in it
+        if only_ids and st_id not in only_ids:
+            print(f"\n[{st_id}] Skipped (not in --only-ids)")
+            continue
+
         print(f"\n{'='*60}")
         print(f"[{st_id}] {st['name_ko']}")
         print(f"{'='*60}")
@@ -625,7 +701,12 @@ def search_sub_techs(
             cql = f'ti={term_q} AND pd within "{year_from}0101,{year_to}1231"'
 
             print(f"  [{term}] searching ...")
-            results = search_patents(client, cql, max_results=max_per_term)
+            try:
+                results = search_patents(client, cql, max_results=max_per_term)
+            except Exception as e:
+                print(f"  [{term}] Error (skipping): {e}", file=sys.stderr)
+                time.sleep(3)
+                continue
             added = 0
             for r in results:
                 if r["id"] not in seen_ids:
@@ -638,7 +719,13 @@ def search_sub_techs(
                 print(f"  Reached 500 results cap, stopping early")
                 break
 
-        csv_path = output_dir / f"gp-search-{st_id}.csv"
+        # Family dedup before saving
+        before_dedup = len(all_results)
+        all_results = deduplicate_by_family(all_results)
+        print(f"  [{st_id}] Family dedup: {before_dedup} → {len(all_results)} unique patents")
+
+        date_str = datetime.now().strftime("%Y%m%d")
+        csv_path = output_dir / f"gp-search-{date_str}_{st_id}.csv"
         write_csv_file(all_results, csv_path)
         csv_map[st_id] = str(csv_path)
 
@@ -655,9 +742,69 @@ def search_main(
     required_terms: list[str] = None,
     exclude_terms: list[str] = None,
     split_by_year: bool = False,
+    sub_techs_path: Path = None,
+    max_per_term: int = 200,
 ) -> str:
-    """Search main query and save CSV."""
-    # Import query generation logic
+    """
+    Search main query and save CSV.
+
+    When sub_techs_path is provided (recommended), builds main.csv as the
+    union of all sub-technology key_terms searches — guaranteeing main.csv
+    is a true superset of all sub-tech CSVs.
+
+    When sub_techs_path is not provided, falls back to RFP-text AND-group
+    query (original behaviour, tends to return fewer results).
+    """
+    current_year = datetime.now().year
+    year_from = current_year - years
+    year_to = current_year
+
+    if sub_techs_path and Path(sub_techs_path).exists():
+        # ── Union of all sub-tech key_terms (per-term OR search) ──────────
+        sub_data = json.loads(Path(sub_techs_path).read_text(encoding="utf-8"))
+        sub_techs = sub_data.get("sub_technologies", [])
+
+        # Collect unique key_terms across all sub-techs
+        all_terms: list[str] = []
+        seen_terms: set[str] = set()
+        for st in sub_techs:
+            for term in st.get("key_terms", []):
+                if term.lower() not in seen_terms:
+                    seen_terms.add(term.lower())
+                    all_terms.append(term)
+
+        print(f"\n[Main] Union search: {len(all_terms)} unique terms across all sub-techs")
+
+        all_results: list[dict] = []
+        seen_ids: set[str] = set()
+
+        for term in all_terms:
+            term_q = f'"{term}"' if " " in term else term
+            cql = f'ti={term_q} AND pd within "{year_from}0101,{year_to}1231"'
+            print(f"  [{term}] searching ...")
+            try:
+                results = search_patents(client, cql, max_results=max_per_term)
+            except Exception as e:
+                print(f"  [{term}] Error (skipping): {e}", file=sys.stderr)
+                time.sleep(3)
+                continue
+            added = 0
+            for r in results:
+                if r["id"] not in seen_ids:
+                    seen_ids.add(r["id"])
+                    all_results.append(r)
+                    added += 1
+            print(f"  [{term}] +{added} unique (total: {len(all_results)})")
+
+        # Family dedup
+        before_dedup = len(all_results)
+        all_results = deduplicate_by_family(all_results)
+        print(f"\n[Main] Family dedup: {before_dedup} → {len(all_results)} unique patents")
+
+        write_csv_file(all_results, output_path)
+        return str(output_path)
+
+    # ── Fallback: RFP AND-group query (legacy) ────────────────────────────
     script_dir = Path(__file__).resolve().parent
     sys.path.insert(0, str(script_dir))
     from generate_query import (
@@ -665,7 +812,6 @@ def search_main(
         extract_section_text, SECTION_PATTERNS,
     )
 
-    # Build term groups (same logic as generate_main_query)
     rfp_explicit = extract_rfp_english_keywords(rfp_text)
     heuristic = extract_english_keywords(
         extract_section_text(rfp_text, SECTION_PATTERNS.get("objectives", [])) + "\n" +
@@ -685,19 +831,17 @@ def search_main(
     if required_terms:
         groups.insert(0, required_terms)
 
-    current_year = datetime.now().year
-    year_from = current_year - years
-
     if split_by_year:
         cql_base = build_cql_from_groups(groups, exclude_terms=exclude_terms)
-        results = search_with_year_split(client, cql_base, year_from, current_year)
+        results = search_with_year_split(client, cql_base, year_from, year_to)
     else:
         cql = build_cql_from_groups(
             groups, exclude_terms=exclude_terms,
-            year_from=year_from, year_to=current_year,
+            year_from=year_from, year_to=year_to,
         )
         results = search_patents(client, cql)
 
+    results = deduplicate_by_family(results)
     write_csv_file(results, output_path)
     return str(output_path)
 
@@ -735,16 +879,31 @@ Environment variables:
                     help="Split search by year for queries with >2000 results")
     ap.add_argument("--key", type=str, default=None, help="EPO OPS Consumer Key")
     ap.add_argument("--secret", type=str, default=None, help="EPO OPS Consumer Secret")
+    ap.add_argument("--only-ids", type=str, default=None,
+                    help="Comma-separated sub-tech IDs to search (e.g. sub4). Others are skipped.")
+    ap.add_argument("--main-only", action="store_true",
+                    help="Generate main CSV (union of sub-tech key_terms) even when --sub-tech-json is set. "
+                         "Output path (-o) must be a .csv file, not a directory.")
     args = ap.parse_args()
 
     client = create_client(key=args.key, secret=args.secret)
     required = [t.strip() for t in (args.required_terms or "").split(",") if t.strip()]
     exclude = [t.strip() for t in (args.exclude_terms or "").split(",") if t.strip()]
+    only_ids = [t.strip() for t in (args.only_ids or "").split(",") if t.strip()] or None
 
     if args.cql:
         # Direct CQL search
         results = search_patents(client, args.cql)
         write_csv_file(results, Path(args.output))
+
+    elif args.sub_tech_json and args.main_only:
+        # Main CSV via union of sub-tech key_terms
+        rfp_text = Path(args.rfp).read_text(encoding="utf-8") if args.rfp else ""
+        search_main(
+            client, rfp_text, Path(args.output),
+            years=args.years,
+            sub_techs_path=Path(args.sub_tech_json),
+        )
 
     elif args.sub_tech_json:
         # Batch sub-tech search
@@ -758,6 +917,7 @@ Environment variables:
             global_required=required or None,
             global_exclude=exclude or None,
             split_by_year=args.split_by_year,
+            only_ids=only_ids,
         )
         print(f"\n{'='*60}")
         print("Sub-tech CSV files:")

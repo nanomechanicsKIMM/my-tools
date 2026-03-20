@@ -300,6 +300,7 @@ def main():
             required_terms=include_terms or None,
             exclude_terms=exclude_terms or None,
             split_by_year=args.split_by_year,
+            sub_techs_path=Path(args.sub_tech_json) if args.sub_tech_json else None,
         )
         args.main_csv = str(main_csv_path)
 
