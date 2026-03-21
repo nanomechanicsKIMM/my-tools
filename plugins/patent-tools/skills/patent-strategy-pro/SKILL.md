@@ -131,20 +131,22 @@ Wait for completion. The agent returns the approval table markdown.
 
 ---
 
-### ⛔ USER APPROVAL GATE
+### ⏱️ USER APPROVAL GATE (1분 타임아웃)
 
-Present the approval table returned by the Phase 2A agent verbatim to the user.
+Present the approval table returned by the Phase 2A agent verbatim to the user, with the following notice:
 
-**Block here until the user explicitly approves.**
+```
+> [!warning] 1분 내 수정 요청이 없으면 자동으로 다음 단계로 진행합니다.
+```
 
-Acceptable approval inputs: "확인", "OK", "ok", "진행", "맞습니다", "좋아요"
+Then use `AskUserQuestion` to request approval. **Wait up to 60 seconds.**
 
-If user requests corrections:
-- If the correction is a JSON edit: edit `{output_dir}/sub_techs.json` directly
-- If the correction is verbal: apply the change to the JSON file
-- Re-present the updated table and wait for approval again
-
-Do NOT proceed to Phase 2B until approval is received.
+- If user approves ("확인", "OK", "ok", "진행", "맞습니다", "좋아요") → proceed immediately
+- If user requests corrections → apply changes to `{output_dir}/sub_techs.json`, re-present, and wait again (60초 타이머 리셋)
+- **If 60초 경과 후 응답 없음** → 현재 세부 기술 그대로 확정하고 Phase 2B로 자동 진행. 진행 시 다음 메시지를 출력:
+  ```
+  ⏱️ 1분 타임아웃 — 세부 기술을 현재 상태로 확정하고 Phase 2B를 진행합니다.
+  ```
 
 ---
 
