@@ -78,6 +78,21 @@ Store collected values:
 
 ---
 
+## Agent Model Assignment
+
+각 에이전트는 작업 복잡도에 따라 모델이 지정되어 있다. Agent 호출 시 `model` 파라미터를 반드시 명시한다.
+
+| Phase | Agent | Model | 근거 |
+|-------|-------|-------|------|
+| Phase 1 | phase1-rfp-prep | **haiku** | PDF→MD 단순 변환 |
+| Phase 2A | phase2a-sub-tech-extract | **sonnet** | 세부 기술 도출·보정 (분석 판단) |
+| Phase 2B | phase2b-query-gen | **sonnet** | 검색식 생성·Playwright 건수 조정 (반복 판단) |
+| Phase 3 | phase3-main-stats | **haiku** | CSV 통계 집계 (스크립트 실행·수치 처리) |
+| Phase 4 | phase4-sub-tech-analysis | **sonnet** | 세부 기술별 특허 분석 (핵심 특허 선별) |
+| Phase 5 | phase5-report-writer | **opus** | 전략 보고서 작성 (공백 분석·OS 매트릭스·IP 전략) |
+
+---
+
 ## Orchestration Sequence
 
 ### Phase 1 (serial)
@@ -138,7 +153,7 @@ Do NOT proceed to Phase 2B until approval is received.
 Launch Agent with `agents/phase2b-query-gen.md`:
 
 ```
-Task: Generate queries and acquire CSVs
+Task: Generate queries, auto-adjust counts, open browser tabs, acquire CSVs
 Agent: phase2b-query-gen
 Inputs:
   rfp_md: {output_dir}/rfp.md
@@ -153,7 +168,12 @@ Inputs:
   date: {date}
 ```
 
-**Google Patents mode**: The agent presents download URLs. Present them to the user and wait for CSV file paths. Once received, pass them back to the agent for manifest writing.
+**Google Patents mode** (3단계 자동화):
+1. **검색식 생성** → 구문 규칙 자동 검증/수정
+2. **Playwright 자동 건수 조정** → 각 검색식별 목표 건수(MAIN ~5,000 / SUB ~1,000) 도달까지 최대 5회 반복
+3. **브라우저 탭 오픈** → MAIN + SUB1~N 전체 URL을 Playwright로 동시에 탭 열기
+4. 사용자가 각 탭에서 CSV 수동 다운로드 후 확인 대기
+5. CSV 경로 확인 → `acquisition_manifest.json` 작성
 
 **EPO mode**: The agent runs fully automatically. Wait for completion.
 

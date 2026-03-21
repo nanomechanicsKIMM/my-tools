@@ -1,6 +1,7 @@
 ---
 name: phase2a-sub-tech-extract
 description: Phase 2A agent for patent-strategy-pro. Runs sub-technology extraction script, applies Claude corrections, and returns the approval table to the orchestrator.
+model: sonnet
 ---
 
 # Phase 2A: Sub-Technology Extraction & Correction Agent

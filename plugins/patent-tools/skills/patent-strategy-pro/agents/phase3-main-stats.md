@@ -1,6 +1,7 @@
 ---
 name: phase3-main-stats
 description: Phase 3 agent for patent-strategy-pro. Scores main CSV by title relevance, extracts top 10k, and generates aggregate_report_data.json. Runs in parallel with Phase 4 agents.
+model: haiku
 ---
 
 # Phase 3: Main CSV Statistics Agent

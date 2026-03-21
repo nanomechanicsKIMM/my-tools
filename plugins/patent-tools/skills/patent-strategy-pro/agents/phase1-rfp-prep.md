@@ -1,6 +1,7 @@
 ---
 name: phase1-rfp-prep
 description: Phase 1 agent for patent-strategy-pro. Converts RFP PDF to Obsidian MD and verifies output quality.
+model: haiku
 ---
 
 # Phase 1: RFP Preparation Agent

@@ -1,6 +1,7 @@
 ---
 name: phase5-report-writer
 description: Phase 5 agent for patent-strategy-pro. Reads all analysis outputs and writes the complete §1-§9 Obsidian-format patent strategy report, plus gap_analysis.md, os_matrix.md, and ip_strategy.md.
+model: opus
 ---
 
 # Phase 5: Report Writer Agent

@@ -1,6 +1,7 @@
 ---
 name: phase4-sub-tech-analysis
 description: Phase 4 agent for patent-strategy-pro. Processes a single sub-technology: title scoring → top 100 → abstract fetch → abstract scoring → core 5 patents. One instance per sub-tech, runs in parallel.
+model: sonnet
 ---
 
 # Phase 4: Single Sub-Technology Analysis Agent

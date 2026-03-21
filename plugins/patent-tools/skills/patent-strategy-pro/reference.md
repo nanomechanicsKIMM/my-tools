@@ -11,11 +11,46 @@
   - 예: `https://patents.google.com/?q=QUERY&after=priority:20160101&before=priority:20251231`
 - **기본 검색 기간**: 10년 (`--years 10`). 사용자 지정 우선.
 
+### Google Patents 구문 규칙 (실증 확인)
+
+- 괄호 그룹은 최대 **2개**까지만 지원 (3개 이상 → syntax error)
+- 괄호와 괄호 사이에 반드시 **AND** 또는 **OR** 연결 필요 (암묵적 AND 미지원)
+- 제외 키워드는 `-` 대신 **AND NOT** 사용 (예: `-OLED` → `AND NOT OLED`)
+- 따옴표 내 하이픈(`-`) 사용 금지 (예: `"roll-to-roll"` → syntax error → `"roll to roll"`)
+
 ### 검색식 구성 전략
 
-- **AND 그룹 방식** (기본): `(그룹1 OR …) AND (그룹2 OR …)` → 결과 건수 제한
-- **목표 건수**: 초기 검색식으로 5,000건 이하 목표
-- **세부 기술 검색식**: 세부 기술 고유 용어를 필수 AND 블록으로 추가 → 더 좁은 결과
+- **구조**: `(핵심 용어 동의어 OR 그룹) AND (기술 키워드 OR 그룹) AND NOT 제외1 AND NOT 제외2`
+  - 괄호 2개 제한이므로 핵심 용어 1그룹 + 키워드 1그룹 + AND NOT (괄호 없이)
+- **MAIN 검색식**: ~5,000건 목표. 핵심 용어 동의어 5~7개 + 넓은 키워드 10~13개
+- **SUB 검색식**: ~1,000건 목표. 동일 핵심 용어 동의어 + 세부 기술 고유 키워드 8~12개
+- **키워드 넓이 조절**: 단일어(`"sensor"`)는 매우 넓고, 2어구(`"strain sensor"`)는 좁음. 건수에 따라 조절
+
+### Playwright 기반 자동 건수 조정 (Google Patents 모드)
+
+검색식 생성 후 Playwright MCP로 Google Patents에 접속하여 결과 건수를 자동 확인하고,
+목표 범위(MAIN ~5,000 / SUB ~1,000)에 맞을 때까지 반복 조정한다.
+
+**건수 추출 방법**:
+```javascript
+// navigate 후 5초 대기, 그 후 evaluate로 결과 건수 파싱
+() => {
+  const all = document.body.innerText;
+  const match = all.match(/([\d,]+)\s+results/i);
+  return match ? match[1] : 'NOT FOUND';
+}
+```
+
+**조정 전략**:
+
+| 상황 | 조치 |
+|------|------|
+| 건수 >> 목표 (2배 이상) | 핵심 용어 동의어 제거, 단일어 키워드를 2어구로 구체화 |
+| 건수 > 목표 (1.2~2배) | 가장 넓은 키워드 1~2개 제거 또는 구체화 |
+| 건수 < 목표 (0.5~0.8배) | 관련 동의어/키워드 1~2개 추가 |
+| 건수 << 목표 (0.5배 미만) | 2 AND 그룹 → 1 통합 OR 그룹, 핵심 용어 동의어 추가, 키워드 단일어화 |
+
+**반복 제한**: 최대 5회. 5회 후에도 범위 밖이면 현재 결과로 확정하고 사용자에게 보고.
 
 ---
 
@@ -315,9 +350,38 @@ Step 2-B에서 Claude가 반드시 확인해야 할 항목:
 
 ---
 
-## CSV 수동 다운로드 방법
+## CSV 다운로드 (Google Patents 모드)
 
-1. Step 3/4에서 생성된 검색 URL을 브라우저에서 열기
-2. Google Patents 검색 결과 페이지 상단 **Download (CSV)** 버튼 클릭
-3. 저장 후 경로를 Claude에게 제공
-4. Google Patents 정책상 최대 1,000건 (반복 검색식 조정으로 분할 수집 가능)
+### Playwright 자동 탭 오픈
+
+검색식 건수 조정 완료 후, Playwright로 MAIN + SUB1~N 전체 URL을 브라우저 탭으로 동시에 열어
+사용자가 각 탭에서 바로 CSV를 다운로드할 수 있도록 한다.
+
+```javascript
+// 5개 URL을 한 번에 탭으로 오픈하는 Playwright 코드
+async (page) => {
+  const urls = [
+    { name: 'MAIN', url: '<main_url>' },
+    { name: 'SUB1', url: '<sub1_url>' },
+    // ...
+  ];
+  await page.goto(urls[0].url);
+  const context = page.context();
+  for (let i = 1; i < urls.length; i++) {
+    const newPage = await context.newPage();
+    await newPage.goto(urls[i].url);
+  }
+  return `Opened ${urls.length} tabs`;
+}
+```
+
+### 수동 다운로드 절차
+
+각 탭에서:
+1. 검색 결과 상단 **Download** 아이콘 클릭
+2. **"Download (CSV)"** 선택
+3. 파일명 규칙: `gp-search-{date}_{id}.csv` (예: `gp-search-20260320_main.csv`)
+4. 저장 경로: `{output_dir}/`
+
+- Google Patents CSV 다운로드는 Playwright 자동화 불가 (사용자 수동 필요)
+- Google Patents 정책상 최대 1,000건 (반복 검색식 조정으로 분할 수집 가능)
