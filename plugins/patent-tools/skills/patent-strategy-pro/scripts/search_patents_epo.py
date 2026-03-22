@@ -8,7 +8,7 @@ Uses python-epo-ops-client for OAuth, throttling, and pagination.
 
 Usage:
   # Single CQL query
-  python search_patents_epo.py --cql 'ti="stretchable display"' -o results.csv
+  python search_patents_epo.py --cql 'ta="stretchable display"' -o results.csv
 
   # From query file (generate_query.py --format cql output)
   python search_patents_epo.py --query-file query_main.cql -o results.csv
@@ -17,7 +17,7 @@ Usage:
   python search_patents_epo.py --sub-tech-json sub_techs.json --rfp rfp.md -o output/
 
   # With date range
-  python search_patents_epo.py --cql 'ti="flexible sensor"' --years 15 -o results.csv
+  python search_patents_epo.py --cql 'ta="flexible sensor"' --years 15 -o results.csv
 
 Requires:
   pip install python-epo-ops-client
@@ -106,14 +106,14 @@ def google_to_cql(google_query: str, year_from: int = None, year_to: int = None)
     Convert Google Patents boolean query to EPO OPS CQL syntax.
 
     Google: ("stretchable display" OR "flexible display") AND sensor NOT OLED
-    CQL:    ti=("stretchable display" OR "flexible display") AND ti=sensor NOT ti=OLED
+    CQL:    ta=("stretchable display" OR "flexible display") AND ta=sensor NOT ta=OLED
 
-    Adds title-field prefix (ti=) since Google Patents searches titles by default.
+    Adds title+abstract field prefix (ta=) for broader coverage.
     """
     cql = google_query
 
-    # Replace NOT (...) → NOT (ti=...)
-    # First handle the main terms - wrap bare terms with ti=
+    # Replace NOT (...) → NOT (ta=...)
+    # First handle the main terms - wrap bare terms with ta=
     # This is a simplified converter; complex queries may need manual CQL
 
     # Add date range if specified
@@ -130,16 +130,16 @@ def build_cql_from_groups(
     exclude_terms: list[str] = None,
     year_from: int = None,
     year_to: int = None,
-    field: str = "ti",
+    field: str = "ta",
 ) -> str:
     """
     Build CQL query from term groups using correct EPO OPS per-field OR syntax.
 
-    EPO OPS requires:   (ti="p1" OR ti="p2") AND ti=sensor
-    NOT:                ti=("p1" OR "p2") AND ti=sensor  ← causes 413/404
+    EPO OPS requires:   (ta="p1" OR ta="p2") AND ta=sensor
+    NOT:                ta=("p1" OR "p2") AND ta=sensor  ← causes 413/404
 
     groups: [["stretchable display", "flexible display"], ["sensor"]]
-    → (ti="stretchable display" OR ti="flexible display") AND ti=sensor
+    → (ta="stretchable display" OR ta="flexible display") AND ta=sensor
     """
     parts = []
     for g in groups:
@@ -390,19 +390,19 @@ def _narrow_413(
       3. Keep only the first term of each OR-group (single-term AND chain)
     Returns (final_cql, response) or (original_cql, None) on full failure.
     """
-    # Parse OR-groups: matches (ti="..." OR ti=... OR ...) patterns
+    # Parse OR-groups: matches (ta="..." OR ta=... OR ...) patterns
     def trim_cql_groups(cql: str, keep: int) -> str:
-        """Keep only the first `keep` ti= terms in every OR-group."""
+        """Keep only the first `keep` ta=/ti= terms in every OR-group."""
         def _trim_group(m: re.Match) -> str:
             content = m.group(1)
-            # Split on ' OR ' to get individual ti=... terms
+            # Split on ' OR ' to get individual ta=... terms
             terms = re.split(r"\s+OR\s+", content)
             trimmed = terms[:keep]
             if len(trimmed) == 1:
                 return trimmed[0]
             return f'({" OR ".join(trimmed)})'
 
-        # Match (ti=... OR ti=... OR ...) groups (with or without outer parens)
+        # Match (ta=... OR ta=... OR ...) groups (with or without outer parens)
         result = re.sub(r"\(([^()]+(?:\s+OR\s+[^()]+)+)\)", _trim_group, cql)
         return result
 
@@ -438,49 +438,32 @@ def search_patents(
     """
     Search patents with CQL query and fetch bibliographic data.
     Handles pagination automatically (100 per page, max 2000 total).
+
+    Uses constituents=["biblio"] to get search + biblio in a single API call
+    per page, eliminating the need for separate per-patent biblio fetches.
     """
     all_results: list[dict] = []
-    offset = 1
 
-    # First search to get total count
     print(f"  CQL: {cql[:120]}{'...' if len(cql) > 120 else ''}")
 
-    try:
-        resp = client.published_data_search(
-            cql=cql,
-            range_begin=1,
-            range_end=min(OPS_PAGE_SIZE, max_results),
-        )
-    except Exception as e:
-        err_msg = str(e)
-        if "404" in err_msg or "no results" in err_msg.lower():
-            print(f"  → 0 results")
+    # --- Step 1: count-only probe (1 API call) ---
+    total = _count_only(client, cql)
+    if total == -413:
+        # 413 error — try narrowing
+        cql, resp = _narrow_413(client, cql, max_results)
+        if resp is None:
             return []
-        if "413" in err_msg:
-            # EPO OPS returns 413 when an intermediate OR-group result set exceeds
-            # the server limit (~10,000 records), even if the final AND result is small.
-            # Strategy: progressively drop terms from OR groups until the query fits.
-            cql, resp = _narrow_413(client, cql, max_results)
-            if resp is None:
-                return []
-        else:
-            raise
+        _, total = parse_search_response(resp.content)
+    elif total <= 0:
+        if total == 0:
+            print(f"  → 0 results")
+        return []
 
-    doc_ids, total = parse_search_response(resp.content)
     effective_total = min(total, max_results)
     print(f"  → {total} total results (fetching up to {effective_total})")
 
-    if total == 0:
-        return []
-
-    # Fetch biblio for first page
-    if doc_ids:
-        biblio = _fetch_biblio_batch(client, doc_ids)
-        all_results.extend(biblio)
-        print(f"  Fetched {len(all_results)}/{effective_total} ...")
-
-    # Paginate remaining
-    offset = OPS_PAGE_SIZE + 1
+    # --- Step 2: paginate with constituents=["biblio"] ---
+    offset = 1
     while offset <= effective_total:
         end = min(offset + OPS_PAGE_SIZE - 1, effective_total)
         try:
@@ -488,13 +471,18 @@ def search_patents(
                 cql=cql,
                 range_begin=offset,
                 range_end=end,
+                constituents=["biblio"],
             )
-            doc_ids, _ = parse_search_response(resp.content)
-            if doc_ids:
-                biblio = _fetch_biblio_batch(client, doc_ids)
-                all_results.extend(biblio)
+            biblio = parse_biblio_response(resp.content)
+            all_results.extend(biblio)
             print(f"  Fetched {len(all_results)}/{effective_total} ...")
         except Exception as e:
+            err_msg = str(e)
+            if "404" in err_msg:
+                break
+            if "413" in err_msg:
+                print(f"  ⚠ 413 on page {offset}-{end}, stopping pagination", file=sys.stderr)
+                break
             print(f"  Warning: page {offset}-{end} failed: {e}", file=sys.stderr)
             break
         offset += OPS_PAGE_SIZE
@@ -502,8 +490,383 @@ def search_patents(
     return all_results
 
 
+def _count_only(client: epo_ops.Client, cql: str) -> int:
+    """
+    Probe total result count with a single API call (range 1-1).
+    Returns total count, 0 for no results, -413 for 413 error, -1 for other errors.
+    """
+    try:
+        resp = client.published_data_search(cql=cql, range_begin=1, range_end=1)
+        _, total = parse_search_response(resp.content)
+        return total
+    except Exception as e:
+        err_msg = str(e)
+        if "404" in err_msg or "no results" in err_msg.lower():
+            return 0
+        if "413" in err_msg:
+            return -413
+        raise
+
+
+# ── CQL parsing & tuning ────────────────────────────────────────────────────
+
+def _parse_cql_groups(cql: str) -> dict:
+    """
+    Parse a CQL string into structural components for programmatic adjustment.
+
+    Returns dict:
+      - 'or_groups': list of list of (field, term)  e.g. [[(ta, "A"), (ta, "B")], [(ta, "C")]]
+      - 'not_terms': list of (field, term)
+      - 'date_clause': str or None  e.g. 'pd within "20110101,20261231"'
+    """
+    # Extract date clause
+    date_clause = None
+    date_match = re.search(r'\s+AND\s+(pd\s+within\s+"[^"]+")', cql)
+    if date_match:
+        date_clause = date_match.group(1)
+        cql_body = cql[:date_match.start()]
+    else:
+        cql_body = cql
+
+    # Extract NOT clause
+    not_terms = []
+    not_match = re.search(r'\s+NOT\s+(.+)$', cql_body)
+    if not_match:
+        not_str = not_match.group(1)
+        cql_body = cql_body[:not_match.start()]
+        # Parse NOT terms: ta="x" or ta=x or (ta="x" OR ta="y")
+        for m in re.finditer(r'(\w+)="([^"]+)"', not_str):
+            not_terms.append((m.group(1), m.group(2)))
+        for m in re.finditer(r'(\w+)=(\w+)', not_str):
+            if not any(t[1] == m.group(2) for t in not_terms):
+                not_terms.append((m.group(1), m.group(2)))
+
+    # Parse AND-separated OR-groups from body
+    or_groups = []
+    # Split on top-level AND (not inside parentheses)
+    parts = re.split(r'\s+AND\s+', cql_body)
+    for part in parts:
+        part = part.strip().strip('()')
+        terms = []
+        for m in re.finditer(r'(\w+)="([^"]+)"', part):
+            terms.append((m.group(1), m.group(2)))
+        for m in re.finditer(r'(\w+)=(\w+)', part):
+            if not any(t[1] == m.group(2) for t in terms):
+                terms.append((m.group(1), m.group(2)))
+        if terms:
+            or_groups.append(terms)
+
+    return {"or_groups": or_groups, "not_terms": not_terms, "date_clause": date_clause}
+
+
+def _rebuild_cql(parsed: dict) -> str:
+    """Reconstruct CQL string from parsed structure."""
+    parts = []
+    for group in parsed["or_groups"]:
+        if not group:
+            continue
+        field_terms = []
+        for field, term in group:
+            if " " in term:
+                field_terms.append(f'{field}="{term}"')
+            else:
+                field_terms.append(f'{field}={term}')
+        if len(field_terms) == 1:
+            parts.append(field_terms[0])
+        else:
+            parts.append(f'({" OR ".join(field_terms)})')
+
+    cql = " AND ".join(parts)
+
+    if parsed["not_terms"]:
+        not_parts = []
+        for field, term in parsed["not_terms"]:
+            if " " in term:
+                not_parts.append(f'{field}="{term}"')
+            else:
+                not_parts.append(f'{field}={term}')
+        if len(not_parts) == 1:
+            cql += f" NOT {not_parts[0]}"
+        else:
+            cql += f' NOT ({" OR ".join(not_parts)})'
+
+    if parsed["date_clause"]:
+        cql += f" AND {parsed['date_clause']}"
+
+    return cql
+
+
+def tune_query(
+    client: epo_ops.Client,
+    cql: str,
+    target_min: int,
+    target_max: int,
+    max_iterations: int = 5,
+    label: str = "query",
+) -> dict:
+    """
+    Iteratively adjust CQL until count is within [target_min, target_max].
+
+    Returns dict with cql, count, iterations, status, history.
+    """
+    history = [{"cql": cql, "count": None, "action": "initial"}]
+
+    for iteration in range(max_iterations):
+        count = _count_only(client, cql)
+
+        if count == -413:
+            # Try narrowing
+            cql, resp = _narrow_413(client, cql, target_max)
+            if resp is None:
+                history[-1]["count"] = -413
+                return {"cql": cql, "count": 0, "iterations": iteration + 1,
+                        "status": "failed", "history": history}
+            _, count = parse_search_response(resp.content)
+
+        history[-1]["count"] = count
+        print(f"  [{label}] iter {iteration}: count={count} (target {target_min}~{target_max})")
+
+        if count == 0:
+            return {"cql": cql, "count": 0, "iterations": iteration + 1,
+                    "status": "failed", "history": history}
+
+        if target_min <= count <= target_max:
+            return {"cql": cql, "count": count, "iterations": iteration + 1,
+                    "status": "confirmed", "history": history}
+
+        # Determine adjustment
+        ratio = count / target_max if target_max > 0 else 999
+        parsed = _parse_cql_groups(cql)
+
+        if ratio >= 3.0:
+            # Switch broadest OR-group from ta= to ti=
+            if parsed["or_groups"]:
+                biggest = max(parsed["or_groups"], key=len)
+                for i, (field, term) in enumerate(biggest):
+                    if field == "ta":
+                        biggest[i] = ("ti", term)
+                action = "switch_ta_to_ti"
+            else:
+                action = "no_adjustment"
+        elif ratio >= 1.5:
+            # Remove 1-2 terms from broadest OR-group
+            if parsed["or_groups"]:
+                biggest = max(parsed["or_groups"], key=len)
+                remove_count = min(2, len(biggest) - 1)
+                for _ in range(remove_count):
+                    if len(biggest) > 1:
+                        biggest.pop()  # remove last (least specific) terms
+                action = "trim_or_terms"
+            else:
+                action = "no_adjustment"
+        elif ratio >= 0.3:
+            # Switch ti= to ta= for narrowest group
+            switched = False
+            for group in parsed["or_groups"]:
+                for i, (field, term) in enumerate(group):
+                    if field == "ti":
+                        group[i] = ("ta", term)
+                        switched = True
+            action = "switch_ti_to_ta" if switched else "no_adjustment"
+        else:
+            # Merge AND groups into single OR group
+            if len(parsed["or_groups"]) > 1:
+                merged = []
+                for g in parsed["or_groups"]:
+                    merged.extend(g)
+                parsed["or_groups"] = [merged]
+                action = "merge_to_or"
+            else:
+                action = "no_adjustment"
+
+        new_cql = _rebuild_cql(parsed)
+        if new_cql == cql or action == "no_adjustment":
+            # No further adjustments possible
+            return {"cql": cql, "count": count, "iterations": iteration + 1,
+                    "status": "best_effort", "history": history}
+
+        cql = new_cql
+        history.append({"cql": cql, "count": None, "action": action})
+
+    # Max iterations reached
+    return {"cql": cql, "count": history[-1].get("count", 0),
+            "iterations": max_iterations, "status": "best_effort", "history": history}
+
+
+def tune_all_queries(
+    client: epo_ops.Client,
+    rfp_text: str,
+    sub_techs_path: Path | None,
+    years: int = 15,
+    required_terms: list[str] | None = None,
+    exclude_terms: list[str] | None = None,
+    main_target: tuple[int, int] = (1000, 2000),
+    sub_target: tuple[int, int] = (200, 800),
+    output_path: Path = Path("queries_confirmed.json"),
+) -> dict:
+    """
+    Build and tune CQL for SUB queries first, then derive MAIN from SUB union.
+
+    Strategy: main ⊇ sub1 ∪ sub2 ∪ ... ∪ subN
+    1. Tune each SUB query independently
+    2. Extract all positive search terms from confirmed SUB CQLs
+    3. Build MAIN CQL = OR union of all SUB terms (no NOT clause)
+    4. Tune MAIN to target range (only by trimming, never adding NOT)
+    """
+    current_year = datetime.now().year
+    year_from = current_year - years
+
+    queries = {}
+
+    # ── Step 1: SUB queries first ──
+    if sub_techs_path:
+        sub_data = json.loads(sub_techs_path.read_text(encoding="utf-8"))
+        sub_techs = sub_data.get("sub_technologies", [])
+
+        for st in sub_techs:
+            st_id = st["id"]
+            print(f"\n{'='*60}")
+            print(f"Tuning [{st_id}] {st['name_ko']}")
+            print(f"{'='*60}")
+
+            key_terms = st.get("key_terms", [])
+            st_exclude = list(set((exclude_terms or []) + st.get("exclude_terms", [])))
+
+            sub_cql = build_cql_from_groups(
+                [key_terms],
+                exclude_terms=st_exclude,
+                year_from=year_from, year_to=current_year,
+            )
+
+            result = tune_query(client, sub_cql, sub_target[0], sub_target[1], label=st_id)
+            queries[st_id] = result
+
+    # ── Step 2: MAIN = derived from SUB union (no separate search) ──
+    # Sum estimated count from subs for the summary table.
+    sub_total = sum(q.get("count", 0) for q in queries.values())
+    queries_with_main = {
+        "main": {
+            "cql": "DERIVED: union of all sub-tech results (deduplicated)",
+            "count": sub_total,
+            "iterations": 0,
+            "status": "derived",
+            "history": [],
+        },
+    }
+    queries_with_main.update(queries)
+    queries = queries_with_main
+
+    # ── Save JSON ──
+    confirmed = {
+        "tuned_at": datetime.now().isoformat(),
+        "config": {
+            "years": years,
+            "main_target": list(main_target),
+            "sub_target": list(sub_target),
+        },
+        "queries": queries,
+    }
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(confirmed, f, ensure_ascii=False, indent=2)
+    print(f"\n  Saved: {output_path}")
+
+    # ── Summary table ──
+    print(f"\n{'='*60}")
+    print(f"  {'Query':<10} {'Count':>8} {'Target':>12} {'Iters':>6} {'Status':<12}")
+    print(f"  {'-'*10} {'-'*8} {'-'*12} {'-'*6} {'-'*12}")
+    for qid, q in queries.items():
+        tgt = f"{main_target[0]}~{main_target[1]}" if qid == "main" else f"{sub_target[0]}~{sub_target[1]}"
+        print(f"  {qid:<10} {q['count']:>8,} {tgt:>12} {q['iterations']:>6} {q['status']:<12}")
+    print(f"{'='*60}")
+
+    return confirmed
+
+
+def download_confirmed(
+    client: epo_ops.Client,
+    confirmed_path: Path,
+    output_dir: Path,
+    date_tag: str | None = None,
+    split_by_year: bool = False,
+) -> dict[str, str]:
+    """
+    Read queries_confirmed.json and download CSVs for each confirmed query.
+
+    Main CSV is derived by merging all sub-tech CSVs (deduplicated),
+    not by running a separate search. This guarantees main ⊇ ∪(subs).
+    """
+    confirmed = json.loads(confirmed_path.read_text(encoding="utf-8"))
+    queries = confirmed.get("queries", {})
+    if not date_tag:
+        date_tag = confirmed.get("tuned_at", "")[:10].replace("-", "")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    csv_map = {}
+    all_sub_results = []  # collect all sub results for main merge
+
+    # ── Download SUB queries ──
+    for qid, q in queries.items():
+        if qid == "main":
+            continue  # skip main — will be derived from subs
+
+        if q.get("status") == "failed":
+            print(f"  [{qid}] skipped (status=failed)")
+            continue
+
+        cql = q["cql"]
+        print(f"\n{'='*60}")
+        print(f"Downloading [{qid}] (count={q['count']})")
+        print(f"{'='*60}")
+
+        if split_by_year:
+            cql_base = re.sub(r'\s+AND\s+pd\s+within\s+"[^"]+"', '', cql)
+            date_match = re.search(r'pd\s+within\s+"(\d{4})\d+,(\d{4})\d+"', q["cql"])
+            if date_match:
+                y_from, y_to = int(date_match.group(1)), int(date_match.group(2))
+                results = search_with_year_split(client, cql_base, y_from, y_to)
+            else:
+                results = search_patents(client, cql)
+        else:
+            results = search_patents(client, cql)
+
+        csv_path = output_dir / f"gp-search-{date_tag}_{qid}.csv"
+        write_csv_file(results, csv_path)
+        csv_map[qid] = str(csv_path)
+        all_sub_results.extend(results)
+
+    # ── Derive MAIN CSV from sub-tech union (deduplicated) ──
+    seen_ids = set()
+    main_results = []
+    for r in all_sub_results:
+        pid = r.get("id", "")
+        if pid and pid not in seen_ids:
+            seen_ids.add(pid)
+            main_results.append(r)
+
+    main_csv_path = output_dir / f"gp-search-{date_tag}_main.csv"
+    write_csv_file(main_results, main_csv_path)
+    csv_map["main"] = str(main_csv_path)
+
+    print(f"\n{'='*60}")
+    print("Download complete:")
+    for qid in ["main"] + [k for k in csv_map if k != "main"]:
+        if qid in csv_map:
+            row_info = f" ({len(main_results)} rows, merged)" if qid == "main" else ""
+            print(f"  [{qid}] {csv_map[qid]}{row_info}")
+    print(f"{'='*60}")
+
+    return csv_map
+
+
+# ── Legacy functions ────────────────────────────────────────────────────────
+
 def _fetch_biblio_batch(client: epo_ops.Client, doc_ids: list[str]) -> list[dict]:
-    """Fetch bibliographic data for a batch of document IDs."""
+    """[LEGACY] Fetch bibliographic data for a batch of document IDs.
+    No longer called by search_patents() — kept for backward compatibility.
+    search_patents() now uses constituents=["biblio"] to get biblio inline.
+    """
     results = []
     # EPO OPS allows batch biblio for up to ~20 docs at once via comma-separated
     batch_size = 20
@@ -539,13 +902,24 @@ def search_with_year_split(
     """
     Split search by year when total results > 2000.
     Searches each year separately and merges results.
+    Uses count-only probe to skip years with 0 results.
     """
     all_results = []
     seen_ids = set()
 
     for year in range(year_from, year_to + 1):
         cql_year = f'{cql_base} AND pd within "{year}0101,{year}1231"'
-        print(f"\n  [Year {year}]")
+
+        # Count-only probe: skip years with 0 results (saves full search call)
+        count = _count_only(client, cql_year)
+        if count == 0:
+            print(f"  [Year {year}] → 0 results, skipping")
+            continue
+        if count == -413:
+            print(f"  [Year {year}] → 413 error, skipping")
+            continue
+
+        print(f"\n  [Year {year}] → {count} results")
         results = search_patents(client, cql_year, max_results=max_per_year)
         for r in results:
             if r["id"] not in seen_ids:
@@ -622,7 +996,7 @@ def search_sub_techs(
             # Irrelevant results are filtered out at abstract scoring time instead.
             term_q = f'"{term}"' if " " in term else term
             # EPO OPS requires pd within "YYYYMMDD,YYYYMMDD" — the pd>=X form triggers 413
-            cql = f'ti={term_q} AND pd within "{year_from}0101,{year_to}1231"'
+            cql = f'ta={term_q} AND pd within "{year_from}0101,{year_to}1231"'
 
             print(f"  [{term}] searching ...")
             results = search_patents(client, cql, max_results=max_per_term)
@@ -711,7 +1085,7 @@ def main():
         epilog="""
 Examples:
   # Single CQL query
-  python search_patents_epo.py --cql 'ti="stretchable display"' -o results.csv
+  python search_patents_epo.py --cql 'ta="stretchable display"' -o results.csv
 
   # All sub-techs from JSON
   python search_patents_epo.py --sub-tech-json sub_techs.json --rfp rfp.md -o output/
@@ -735,6 +1109,10 @@ Environment variables:
                     help="Split search by year for queries with >2000 results")
     ap.add_argument("--count-only", action="store_true",
                     help="Only return total result count without downloading (for query tuning)")
+    ap.add_argument("--tune", action="store_true",
+                    help="Tune queries only (no download). Saves queries_confirmed.json to -o path")
+    ap.add_argument("--download-confirmed", type=str, default=None, metavar="PATH",
+                    help="Download CSVs from a queries_confirmed.json file")
     ap.add_argument("--key", type=str, default=None, help="EPO OPS Consumer Key")
     ap.add_argument("--secret", type=str, default=None, help="EPO OPS Consumer Secret")
     args = ap.parse_args()
@@ -742,6 +1120,36 @@ Environment variables:
     client = create_client(key=args.key, secret=args.secret)
     required = [t.strip() for t in (args.required_terms or "").split(",") if t.strip()]
     exclude = [t.strip() for t in (args.exclude_terms or "").split(",") if t.strip()]
+
+    # ── Download from confirmed JSON ──
+    if args.download_confirmed:
+        csv_map = download_confirmed(
+            client,
+            confirmed_path=Path(args.download_confirmed),
+            output_dir=Path(args.output),
+            split_by_year=args.split_by_year,
+        )
+        print("\nDone.")
+        sys.exit(0)
+
+    # ── Tune mode: build + tune queries, save JSON ──
+    if args.tune:
+        if not args.rfp:
+            print("--tune requires --rfp", file=sys.stderr)
+            sys.exit(1)
+        rfp_text = Path(args.rfp).read_text(encoding="utf-8")
+        sub_path = Path(args.sub_tech_json) if args.sub_tech_json else None
+        tune_all_queries(
+            client,
+            rfp_text=rfp_text,
+            sub_techs_path=sub_path,
+            years=args.years,
+            required_terms=required or None,
+            exclude_terms=exclude or None,
+            output_path=Path(args.output),
+        )
+        print("\nDone.")
+        sys.exit(0)
 
     if args.count_only and args.cql:
         # Count-only mode: just return total without fetching biblio

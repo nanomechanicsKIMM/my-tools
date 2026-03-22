@@ -86,7 +86,8 @@ Store collected values:
 |-------|-------|-------|------|
 | Phase 1 | phase1-rfp-prep | **haiku** | PDF→MD 단순 변환 |
 | Phase 2A | phase2a-sub-tech-extract | **sonnet** | 세부 기술 도출·보정 (분석 판단) |
-| Phase 2B | phase2b-query-gen | **sonnet** | 검색식 생성·Playwright 건수 조정 (반복 판단) |
+| Phase 2B-Google | phase2b-query-gen | **sonnet** | 검색식 생성·Playwright 건수 조정 (반복 판단) |
+| Phase 2B-EPO | phase2b-epo-tune | **sonnet** | EPO CQL 튜닝·자동 다운로드 (tune→download) |
 | Phase 3 | phase3-main-stats | **haiku** | CSV 통계 집계 (스크립트 실행·수치 처리) |
 | Phase 4 | phase4-sub-tech-analysis | **sonnet** | 세부 기술별 특허 분석 (핵심 특허 선별) |
 | Phase 5 | phase5-report-writer | **opus** | 전략 보고서 작성 (공백 분석·OS 매트릭스·IP 전략) |
@@ -150,7 +151,13 @@ Then use `AskUserQuestion` to request approval. **Wait up to 60 seconds.**
 
 ---
 
-### Phase 2B (serial)
+### Phase 2B (serial — db_mode에 따라 분기)
+
+**db_mode에 따라 다른 에이전트를 호출한다.** Google Patents와 EPO는 CSV 생성까지 완전히 분리된 절차로 진행된다.
+
+---
+
+#### Phase 2B — Google Patents mode (`db_mode == "google"`)
 
 Launch Agent with `agents/phase2b-query-gen.md`:
 
@@ -162,7 +169,6 @@ Inputs:
   sub_techs_json: {output_dir}/sub_techs.json
   output_dir: {output_dir}
   scripts_dir: {SCRIPTS_DIR}
-  db_mode: {db_mode}
   years: {years}
   include_terms: {include_terms}
   exclude_terms: {exclude_terms}
@@ -170,18 +176,45 @@ Inputs:
   date: {date}
 ```
 
-**Google Patents mode** (3단계 자동화):
-1. **검색식 생성** → 구문 규칙 자동 검증/수정
-2. **Playwright 자동 건수 조정** → 각 검색식별 목표 건수(MAIN ~5,000 / SUB ~1,000) 도달까지 최대 5회 반복
-3. **브라우저 탭 오픈** → MAIN + SUB1~N 전체 URL을 Playwright로 동시에 탭 열기
-4. 사용자가 각 탭에서 CSV 수동 다운로드 후 확인 대기
-5. CSV 경로 확인 → `acquisition_manifest.json` 작성
+**Google Patents 절차** (SUB 먼저 → MAIN 도출):
+1. **SUB 검색식 생성** → 구문 규칙 자동 검증/수정
+2. **Playwright SUB 건수 조정** → 각 SUB별 목표 건수(~1,000) 도달까지 최대 5회 반복
+3. **MAIN 검색식 도출** → 확정된 SUB들의 핵심 키워드를 OR로 합쳐서 MAIN 검색식 구성 (모든 SUB 결과를 포함하는 상위 검색식, NOT 절 최소화)
+4. **Playwright MAIN 건수 조정** → 목표 건수(~5,000) 도달까지 최대 5회 반복
+5. **브라우저 탭 오픈** → MAIN + SUB1~N 전체 URL을 Playwright로 동시에 탭 열기
+6. 사용자가 각 탭에서 CSV 수동 다운로드 후 확인 대기
+7. CSV 경로 확인 → `acquisition_manifest.json` 작성 (`main_derived: false`)
 
-**EPO mode** (3단계 자동화):
-1. **CQL 쿼리 생성** → 검색식 자동 구성
-2. **EPO API 건수 조정** → `--count-only` 모드로 건수 확인, 목표(MAIN ~2,000 / SUB ~500) 도달까지 최대 5회 CQL 조정
-3. **자동 다운로드** → 확정된 CQL로 `search_patents_epo.py` 실행, CSV 자동 생성
-4. `acquisition_manifest.json` 작성
+---
+
+#### Phase 2B — EPO OPS mode (`db_mode == "epo"`)
+
+Launch Agent with `agents/phase2b-epo-tune.md`:
+
+```
+Task: Tune EPO queries and download CSVs
+Agent: phase2b-epo-tune
+Inputs:
+  rfp_md: {output_dir}/rfp.md
+  sub_techs_json: {output_dir}/sub_techs.json
+  output_dir: {output_dir}
+  scripts_dir: {SCRIPTS_DIR}
+  years: {years}
+  include_terms: {include_terms}
+  exclude_terms: {exclude_terms}
+  topic: {topic}
+  date: {date}
+  epo_key: {epo_key}
+  epo_secret: {epo_secret}
+```
+
+**EPO OPS 절차** (tune → 검토 → download):
+1. **`search_patents_epo.py --tune`** 실행 → SUB 먼저 튜닝 (목표 200~800건), MAIN은 SUB 합집합으로 자동 도출
+2. **사용자 검토 게이트** → `queries_confirmed.json` 확인, 수정 가능
+3. **`search_patents_epo.py --download-confirmed`** 실행 → SUB CSV 다운로드 + MAIN CSV = SUB 합집합 (중복 제거)
+4. `acquisition_manifest.json` 작성 (`main_derived: true`)
+
+---
 
 Verify `{output_dir}/acquisition_manifest.json` exists after completion.
 
@@ -278,7 +311,8 @@ After Phase 5 completes, present to the user:
 - [SKILL.md](SKILL.md) — 오케스트레이터 (이 파일)
 - [agents/phase1-rfp-prep.md](agents/phase1-rfp-prep.md) — Phase 1 에이전트
 - [agents/phase2a-sub-tech-extract.md](agents/phase2a-sub-tech-extract.md) — Phase 2A 에이전트
-- [agents/phase2b-query-gen.md](agents/phase2b-query-gen.md) — Phase 2B 에이전트
+- [agents/phase2b-query-gen.md](agents/phase2b-query-gen.md) — Phase 2B 에이전트 (Google Patents 전용)
+- [agents/phase2b-epo-tune.md](agents/phase2b-epo-tune.md) — Phase 2B 에이전트 (EPO OPS 전용, tune→download)
 - [agents/phase3-main-stats.md](agents/phase3-main-stats.md) — Phase 3 에이전트 (병렬)
 - [agents/phase4-sub-tech-analysis.md](agents/phase4-sub-tech-analysis.md) — Phase 4 에이전트 (병렬, N 인스턴스)
 - [agents/phase5-report-writer.md](agents/phase5-report-writer.md) — Phase 5 에이전트
@@ -299,11 +333,17 @@ After Phase 5 completes, present to the user:
   "date": "YYYYMMDD",
   "db_mode": "google | epo",
   "main_csv": "output/gp-search-{date}_main.csv",
+  "main_derived": false,
   "sub_tech_csvs": {
     "sub1": "output/gp-search-{date}_sub1.csv",
     "sub2": "output/gp-search-{date}_sub2.csv"
   }
 }
+```
+
+**`main_derived` field**:
+- `false` (Google Patents): main CSV는 별도 검색식으로 독립 검색/다운로드
+- `true` (EPO OPS): main CSV는 sub CSV 합집합 (중복 제거)
 ```
 
 Phase 3 and all Phase 4 agents read ONLY from this manifest — they never accept CSV paths as direct arguments.
