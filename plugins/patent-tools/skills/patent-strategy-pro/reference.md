@@ -52,6 +52,38 @@
 
 **반복 제한**: 최대 5회. 5회 후에도 범위 밖이면 현재 결과로 확정하고 사용자에게 보고.
 
+### EPO OPS 자동 건수 조정 (EPO 모드)
+
+EPO OPS는 `search_patents()` 함수가 total count를 즉시 반환하므로 Playwright 없이 API 응답으로 건수를 확인한다.
+
+**건수 확인 방법**:
+```python
+# search_patents_epo.py의 search_patents() 함수가 출력:
+#   → {total} total results (fetching up to {effective_total})
+# 또는 직접 EPO OPS API 호출로 total count만 확인:
+python search_patents_epo.py --cql '{cql_query}' --count-only
+```
+
+에이전트가 직접 `search_patents_epo.py`를 `--count-only` 모드로 호출하여 건수를 확인하고,
+목표 범위에 맞을 때까지 CQL 쿼리의 키워드를 조정한 후 실제 다운로드를 실행한다.
+
+**EPO CQL 조정 전략**:
+
+| 상황 | 조치 |
+|------|------|
+| 건수 >> 목표 | AND 그룹 추가, 키워드를 ti= (제목 한정)으로 축소 |
+| 건수 > 목표 (1.2~2배) | OR 그룹에서 가장 넓은 키워드 1~2개 제거 |
+| 건수 < 목표 (0.5~0.8배) | OR 그룹에 동의어 추가, ta= (제목+초록)으로 확장 |
+| 건수 << 목표 (0.5배 미만) | AND 그룹 제거, ta= 검색으로 전환, 키워드 단일어화 |
+| EPO 413 에러 | OR 그룹 분할, 개별 키워드 검색 후 합산 (search_sub_techs 방식) |
+
+**EPO 특수 제약**:
+- 최대 2,000건/쿼리 (초과 시 `--split-by-year` 자동 적용)
+- MAIN 목표: ~2,000건 (EPO 한도), SUB: ~500건
+- 413 에러 시 OR 그룹 크기 축소 또는 개별 키워드 검색으로 전환
+
+**반복 제한**: Google Patents 모드와 동일하게 최대 5회.
+
 ---
 
 ## 세부 기술 도출 방법론

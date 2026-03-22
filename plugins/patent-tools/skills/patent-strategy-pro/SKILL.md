@@ -177,7 +177,11 @@ Inputs:
 4. 사용자가 각 탭에서 CSV 수동 다운로드 후 확인 대기
 5. CSV 경로 확인 → `acquisition_manifest.json` 작성
 
-**EPO mode**: The agent runs fully automatically. Wait for completion.
+**EPO mode** (3단계 자동화):
+1. **CQL 쿼리 생성** → 검색식 자동 구성
+2. **EPO API 건수 조정** → `--count-only` 모드로 건수 확인, 목표(MAIN ~2,000 / SUB ~500) 도달까지 최대 5회 CQL 조정
+3. **자동 다운로드** → 확정된 CQL로 `search_patents_epo.py` 실행, CSV 자동 생성
+4. `acquisition_manifest.json` 작성
 
 Verify `{output_dir}/acquisition_manifest.json` exists after completion.
 
