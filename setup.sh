@@ -8,32 +8,64 @@ PLUGINS_DIR="$HOME/.claude/plugins"
 # ─── 1. Skills → Claude Code ──────────────────────────────────────────────────
 install_claude_skills() {
     local claude_skills="$HOME/.claude/skills"
-    local skills_src="$REPO_ROOT/skills"
-    if [[ ! -d "$skills_src" ]]; then echo "No skills/ folder; skipping."; return; fi
     mkdir -p "$claude_skills"
-    for dir in "$skills_src"/*/; do
-        [[ -d "$dir" ]] || continue
-        local name; name="$(basename "$dir")"
-        echo "Deploying Claude skill: $name"
-        rm -rf "$claude_skills/$name"
-        cp -R "$dir" "$claude_skills/$name"
+
+    # 루트 skills/ 폴더 (있으면 설치)
+    local root_skills="$REPO_ROOT/skills"
+    if [[ -d "$root_skills" ]]; then
+        for dir in "$root_skills"/*/; do
+            [[ -d "$dir" ]] || continue
+            local name; name="$(basename "$dir")"
+            echo "Deploying Claude skill (root): $name"
+            rm -rf "$claude_skills/$name"
+            cp -R "$dir" "$claude_skills/$name"
+        done
+    fi
+
+    # 각 플러그인의 skills/ 폴더
+    for plugin_dir in "$REPO_ROOT/plugins"/*/; do
+        [[ -d "$plugin_dir/skills" ]] || continue
+        for dir in "$plugin_dir/skills"/*/; do
+            [[ -d "$dir" ]] || continue
+            local name; name="$(basename "$dir")"
+            echo "Deploying Claude skill ($(basename "$plugin_dir")): $name"
+            rm -rf "$claude_skills/$name"
+            cp -R "$dir" "$claude_skills/$name"
+        done
     done
+
     echo "Claude Code skills installed."
 }
 
 # ─── 2. Skills → Codex ────────────────────────────────────────────────────────
 install_codex_skills() {
     local codex_skills="${CODEX_HOME:-$HOME/.codex}/skills"
-    local skills_src="$REPO_ROOT/skills"
-    if [[ ! -d "$skills_src" ]]; then echo "No skills/ folder; skipping."; return; fi
     mkdir -p "$codex_skills"
-    for dir in "$skills_src"/*/; do
-        [[ -d "$dir" ]] || continue
-        local name; name="$(basename "$dir")"
-        echo "Deploying Codex skill: $name"
-        rm -rf "$codex_skills/$name"
-        cp -R "$dir" "$codex_skills/$name"
+
+    # 루트 skills/ 폴더 (있으면 설치)
+    local root_skills="$REPO_ROOT/skills"
+    if [[ -d "$root_skills" ]]; then
+        for dir in "$root_skills"/*/; do
+            [[ -d "$dir" ]] || continue
+            local name; name="$(basename "$dir")"
+            echo "Deploying Codex skill (root): $name"
+            rm -rf "$codex_skills/$name"
+            cp -R "$dir" "$codex_skills/$name"
+        done
+    fi
+
+    # 각 플러그인의 skills/ 폴더
+    for plugin_dir in "$REPO_ROOT/plugins"/*/; do
+        [[ -d "$plugin_dir/skills" ]] || continue
+        for dir in "$plugin_dir/skills"/*/; do
+            [[ -d "$dir" ]] || continue
+            local name; name="$(basename "$dir")"
+            echo "Deploying Codex skill ($(basename "$plugin_dir")): $name"
+            rm -rf "$codex_skills/$name"
+            cp -R "$dir" "$codex_skills/$name"
+        done
     done
+
     echo "Codex skills installed."
 }
 
@@ -138,6 +170,14 @@ install_local_plugin() {
     mkdir -p "$mkt_dir"
     cp -R "$plugin_src/." "$mkt_dir/"
     echo "  Marketplace entry -> $mkt_dir"
+
+    # marketplace.json 배포
+    local mkt_meta_dir="$PLUGINS_DIR/marketplaces/$marketplace/.claude-plugin"
+    if [[ -f "$REPO_ROOT/.claude-plugin/marketplace.json" ]]; then
+        mkdir -p "$mkt_meta_dir"
+        cp "$REPO_ROOT/.claude-plugin/marketplace.json" "$mkt_meta_dir/marketplace.json"
+        echo "  marketplace.json -> $mkt_meta_dir"
+    fi
 
     local sha
     sha="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "bundled")"
