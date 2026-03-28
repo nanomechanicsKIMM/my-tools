@@ -1,6 +1,6 @@
 ---
 name: phase7-hwpx-converter
-description: "HWPX 변환 에이전트. 완성된 발명내용설명서 MD를 KIMM 양식 HWPX로 변환한다. 셀별 고유키 zip_replace() 방식."
+description: "HWPX 변환 에이전트. 완성된 발명내용설명서 MD를 KIMM 양식 HWPX로 변환한다. 전체 셀 내용 교체 방식(전략 A)."
 model: sonnet
 ---
 
@@ -41,6 +41,11 @@ for k in sections:
     text = '\n'.join(sections[k]).strip()
     # > [!note] 블록 제거
     text = re.sub(r'> \[!.*?\].*?\n(?:>.*?\n)*', '', text).strip()
+    # ### 하위 헤더를 일반 텍스트로 변환
+    text = re.sub(r'^###?\s+', '', text, flags=re.MULTILINE)
+    # 마크다운 볼드/이탤릭 제거
+    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
+    text = re.sub(r'\*([^*]+)\*', r'\1', text)
     sections[k] = text
 ```
 
@@ -54,35 +59,212 @@ for k in sections:
     sections[k] = escape(sections[k])
 ```
 
-### Step 3: 셀별 고유키 치환
+### Step 3: 전체 셀 내용 교체 (전략 A — 필수)
 
-`kimm-template-mapping.md`에서 각 섹션의 고유키(치환 대상 텍스트)를 읽고, `zip_replace()`로 일괄 치환:
+> [!warning] 중요: 단순 텍스트 치환(zip_replace)은 사용 금지
+> 기존 zip_replace()는 첫 번째 hp:t만 교체하고 나머지 hp:p 블록이 남아 텍스트가 겹치는 버그를 발생시킨다.
+> 반드시 **전체 셀 내용 교체 방식**을 사용해야 한다.
+
+#### 핵심 원리
+
+각 섹션 셀(`<hp:tc>`) 내부의 **모든 `<hp:p>` 요소를 제거**하고, 새 내용을 줄바꿈(`\n\n` 또는 `\n`) 기준으로 분할하여 **개별 `<hp:p>` 요소로 재생성**한다.
+
+#### Python 구현
 
 ```python
-import zipfile, os, shutil
+import zipfile, shutil, copy
+import xml.etree.ElementTree as ET
 
-def zip_replace(src_path, dst_path, replacements):
-    """HWPX ZIP 내 모든 XML에서 텍스트 치환"""
-    tmp = dst_path + ".tmp"
-    with zipfile.ZipFile(src_path, 'r') as zin:
-        with zipfile.ZipFile(tmp, 'w') as zout:
-            for item in zin.infolist():
-                data = zin.read(item.filename)
-                if item.filename.endswith('.xml') or item.filename.endswith('.hpf'):
-                    text = data.decode('utf-8')
-                    for old, new in replacements.items():
-                        text = text.replace(old, new)
-                    data = text.encode('utf-8')
-                zout.writestr(item, data)
-    shutil.move(tmp, dst_path)
+# HWPX 네임스페이스 등록
+NS = {
+    'hp': 'http://www.hancom.co.kr/hwpml/2011/paragraph',
+    'hp2': 'http://www.hancom.co.kr/hwpml/2011/paragraph',
+    'hc': 'http://www.hancom.co.kr/hwpml/2011/core',
+}
+for prefix, uri in NS.items():
+    ET.register_namespace(prefix, uri)
 
-# 치환 딕셔너리 구성
-replacements = {}
-for section_num, unique_key in mapping.items():
-    replacements[unique_key] = sections[section_num]
+# 섹션별 스타일 참조 (kimm-template-mapping.md에서 추출)
+SECTION_STYLES = {
+    1: {'paraPrIDRef': '12', 'charPrIDRef': '16'},  # §1 발명 명칭
+    2: {'paraPrIDRef': '12', 'charPrIDRef': '11'},  # §2 논문발표
+    3: {'paraPrIDRef': '14', 'charPrIDRef': '11'},  # §3 배경
+    4: {'paraPrIDRef': '14', 'charPrIDRef': '11'},  # §4 종래기술
+    5: {'paraPrIDRef': '14', 'charPrIDRef': '11'},  # §5 목적
+    6: {'paraPrIDRef': '14', 'charPrIDRef': '11'},  # §6 구성
+    7: {'paraPrIDRef': '14', 'charPrIDRef': '11'},  # §7 효과
+    8: {'paraPrIDRef': '14', 'charPrIDRef': '11'},  # §8 청구범위
+    9: {'paraPrIDRef': '12', 'charPrIDRef': '6'},   # §9 추가자료
+}
 
-# 실행
-zip_replace(template_path, output_path, replacements)
+# 셀 위치 매핑 (테이블 인덱스, 행 인덱스, 셀 인덱스)
+SECTION_CELLS = {
+    1: (0, 2, 0),   # Table 0, Row 2, Cell 0
+    2: (0, 4, 0),   # Table 0, Row 4, Cell 0
+    3: (0, 6, 0),   # Table 0, Row 6, Cell 0
+    4: (0, 8, 0),   # Table 0, Row 8, Cell 0
+    5: (1, 1, 0),   # Table 1, Row 1, Cell 0
+    6: (1, 3, 0),   # Table 1, Row 3, Cell 0
+    7: (1, 5, 0),   # Table 1, Row 5, Cell 0
+    8: (1, 7, 0),   # Table 1, Row 7, Cell 0
+    9: (1, 9, 0),   # Table 1, Row 9, Cell 0
+}
+
+def make_paragraph(text, para_id_ref, char_id_ref):
+    """단일 hp:p 요소를 생성한다."""
+    hp_ns = NS['hp']
+    p = ET.Element(f'{{{hp_ns}}}p')
+    p.set('id', '0')
+    p.set('paraPrIDRef', para_id_ref)
+    p.set('styleIDRef', '0')
+    p.set('pageBreak', '0')
+    p.set('columnBreak', '0')
+    p.set('merged', '0')
+
+    run = ET.SubElement(p, f'{{{hp_ns}}}run')
+    run.set('charPrIDRef', char_id_ref)
+
+    t = ET.SubElement(run, f'{{{hp_ns}}}t')
+    t.text = text
+
+    lsa = ET.SubElement(p, f'{{{hp_ns}}}linesegarray')
+    ls = ET.SubElement(lsa, f'{{{hp_ns}}}lineseg')
+    ls.set('textpos', '0')
+    ls.set('vertpos', '0')
+    ls.set('vertsize', '1000')
+    ls.set('textheight', '1000')
+    ls.set('baseline', '850')
+    ls.set('spacing', '600')
+    ls.set('horzpos', '0')
+    ls.set('horzsize', '41672')
+    ls.set('flags', '2490368')
+
+    return p
+
+def replace_cell_content(tree, table_idx, row_idx, cell_idx, new_text, styles):
+    """특정 셀의 전체 내용을 새 텍스트로 교체한다."""
+    root = tree.getroot()
+    hp_ns = NS['hp']
+
+    # 테이블 찾기 (hp:tbl)
+    tables = root.findall(f'.//{{{hp_ns}}}tbl')
+    if table_idx >= len(tables):
+        # subList 내부의 테이블도 검색
+        tables = []
+        for elem in root.iter():
+            if elem.tag.endswith('}tbl') or elem.tag == 'hp:tbl':
+                tables.append(elem)
+
+    tbl = tables[table_idx]
+
+    # 행 찾기 (hp:tr)
+    rows = tbl.findall(f'{{{hp_ns}}}tr')
+    row = rows[row_idx]
+
+    # 셀 찾기 (hp:tc)
+    cells = row.findall(f'{{{hp_ns}}}tc')
+    cell = cells[cell_idx]
+
+    # 셀 내부의 기존 hp:p 요소 모두 제거
+    # subList가 있으면 그 안의 hp:p를 제거
+    sublist = cell.find(f'{{{hp_ns}}}subList')
+    if sublist is None:
+        # subList 없이 직접 hp:p가 있는 경우
+        container = cell
+    else:
+        container = sublist
+
+    # 기존 hp:p 요소 모두 제거 (hp:pic 포함 요소도 제거)
+    paras_to_remove = []
+    for child in list(container):
+        if child.tag.endswith('}p') or child.tag == 'hp:p':
+            paras_to_remove.append(child)
+    for p in paras_to_remove:
+        container.remove(p)
+
+    # 새 텍스트를 단락 단위로 분할
+    # 빈 줄(\n\n)은 단락 구분, 단일 줄바꿈(\n)도 단락 구분
+    paragraphs = [p.strip() for p in new_text.split('\n') if p.strip()]
+
+    if not paragraphs:
+        paragraphs = [' ']  # 빈 셀 방지
+
+    # 새 hp:p 요소들을 생성하여 삽입
+    for para_text in paragraphs:
+        new_p = make_paragraph(
+            para_text,
+            styles['paraPrIDRef'],
+            styles['charPrIDRef']
+        )
+        container.append(new_p)
+
+def remove_images_from_cell(tree, table_idx, row_idx, cell_idx):
+    """특정 셀에서 hp:pic 요소(이미지)를 모두 제거한다."""
+    root = tree.getroot()
+    hp_ns = NS['hp']
+
+    tables = root.findall(f'.//{{{hp_ns}}}tbl')
+    if table_idx >= len(tables):
+        tables = []
+        for elem in root.iter():
+            if elem.tag.endswith('}tbl') or elem.tag == 'hp:tbl':
+                tables.append(elem)
+
+    tbl = tables[table_idx]
+    rows = tbl.findall(f'{{{hp_ns}}}tr')
+    row = rows[row_idx]
+    cells = row.findall(f'{{{hp_ns}}}tc')
+    cell = cells[cell_idx]
+
+    # 재귀적으로 hp:pic 요소 제거
+    for parent in cell.iter():
+        pics_to_remove = []
+        for child in parent:
+            if child.tag.endswith('}pic') or child.tag == 'hp:pic':
+                pics_to_remove.append(child)
+        for pic in pics_to_remove:
+            parent.remove(pic)
+
+def convert_hwpx(template_path, output_path, sections):
+    """HWPX 변환 메인 함수"""
+    tmp_dir = output_path + '_tmp'
+
+    # 1. ZIP 해제
+    with zipfile.ZipFile(template_path, 'r') as z:
+        z.extractall(tmp_dir)
+
+    # 2. section0.xml 파싱
+    section_xml = os.path.join(tmp_dir, 'Contents', 'section0.xml')
+    tree = ET.parse(section_xml)
+
+    # 3. 각 섹션 셀 내용 교체
+    for sec_num, content in sections.items():
+        tbl_idx, row_idx, cell_idx = SECTION_CELLS[sec_num]
+        styles = SECTION_STYLES[sec_num]
+        replace_cell_content(tree, tbl_idx, row_idx, cell_idx, content, styles)
+
+    # 4. §9 셀에서 기존 템플릿 이미지 삭제
+    tbl_idx, row_idx, cell_idx = SECTION_CELLS[9]
+    remove_images_from_cell(tree, tbl_idx, row_idx, cell_idx)
+
+    # 5. BinData/image1.bmp 파일도 ZIP에서 제거 (선택적)
+
+    # 6. 수정된 XML 저장
+    tree.write(section_xml, encoding='utf-8', xml_declaration=True)
+
+    # 7. 다시 ZIP으로 압축
+    with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zout:
+        for root_dir, dirs, files in os.walk(tmp_dir):
+            for f in files:
+                file_path = os.path.join(root_dir, f)
+                arcname = os.path.relpath(file_path, tmp_dir)
+                # image1.bmp 제외 (§9 기존 이미지 삭제)
+                if arcname == os.path.join('BinData', 'image1.bmp'):
+                    continue
+                zout.write(file_path, arcname)
+
+    # 8. 임시 디렉토리 정리
+    shutil.rmtree(tmp_dir)
 ```
 
 ### Step 4: 네임스페이스 수정
@@ -109,8 +291,32 @@ python3 "C:/Users/JHKIM/.claude/skills/hwpx-xml/scripts/validate.py" "$OUTPUT_HW
 
 ## 주의사항
 
-- **셀별 고유키가 XML 내에서 유일해야 함** — 중복되면 의도치 않은 곳이 치환됨
-- 줄바꿈 처리: MD의 `\n`은 HWPX에서 별도 `<hp:p>` 블록으로 분리하거나, 기존 단락 구조를 유지하며 텍스트만 교체
-- 한글 인코딩: UTF-8 유지
-- 양식의 표 테두리, 글꼴 크기 등 서식은 원본 유지 (텍스트만 치환)
-- validate.py는 ZIP 구조와 XML well-formedness만 검증 (의미적 정확성은 미검증)
+### 절대 금지 사항
+
+- **zip_replace()로 텍스트만 치환하는 방식 사용 금지** — 이 방식은 첫 번째 `hp:t`만 교체하고 나머지 `hp:p` 블록(템플릿 원문)이 남아 한/글에서 열었을 때 글자가 겹쳐 보이는 치명적 버그를 발생시킨다.
+- **단일 `hp:t`에 `\n`을 포함한 전체 텍스트를 넣는 방식 금지** — HWPX는 `\n`을 단락 구분으로 인식하지 않는다. 각 단락은 별도의 `<hp:p>` 요소여야 한다.
+
+### 필수 수행 사항
+
+1. **전체 셀 내용 교체**: `replace_cell_content()` 함수로 셀 내 모든 `<hp:p>`를 제거 후 새 단락들을 생성
+2. **§9 이미지 삭제**: `remove_images_from_cell()`로 템플릿에 포함된 예시 이미지(`image1.bmp`) 제거
+3. **BinData/image1.bmp 제외**: ZIP 재압축 시 해당 파일 미포함
+4. **단락 분할**: 새 내용의 각 줄(`\n` 기준)을 개별 `<hp:p>` 요소로 생성
+5. **스타일 보존**: 각 섹션의 `paraPrIDRef`, `charPrIDRef` 값을 정확히 적용
+
+### XML 이스케이프 규칙
+
+| 문자 | 이스케이프 |
+|------|-----------|
+| `&` | `&amp;` |
+| `<` | `&lt;` |
+| `>` | `&gt;` |
+| `"` | `&quot;` |
+
+### 스타일 참조 보존
+
+| 속성 | 설명 | 주요 값 |
+|------|------|---------|
+| `paraPrIDRef` | 단락 서식 ID | `12` (§1,§2,§9), `14` (§3~§8) |
+| `charPrIDRef` | 글자 서식 ID | `16` (§1 명칭), `11` (본문), `6` (§9) |
+| `styleIDRef` | 스타일 ID | 모든 셀에서 `0` |
