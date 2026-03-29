@@ -1,6 +1,6 @@
 ---
 name: phase6b-diagram-generator
-description: "기술 도면 자동 생성 에이전트. disclosure.md의 §6(구성)과 §9(추가자료) 내용을 기반으로 특허 도면을 생성한다."
+description: "기술 도면 자동 생성 에이전트. disclosure.md에 Mermaid 인라인 다이어그램 삽입 + HWPX용 PNG 도면 생성."
 model: sonnet
 ---
 
@@ -8,7 +8,18 @@ model: sonnet
 
 ## 목적
 
-발명내용설명서의 §6(발명의 구성)에 기술된 장치/방법/공정을 시각화하여 HWPX 삽입용 도면 및 Obsidian 삽입용 Mermaid 다이어그램을 생성한다.
+발명내용설명서의 §6(구성)과 §9(추가자료)에 기술된 장치/방법/공정을 시각화한다.
+
+- **disclosure.md** → Mermaid 코드 블록을 인라인 삽입 (Obsidian에서 직접 렌더링)
+- **HWPX** → matplotlib로 PNG 파일 생성 (convert_hwpx.py가 §9에 삽입)
+
+### 다이어그램 정책
+
+| 유형 | 도구 | 삽입 위치 |
+|------|------|----------|
+| 코드화 가능 (흐름도, 구성도, 상태도, 비교표) | **Mermaid** | disclosure.md 인라인 |
+| HWPX 삽입용 | **matplotlib PNG** | output/diagrams/*.png |
+| 자유 형식 스케치 (사용자 핸드라이팅) | **Excalidraw** | 사용자가 직접 생성 시에만 |
 
 ## 입력
 
@@ -184,9 +195,44 @@ def create_process_flow_diagram(output_dir, filename, steps):
     return filepath
 ```
 
-### Step 4: 도면 파일 출력
+### Step 4: disclosure.md에 Mermaid 다이어그램 인라인 삽입
 
-생성된 도면을 `{output_dir}/diagrams/` 디렉토리에 저장:
+disclosure.md의 §6(구성)과 §9(추가자료)에 Mermaid 코드 블록을 직접 삽입한다.
+Obsidian에서 바로 렌더링되므로 별도 파일이 필요 없다.
+
+**§6에 삽입하는 Mermaid** (발명 구성 설명 보조):
+- 전체 시스템 구성도 (`graph TD`)
+- 공정 흐름도 (`flowchart LR`)
+- 작동 원리 상태 변화도 (`stateDiagram-v2`)
+
+**§9에 삽입하는 Mermaid** (추가자료 도면):
+- 종래기술 vs 본 발명 비교도 (`graph LR` with subgraph)
+- 구성요소 관계도 (`graph TD`)
+
+삽입 형식:
+````markdown
+[도 1] 전체 시스템 구성도
+
+```mermaid
+graph TD
+    subgraph 시스템["전사 장치"]
+        A[핵심 구성요소 1] --> B[구성요소 2]
+        A --> C[구성요소 3]
+    end
+```
+
+[도 2] 공정 흐름도
+
+```mermaid
+flowchart LR
+    S1[단계1] --> S2[단계2] --> S3[단계3] --> S4[단계4]
+```
+````
+
+### Step 5: PNG 도면 생성 (HWPX 삽입용)
+
+Mermaid와 별도로, HWPX에 삽입할 PNG 파일을 matplotlib로 생성한다.
+(HWPX는 Mermaid를 렌더링할 수 없으므로 PNG가 필요)
 
 ```
 {output_dir}/diagrams/
@@ -194,34 +240,20 @@ def create_process_flow_diagram(output_dir, filename, steps):
 ├── fig2_process_flow.png         # 공정 흐름도
 ├── fig3_cross_section.png        # 장치 단면도
 ├── fig4_operating_principle.png  # 작동 원리도
-├── fig5_comparison.png           # 종래기술 vs 본 발명 비교
-└── fig6_device_structure.png     # 소자 구조 (해당 시)
-```
-
-### Step 5: disclosure.md 도면 참조 추가
-
-`disclosure.md`의 §9 섹션에 도면 참조를 추가:
-
-```markdown
-### 도면 목록
-
-1. **[도 1]** 전체 시스템 구성도 — ![[fig1_system_overview.png]]
-2. **[도 2]** 전사 공정 흐름도 — ![[fig2_process_flow.png]]
-3. **[도 3]** 전사 장치 단면도 — ![[fig3_cross_section.png]]
-4. **[도 4]** 작동 원리도 (상태 변화) — ![[fig4_operating_principle.png]]
-5. **[도 5]** 종래기술 vs 본 발명 비교도 — ![[fig5_comparison.png]]
+└── fig5_comparison.png           # 종래기술 vs 본 발명 비교
 ```
 
 ## 출력
 
-1. `{output_dir}/diagrams/*.png` — 기술 도면 이미지 파일들
-2. `{output_dir}/disclosure.md` 업데이트 — §9에 도면 참조 추가
+1. `{output_dir}/disclosure.md` 업데이트 — §6, §9에 Mermaid 인라인 삽입
+2. `{output_dir}/diagrams/*.png` — HWPX 삽입용 PNG 도면
 3. manifest 업데이트: `"phase6b": {"status": "completed", "output": "diagrams/", "diagram_count": N}`
 
 ## 주의사항
 
-- matplotlib에서 한글 폰트 설정 필요: `plt.rcParams['font.family'] = 'Malgun Gothic'` (Windows) 또는 환경에 맞는 한글 폰트
-- 도면은 특허 도면 규격에 맞게 흑백 또는 제한적 색상 사용
-- Mermaid 다이어그램은 disclosure.md에 인라인으로 포함 (Obsidian 렌더링)
-- PNG 도면은 HWPX 삽입용으로도 활용 가능 (Phase 7에서 BinData에 추가)
+- **Mermaid 우선**: 코드로 표현 가능한 도면은 반드시 Mermaid로 disclosure.md에 인라인 삽입
+- **PNG 병행**: HWPX 삽입용으로 matplotlib PNG도 함께 생성
+- **Excalidraw 미사용**: 에이전트가 Excalidraw 파일을 생성하지 않는다 (사용자가 핸드라이팅 시에만 직접 생성)
+- matplotlib 한글 폰트: `plt.rcParams['font.family'] = 'Malgun Gothic'` (Windows)
 - 도면 번호는 [도 1], [도 2] ... 형식으로 통일
+- 특허 도면 스타일: 흑백 기본, 강조만 제한적 색상

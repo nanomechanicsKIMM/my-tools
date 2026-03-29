@@ -25,6 +25,42 @@ EPO_ENV_FILE = C:/Users/JHKIM/Claude_Work/Patents_EPO/.env
 
 ---
 
+## Obsidian 마크다운 및 다이어그램 규칙 (모든 출력 파일에 적용)
+
+본 스킬이 생성하는 모든 `.md` 파일은 Obsidian 볼트에서 직접 사용할 수 있어야 한다.
+
+### MD 파일 기본 규칙
+
+1. **YAML 프론트매터 필수**: `title`, `created`, `tags` 최소 포함
+2. **내부 링크**: `[[파일명]]` 또는 `[[파일명|표시텍스트]]` 문법 사용 가능
+3. **태그**: `#태그명` 또는 프론트매터 `tags:` 배열
+4. **콜아웃**: `> [!note]`, `> [!warning]`, `> [!info]` 등 Obsidian 콜아웃 사용 가능
+5. **줄바꿈**: Obsidian 렌더링 기준 (빈 줄로 단락 구분)
+
+### 다이어그램 정책
+
+| 유형 | 도구 | 용도 |
+|------|------|------|
+| 코드화 가능한 도면 | **Mermaid** | 흐름도, 시스템 구성도, 상태 변화도, 비교표, 시퀀스 다이어그램 등 |
+| 자유 형식 스케치 | **Excalidraw** | 아이디어 핸드라이팅, 개념 스케치 등 사용자가 직접 그리는 경우만 |
+| HWPX 삽입용 | **PNG (matplotlib)** | convert_hwpx.py가 §9에 자동 삽입하는 이미지 |
+
+### Mermaid 다이어그램 규칙
+
+- disclosure.md에 `\`\`\`mermaid` 코드 블록으로 **인라인 삽입**
+- 지원 유형: `graph`, `flowchart`, `stateDiagram-v2`, `sequenceDiagram`, `pie`, `xychart-beta`, `quadrantChart`
+- 한글 텍스트 사용 가능 (노드 라벨, 설명 등)
+- Phase 6b에서 발명 구성에 맞는 Mermaid 다이어그램을 자동 생성하여 disclosure.md §6, §9에 삽입
+
+### PNG 도면 규칙 (HWPX 삽입용)
+
+- Mermaid와 별도로 **matplotlib로 PNG 파일도 생성** (HWPX에는 Mermaid 삽입 불가)
+- `{output_dir}/diagrams/*.png` 에 저장
+- convert_hwpx.py의 `--diagrams` 옵션으로 §9에 자동 삽입
+- 해상도: 150 dpi, 흰색 배경, 한글 폰트(Malgun Gothic)
+
+---
+
 ## 워크플로우 전체 개요
 
 ```
