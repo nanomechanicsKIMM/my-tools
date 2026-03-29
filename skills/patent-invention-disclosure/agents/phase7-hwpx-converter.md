@@ -14,10 +14,34 @@ model: sonnet
 
 ## 의존 스크립트
 
+- **convert_hwpx.py**: `{SKILL_ROOT}/scripts/convert_hwpx.py` — 메인 변환 스크립트 (권장)
 - **fix_namespaces.py**: `C:/Users/JHKIM/.claude/skills/hwpx/scripts/fix_namespaces.py`
 - **validate.py**: `C:/Users/JHKIM/.claude/skills/hwpx-xml/scripts/validate.py`
 
-## 작업
+## 권장 실행 방법 (스크립트 직접 호출)
+
+> [!important] 아래 스크립트를 직접 실행하는 것이 가장 안정적이다. Python 코드를 에이전트가 재구현하지 말 것.
+
+```bash
+python "{SKILL_ROOT}/scripts/convert_hwpx.py" \
+  --disclosure "{output_dir}/disclosure.md" \
+  --output "{output_dir}/{발명명칭}_발명내용설명서.hwpx" \
+  --diagrams "{output_dir}/diagrams"
+```
+
+스크립트가 수행하는 작업:
+1. disclosure.md에서 §1~§9 추출 (부록 제외, 마크다운 서식 제거)
+2. 템플릿 HWPX 해제 → section0.xml 파싱
+3. 각 셀의 모든 hp:p 제거 후 새 단락 삽입 (lineseg vertpos 누적 계산)
+4. §9에 diagrams/*.png 삽입 (hp:pic + BinData + content.hpf 업데이트)
+5. 템플릿 image1.bmp 제외
+6. fix_namespaces + validate 실행
+
+스크립트 실행이 성공하면 Phase 7 완료. 실패 시 아래 수동 절차 참조.
+
+---
+
+## 수동 절차 (스크립트 실패 시 fallback)
 
 ### Step 1: MD 파싱
 
