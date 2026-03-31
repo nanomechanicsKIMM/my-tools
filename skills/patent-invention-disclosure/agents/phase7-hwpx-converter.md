@@ -310,8 +310,81 @@ python3 "C:/Users/JHKIM/.claude/skills/hwpx-xml/scripts/validate.py" "$OUTPUT_HW
 
 ## 출력
 
-- `{발명명칭}_발명내용설명서.hwpx` — KIMM 양식 HWPX
-- manifest 업데이트: `"phase7": {"status": "completed", "output": "disclosure.hwpx"}`
+- `(YYYYMMDD 발명자) {발명명칭}v1.hwpx` — KIMM 양식 HWPX
+- `(YYYYMMDD 발명자) {발명명칭}v1.md` — disclosure.md 복사본
+- manifest 업데이트: `"phase7": {"status": "completed", "output": "(YYYYMMDD 발명자) {발명명칭}v1.hwpx"}`
+
+> [!important] 파일명 규칙: `(YYYYMMDD 발명자) 발명명칭vN.hwpx` 형식. 수정본 생성 시 v2, v3으로 버전 증가.
+
+## §8 청구범위 특별 규칙 (검증됨 — 2026-03-31)
+
+§8은 **청구항 단위로 문단을 분할**해야 한다. 줄 단위로 분할하면 안 된다.
+
+- disclosure.md의 §8에서 `**[청구항 N]**`로 시작하는 각 청구항 블록을 식별
+- 각 청구항의 헤더(`[청구항 N] (유형)`)와 본문을 공백으로 합쳐 **하나의 hp:p 요소**로 생성
+- 예: 6개 청구항 → 6개 hp:p 요소 (27개가 아님)
+
+```python
+# §8 청구항 단위 분할
+import re
+claims = re.split(r'\n\n(?=\*\*\[청구항)', section8_text)
+for claim in claims:
+    claim_oneline = ' '.join(line.strip() for line in claim.strip().split('\n') if line.strip())
+    claim_oneline = claim_oneline.replace('**', '')  # 마크다운 볼드 제거
+    # → 이 claim_oneline을 하나의 hp:p로 생성
+```
+
+## §9 도면 삽입 규칙 (검증됨 — 2026-03-31)
+
+### hp:pic 필수 구조
+
+> [!warning] `hc:` 네임스페이스 요소 (transMatrix, scaMatrix, rotMatrix) 사용 금지
+> `<hp:renderingInfo>` 블록 전체를 생략해야 한다. 포함 시 `validate.py`가 네임스페이스 미선언 오류로 실패한다.
+
+```xml
+<hp:p id="0" paraPrIDRef="12" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">
+  <hp:run charPrIDRef="6">
+    <hp:ctrl>
+      <hp:pic id="{pic_id}" zOrder="{idx+3}"
+        numberingType="PICTURE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES"
+        lock="0" dropcapstyle="None" href="" groupLevel="0" instid="{inst_id}" reverse="0">
+        <hp:offset x="0" y="0"/>
+        <hp:orgSz width="{w}" height="{h}"/>
+        <hp:curSz width="{w}" height="{h}"/>
+        <hp:flip horizontal="0" vertical="0"/>
+        <hp:rotationInfo angle="0" centerX="{w//2}" centerY="{h//2}" rotateimage="1"/>
+        <!-- renderingInfo 생략 (hc: 네임스페이스 문제) -->
+        <hp:lineShape color="0" width="0" style="None" endCap="Flat"
+          headStyle="ARROW_NONE" tailStyle="ARROW_NONE"
+          headSz="MEDIUM_MEDIUM" tailSz="MEDIUM_MEDIUM"
+          outlineStyle="NORMAL" alpha="0"/>
+        <hp:imgRect x="0" y="0" x2="{w}" y2="{h}"/>
+        <hp:imgClip left="0" top="0" right="0" bottom="0"/>
+        <hp:img bright="0" contrast="0" effect="RealPic" binItemIDRef="{fig_id}"/>
+      </hp:pic>
+    </hp:ctrl>
+  </hp:run>
+</hp:p>
+```
+
+### 도면 파일명 매핑
+
+diagrams/ 폴더의 실제 파일명과 HWPX 내부 ID를 매핑해야 한다:
+
+| 실제 파일명 | BinData 저장명 | binItemIDRef | content.hpf id |
+|------------|---------------|-------------|----------------|
+| fig1_system_overview.png | BinData/fig1.png | fig1 | fig1 |
+| fig2_process_flow.png | BinData/fig2.png | fig2 | fig2 |
+| ... | ... | ... | ... |
+
+### content.hpf 필수 처리
+
+1. **image1 참조 제거**: 템플릿의 `<opf:item id="image1" href="BinData/image1.bmp" .../>` 삭제 (파일 미포함 시 한/글 크래시 발생)
+2. **fig 항목 등록**: 각 도면에 대해 `<opf:item id="fig1" href="BinData/fig1.png" media-type="image/png" isEmbeded="1"/>` 추가
+
+### Windows 경로 주의사항
+
+`os.path.join()`으로 경로 조합 시 실제 파일 존재 여부를 `os.listdir()`로 확인할 것. Windows에서 forward/backslash 혼합으로 `os.path.exists()`가 False를 반환할 수 있다. 절대 경로를 사용하는 것을 권장.
 
 ## 주의사항
 

@@ -94,6 +94,12 @@ def parse_disclosure(md_path):
         txt = re.sub(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]",
                       lambda m: m.group(2) or m.group(1), txt)
         txt = re.sub(r"^---+\s*$", "", txt, flags=re.MULTILINE)
+        # Strip mermaid code blocks (rendered as PNG separately)
+        txt = re.sub(r"```mermaid\n.*?```", "", txt, flags=re.DOTALL)
+        # Strip markdown tables (rendered as PNG separately)
+        txt = re.sub(r"(?:^\|.*\|$\n?)+", "", txt, flags=re.MULTILINE)
+        # Strip blockquote lines
+        txt = re.sub(r"^>.*$\n?", "", txt, flags=re.MULTILINE)
         sections[k] = txt
 
     return sections
@@ -161,6 +167,77 @@ def get_cell_horzsize(cell):
         if w:
             return int(w) - 1700
     return 41672
+
+
+def replace_section9_styled(cell, new_text):
+    """§9 셀 내용을 패턴별 다른 스타일로 교체한다.
+    - '도면 목록' → CENTER + bold (paraPr=12, charPr=12)
+    - 도 설명, 참고문헌 → JUSTIFY + normal (paraPr=14, charPr=11)
+    - '참고문헌' 위에 빈 줄 삽입
+    """
+    sublist = cell.find(f"{{{HP_NS}}}subList")
+    if sublist is None:
+        return 0
+
+    horzsize = get_cell_horzsize(cell)
+
+    # 기존 내용 제거
+    to_remove = []
+    for child in list(sublist):
+        tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+        if tag in ("p", "pic"):
+            to_remove.append(child)
+    for elem in to_remove:
+        sublist.remove(elem)
+
+    paragraphs = [line for line in new_text.split("\n")]
+    # 연속 빈 줄 제거하되 1개는 유지
+    cleaned = []
+    prev_empty = False
+    for line in paragraphs:
+        if not line.strip():
+            if not prev_empty:
+                cleaned.append("")
+            prev_empty = True
+        else:
+            cleaned.append(line)
+            prev_empty = False
+    paragraphs = cleaned if cleaned else [" "]
+
+    cumulative_vert = 0
+
+    for para_text in paragraphs:
+        stripped = para_text.strip()
+
+        # 스타일 결정
+        if stripped == "도면 목록":
+            # 볼드 + 가운데 맞춤
+            p_pr, c_pr = "12", "12"
+        else:
+            # JUSTIFY + 일반 본문
+            p_pr, c_pr = "14", "11"
+
+        if not stripped:
+            # 빈 줄
+            display_text = " "
+        else:
+            display_text = stripped
+
+        escaped_text = escape(display_text)
+        p_elem, num_lines = make_paragraph(
+            escaped_text, p_pr, c_pr,
+            vert_offset=cumulative_vert,
+            horzsize=horzsize,
+        )
+        sublist.append(p_elem)
+        cumulative_vert += num_lines * LINE_HEIGHT
+
+    csz = cell.find(f"{{{HP_NS}}}cellSz")
+    if csz is not None:
+        new_height = max(cumulative_vert + LINE_HEIGHT, int(csz.get("height", "0")))
+        csz.set("height", str(new_height))
+
+    return cumulative_vert
 
 
 def replace_cell_content(cell, new_text, para_pr, char_pr):
@@ -465,7 +542,11 @@ def main():
         cell = cells[cell_idx]
 
         content = sections.get(sec_num, " ")
-        total_vert = replace_cell_content(cell, content, para_pr, char_pr)
+
+        if sec_num == 9:
+            total_vert = replace_section9_styled(cell, content)
+        else:
+            total_vert = replace_cell_content(cell, content, para_pr, char_pr)
 
         sublist = cell.find(f"{{{HP_NS}}}subList")
         p_count = len(sublist.findall(f"{{{HP_NS}}}p")) if sublist is not None else 0

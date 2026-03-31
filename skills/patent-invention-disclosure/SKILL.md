@@ -488,7 +488,7 @@ Agent(
          fix_namespaces: {HWPX_SKILL}/scripts/fix_namespaces.py
          validate: {HWPX_XML_SKILL}/scripts/validate.py
 
-         Output: {output_dir}/{발명명칭}_발명내용설명서.hwpx
+         Output: {output_dir}/(YYYYMMDD 발명자) {발명명칭}v1.hwpx
 
          CRITICAL — MUST USE STRATEGY A (전체 셀 내용 교체):
          1. Parse section0.xml with xml.etree.ElementTree
@@ -498,6 +498,18 @@ Agent(
          5. Use correct paraPrIDRef and charPrIDRef per section
          6. Remove §9 template image (hp:pic and BinData/image1.bmp)
          7. DO NOT use zip_replace() — it causes text overlap bugs
+
+         §8 특별 규칙 (청구범위):
+         8. §8은 청구항 단위로 문단을 분할한다 (줄 단위가 아님)
+         9. 각 청구항([청구항 N] 헤더 + 본문)을 하나의 hp:p 요소로 생성
+         10. 청구항 내의 줄바꿈은 공백으로 치환하여 단일 문단에 합침
+
+         §9 도면 삽입 규칙:
+         11. diagrams/ 폴더의 PNG 파일을 BinData/에 fig1.png~figN.png로 저장
+         12. content.hpf에 각 이미지 항목 등록
+         13. §9 셀 맨 끝에 도면 라벨 + hp:pic 문단을 삽입
+         14. hp:pic에 hc: 네임스페이스 요소(transMatrix 등) 사용 금지 — validate 실패 원인
+         15. content.hpf에서 BinData/image1.bmp 참조 반드시 제거 — 한/글 크래시 원인
 
          After replacement:
          1. Run fix_namespaces.py on output HWPX
@@ -530,10 +542,15 @@ manifest 최종 업데이트:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ### 출력 파일
-- 📄 `{output_dir}/disclosure.md` — Obsidian 호환 마크다운 (9개 섹션 + 부록 3개)
-- 📋 `{output_dir}/{발명명칭}_발명내용설명서.hwpx` — KIMM 양식 한글 파일
+- 📄 `{output_dir}/(YYYYMMDD 발명자) {발명명칭}v1.md` — Obsidian 호환 마크다운 (9개 섹션 + 부록 3개)
+- 📋 `{output_dir}/(YYYYMMDD 발명자) {발명명칭}v1.hwpx` — KIMM 양식 한글 파일
 - 🔍 `{output_dir}/{발명명칭}_선행특허분석.md` — EPO 선행특허 분석
 - 🎨 `{output_dir}/diagrams/` — 기술 도면 {N}개
+
+> [!important] 파일명 규칙
+> - HWPX와 MD 파일은 `(YYYYMMDD 발명자) 발명명칭vN` 형식으로 명명
+> - 수정본이 생길 때마다 v2, v3 형태로 버전 번호를 증가
+> - disclosure.md는 중간 작업용으로 유지하되, 최종본은 위 형식으로 복사
 
 ### TRIZ 분석 요약
 - 기술적 모순: {N}개 도출
