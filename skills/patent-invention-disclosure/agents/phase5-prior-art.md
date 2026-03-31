@@ -46,14 +46,13 @@ set -a
 eval "$(cat 'C:/Users/JHKIM/Claude_Work/.env' | sed 's/^[[:space:]]*//' | grep -v '^#')"
 set +a
 
-# 키워드 검색 (초록 포함, 상위 15건 상세 조회)
-python3 "{SKILL_ROOT}/scripts/search_patents_kipris.py" \
+# 키워드 검색 (초록 + 대표청구항 포함, 상위 15건 상세 조회)
+python "{SKILL_ROOT}/scripts/search_patents_kipris.py" \
   --keyword "$KIPRIS_KEYWORD" \
   --max-results 50 \
-  --with-abstract \
+  --with-detail \
   --max-detail 15 \
-  --format json \
-  -o "$OUTPUT_DIR/kipris_raw_results.json"
+  -o "$OUTPUT_DIR/kipris_raw_results.csv"
 ```
 
 검색 결과가 적은 경우 (< 10건):
@@ -121,7 +120,8 @@ KIPRIS API 실패 시:
       "register_date": "2024-01-20",
       "ipc": "H01L 33/00",
       "abstract_summary": "초록 요약 2-3문장",
-      "key_claims": "핵심 청구항 요약 (초록 기반 추론)",
+      "representative_claim": "대표청구항 (청구항 1) 원문",
+      "key_claims": "핵심 청구항 요약",
       "similarity_score": 0.85,
       "similarity_points": "유사점 설명",
       "difference_points": "차이점 설명",

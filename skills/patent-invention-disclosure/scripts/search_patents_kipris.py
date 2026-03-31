@@ -17,8 +17,8 @@ Usage:
   # With applicant filter
   python search_patents_kipris.py --keyword "플렉서블 디스플레이" --applicant "삼성" -o results.csv
 
-  # Fetch abstracts for top N results (detail API calls)
-  python search_patents_kipris.py --keyword "인공지능*의료" --with-abstract --max-detail 10 -o results.csv
+  # Fetch abstracts + representative claims for top N results (detail API calls)
+  python search_patents_kipris.py --keyword "인공지능*의료" --with-detail --max-detail 10 -o results.csv
 
   # JSON output
   python search_patents_kipris.py --keyword "자율주행" --format json -o results.json
@@ -85,6 +85,8 @@ CSV_COLUMNS = [
     "publication_number",
     "publication_date",
     "ipc",
+    "claim_count",
+    "representative_claim",
     "abstract",
     "status",
     "kipris_link",
@@ -172,20 +174,49 @@ def _parse_detail_response(xml_text: str) -> dict:
 
     item = root.find(".//item")
     if item is None:
-        # Try alternate path
         item = root.find(".//body")
     if item is None:
         return {}
 
-    detail = {
-        "abstract": _text(item.find(".//AbstractInfo"))
+    # Abstract
+    abstract = (
+        _text(item.find(".//AbstractInfo"))
         or _text(item.find(".//abstractInfo"))
-        or _text(item.find(".//astrtCont")),
-        "claims": _text(item.find(".//ClaimInfo"))
-        or _text(item.find(".//claimInfo")),
-        "inventor": _text(item.find(".//InventorInfo"))
+        or _text(item.find(".//astrtCont"))
+    )
+
+    # Inventor
+    inventor = (
+        _text(item.find(".//InventorInfo"))
         or _text(item.find(".//inventorInfo"))
-        or _text(item.find(".//invntNm")),
+        or _text(item.find(".//invntNm"))
+    )
+
+    # Claim count
+    claim_count = _text(item.find(".//claimCount")) or "0"
+
+    # Representative claim (claim 1) — collect all <claim> elements, take first
+    claims = [_text(c) for c in root.iter("claim")]
+    representative_claim = ""
+    if claims:
+        # First claim is the representative (independent) claim
+        representative_claim = claims[0].strip()
+    else:
+        # Fallback: try ClaimInfo / claimInfo as single text
+        raw = (
+            _text(item.find(".//ClaimInfo"))
+            or _text(item.find(".//claimInfo"))
+        )
+        if raw:
+            # Extract claim 1 from concatenated text
+            first_end = raw.find("2.")
+            representative_claim = raw[:first_end].strip() if first_end > 0 else raw.strip()
+
+    detail = {
+        "abstract": abstract,
+        "inventor": inventor,
+        "claim_count": claim_count,
+        "representative_claim": representative_claim,
     }
     return detail
 
@@ -337,15 +368,18 @@ def fetch_detail(api_key: str, application_number: str) -> dict:
 def enrich_with_details(
     api_key: str, items: list[dict], max_detail: int = 10
 ) -> list[dict]:
-    """Enrich top N search results with abstract/claims from detail API."""
+    """Enrich top N search results with abstract, representative claim, and claim count."""
     for i, item in enumerate(items[:max_detail]):
         app_num = item.get("application_number", "")
         if not app_num:
             continue
         detail = fetch_detail(api_key, app_num)
-        item["abstract"] = detail.get("abstract", "")
+        if detail.get("abstract"):
+            item["abstract"] = detail["abstract"]
         if detail.get("inventor") and not item.get("inventor"):
             item["inventor"] = detail["inventor"]
+        item["claim_count"] = detail.get("claim_count", "")
+        item["representative_claim"] = detail.get("representative_claim", "")
         if i < max_detail - 1:
             time.sleep(REQUEST_DELAY)
     return items
@@ -432,8 +466,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum number of search results (default: 50)",
     )
     o.add_argument(
-        "--with-abstract", action="store_true",
-        help="Fetch abstract for each result via detail API (slower)",
+        "--with-detail", action="store_true",
+        help="Fetch abstract + representative claim via detail API (slower)",
     )
     o.add_argument(
         "--max-detail", type=int, default=10,
@@ -502,8 +536,8 @@ def main() -> None:
 
     print(f"Total found: {total}, retrieved: {len(items)}", file=sys.stderr)
 
-    # Enrich with abstracts if requested
-    if args.with_abstract and items:
+    # Enrich with detail (abstract + representative claim) if requested
+    if args.with_detail and items:
         print(
             f"Fetching details for top {min(args.max_detail, len(items))} results...",
             file=sys.stderr,
