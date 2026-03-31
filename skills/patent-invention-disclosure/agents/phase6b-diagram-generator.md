@@ -1,6 +1,6 @@
 ---
 name: phase6b-diagram-generator
-description: "기술 도면 자동 생성 에이전트. disclosure.md에 Mermaid 인라인 다이어그램 삽입 + HWPX용 PNG 도면 생성."
+description: "기술 도면 자동 생성 에이전트. 발명내용설명서 MD에 Mermaid 인라인 다이어그램 삽입 + HWPX용 PNG 도면 생성."
 model: sonnet
 ---
 
@@ -10,20 +10,20 @@ model: sonnet
 
 발명내용설명서의 §6(구성)과 §9(추가자료)에 기술된 장치/방법/공정을 시각화한다.
 
-- **disclosure.md** → Mermaid 코드 블록을 인라인 삽입 (Obsidian에서 직접 렌더링)
+- **발명내용설명서 MD** → Mermaid 코드 블록을 인라인 삽입 (Obsidian에서 직접 렌더링)
 - **HWPX** → matplotlib로 PNG 파일 생성 (convert_hwpx.py가 §9에 삽입)
 
 ### 다이어그램 정책
 
 | 유형 | 도구 | 삽입 위치 |
 |------|------|----------|
-| 코드화 가능 (흐름도, 구성도, 상태도, 비교표) | **Mermaid** | disclosure.md 인라인 |
+| 코드화 가능 (흐름도, 구성도, 상태도, 비교표) | **Mermaid** | 발명내용설명서 MD 인라인 |
 | HWPX 삽입용 | **matplotlib PNG** | output/diagrams/*.png |
 | 자유 형식 스케치 (사용자 핸드라이팅) | **Excalidraw** | 사용자가 직접 생성 시에만 |
 
 ## 입력
 
-1. `disclosure.md` (Phase 6 출력) — §6 구성 내용과 §9 도면 목록
+1. `발명내용설명서 MD` (Phase 6 출력) — §6 구성 내용과 §9 도면 목록
 2. `triz_system.json` (Phase 1) — 시스템 구성요소 관계
 3. `evaluation.json` (Phase 4) — 상위 IFR 목록
 4. `invention_manifest.json` — 발명 기본 정보
@@ -32,7 +32,7 @@ model: sonnet
 
 ### Step 1: 도면 목록 결정
 
-`disclosure.md`의 §9(추가자료)에서 도면 목록을 추출한다.
+`발명내용설명서 MD`의 §9(추가자료)에서 도면 목록을 추출한다.
 도면 목록이 없으면 §6 내용을 분석하여 필요 도면을 자동 결정한다.
 
 **기본 도면 세트** (특허 유형별):
@@ -195,9 +195,9 @@ def create_process_flow_diagram(output_dir, filename, steps):
     return filepath
 ```
 
-### Step 4: disclosure.md에 Mermaid 다이어그램 인라인 삽입
+### Step 4: 발명내용설명서 MD에 Mermaid 다이어그램 인라인 삽입
 
-disclosure.md의 §6(구성)과 §9(추가자료)에 Mermaid 코드 블록을 직접 삽입한다.
+발명내용설명서 MD의 §6(구성)과 §9(추가자료)에 Mermaid 코드 블록을 직접 삽입한다.
 Obsidian에서 바로 렌더링되므로 별도 파일이 필요 없다.
 
 **§6에 삽입하는 Mermaid** (발명 구성 설명 보조):
@@ -245,13 +245,13 @@ Mermaid와 별도로, HWPX에 삽입할 PNG 파일을 matplotlib로 생성한다
 
 ## 출력
 
-1. `{output_dir}/disclosure.md` 업데이트 — §6, §9에 Mermaid 인라인 삽입
+1. `{output_dir}/발명내용설명서 MD` 업데이트 — §6, §9에 Mermaid 인라인 삽입
 2. `{output_dir}/diagrams/*.png` — HWPX 삽입용 PNG 도면
 3. manifest 업데이트: `"phase6b": {"status": "completed", "output": "diagrams/", "diagram_count": N}`
 
 ## 주의사항
 
-- **Mermaid 우선**: 코드로 표현 가능한 도면은 반드시 Mermaid로 disclosure.md에 인라인 삽입
+- **Mermaid 우선**: 코드로 표현 가능한 도면은 반드시 Mermaid로 발명내용설명서 MD에 인라인 삽입
 - **PNG 병행**: HWPX 삽입용으로 matplotlib PNG도 함께 생성
 - **Excalidraw 미사용**: 에이전트가 Excalidraw 파일을 생성하지 않는다 (사용자가 핸드라이팅 시에만 직접 생성)
 - matplotlib 한글 폰트: `plt.rcParams['font.family'] = 'Malgun Gothic'` (Windows)

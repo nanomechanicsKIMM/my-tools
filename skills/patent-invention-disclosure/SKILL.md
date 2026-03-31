@@ -20,7 +20,7 @@ SKILL_ROOT = C:/Users/JHKIM/.claude/skills/patent-invention-disclosure
 HWPX_SKILL = C:/Users/JHKIM/.claude/skills/hwpx
 HWPX_XML_SKILL = C:/Users/JHKIM/.claude/skills/hwpx-xml
 PATENT_STRATEGY_SKILL = C:/Users/JHKIM/.claude/skills/patent-strategy-pro
-EPO_ENV_FILE = C:/Users/JHKIM/Claude_Work/Patents_EPO/.env
+KIPRIS_ENV_FILE = C:/Users/JHKIM/Claude_Work/.env
 ```
 
 ---
@@ -47,10 +47,10 @@ EPO_ENV_FILE = C:/Users/JHKIM/Claude_Work/Patents_EPO/.env
 
 ### Mermaid 다이어그램 규칙
 
-- disclosure.md에 `\`\`\`mermaid` 코드 블록으로 **인라인 삽입**
+- 발명내용설명서 MD에 `\`\`\`mermaid` 코드 블록으로 **인라인 삽입**
 - 지원 유형: `graph`, `flowchart`, `stateDiagram-v2`, `sequenceDiagram`, `pie`, `xychart-beta`, `quadrantChart`
 - 한글 텍스트 사용 가능 (노드 라벨, 설명 등)
-- Phase 6b에서 발명 구성에 맞는 Mermaid 다이어그램을 자동 생성하여 disclosure.md §6, §9에 삽입
+- Phase 6b에서 발명 구성에 맞는 Mermaid 다이어그램을 자동 생성하여 발명내용설명서 MD §6, §9에 삽입
 
 ### TRIZ 용어 사용 규칙
 
@@ -58,8 +58,8 @@ TRIZ는 아이디어 도출 수단이며, 그 흔적은 최종 특허 문서에 
 
 | 영역 | TRIZ 용어 | 설명 |
 |------|----------|------|
-| disclosure.md §1~§9 | **금지** | 일반적 기술 용어로 변환하여 서술 |
-| disclosure.md 부록 A | **허용** | TRIZ 분석 과정을 상세 기록 (내부 참고용) |
+| 발명내용설명서 MD §1~§9 | **금지** | 일반적 기술 용어로 변환하여 서술 |
+| 발명내용설명서 MD 부록 A | **허용** | TRIZ 분석 과정을 상세 기록 (내부 참고용) |
 | HWPX §1~§9 | **금지** | TRIZ, IFR, 모순 매트릭스, 원리 번호 등 일체 불포함 |
 
 Phase 6 에이전트가 §1~§9 작성 시, TRIZ 분석 결과를 일반적인 기술 용어로 변환하여 서술한다. 예:
@@ -296,19 +296,19 @@ manifest 업데이트:
 **Agent**: `agents/phase5-prior-art.md`
 **Model**: sonnet
 
-### EPO API 키 로드
+### KIPRIS API 키 로드
 
-실행 전 EPO API 키를 환경변수로 로드한다:
+실행 전 KIPRIS API 키를 환경변수로 로드한다:
 
 ```bash
-if [ -f "C:/Users/JHKIM/Claude_Work/Patents_EPO/.env" ]; then
+if [ -f "C:/Users/JHKIM/Claude_Work/.env" ]; then
   set -a
-  eval "$(cat 'C:/Users/JHKIM/Claude_Work/Patents_EPO/.env' | sed 's/^[[:space:]]*//' | grep -v '^#')"
+  eval "$(cat 'C:/Users/JHKIM/Claude_Work/.env' | sed 's/^[[:space:]]*//' | grep -v '^#')"
   set +a
 fi
 
-if [ -z "$EPO_OPS_KEY" ]; then
-  echo "WARNING: EPO_OPS_KEY not set. Phase 5 will run in degraded mode."
+if [ -z "$KIPRIS_API_KEY" ] && [ -z "$KIPRIS_REST_ACCESS_KEY" ]; then
+  echo "WARNING: KIPRIS API key not set. Phase 5 will run in degraded mode."
 fi
 ```
 
@@ -322,11 +322,11 @@ Agent(
          Read {output_dir}/triz_analysis.json for IFR list.
          Read {output_dir}/evaluation.json for top-ranked IFRs.
 
-         EPO search script: {PATENT_STRATEGY_SKILL}/scripts/search_patents_epo.py
-         EPO .env file: {EPO_ENV_FILE}
+         KIPRIS search script: {SKILL_ROOT}/scripts/search_patents_kipris.py
+         KIPRIS .env file: {KIPRIS_ENV_FILE}
 
-         Before calling the EPO script, load env vars:
-         set -a && eval \"$(cat '{EPO_ENV_FILE}' | sed 's/^[[:space:]]*//' | grep -v '^#')\" && set +a
+         Before calling the KIPRIS script, load env vars:
+         set -a && eval \"$(cat '{KIPRIS_ENV_FILE}' | sed 's/^[[:space:]]*//' | grep -v '^#')\" && set +a
 
          Input: {manifest.input}
          Output: {output_dir}/prior_art.json
@@ -336,8 +336,8 @@ Agent(
 
 ### Graceful Degradation
 
-EPO 검색 실패 시:
-- `prior_art.json`에 `{"status": "degraded", "reason": "EPO API failure", "patents": []}` 기록
+KIPRIS 검색 실패 시:
+- `prior_art.json`에 `{"status": "degraded", "reason": "KIPRIS API failure", "patents": []}` 기록
 - 사용자에게 안내: "선행특허 자동 검색에 실패했습니다. §3, §4, §8 섹션은 수동 보완이 필요합니다."
 - Phase 6는 degraded 상태로 계속 진행
 
@@ -399,7 +399,13 @@ Agent(
          Read original source documents: {manifest.input.source_files}
 
          Input: {manifest.input}
-         Output: {output_dir}/disclosure.md
+         Output: {output_dir}/(YYYYMMDD 발명자) {발명명칭}vN.md
+
+         FILE NAMING RULE:
+         - Format: (YYYYMMDD 발명자) 발명명칭vN.md
+         - Check output_dir for existing files with same 발명명칭 to determine version N
+         - If no existing file: v1. If v1 exists: v2. And so on.
+         - Example: (20260331 김재현) 나노박막의 진공 대면적 전사 방법 및 장비v1.md
 
          CRITICAL REQUIREMENTS:
          1. All 9 sections (§1~§9) must be filled
@@ -416,10 +422,22 @@ Agent(
 
 ### 출력 검증
 
-생성된 `disclosure.md`에서 9개 섹션 + 3개 부록 존재 확인:
+생성된 MD 파일에서 9개 섹션 + 3개 부록 존재 확인:
 
 ```python
-import re
+import re, glob
+
+# 파일명 형식 확인
+md_files = glob.glob(f"{output_dir}/*v*.md")
+# 버전 번호 파싱
+versions = []
+for f in md_files:
+    m = re.search(r'v(\d+)\.md$', f)
+    if m:
+        versions.append(int(m.group(1)))
+next_version = max(versions) + 1 if versions else 1
+
+# 섹션/부록 검증
 sections_found = re.findall(r'^## §(\d+)', md_text, re.MULTILINE)
 appendices_found = re.findall(r'^## 부록 ([A-C])', md_text, re.MULTILINE)
 missing_sec = set(range(1, 10)) - set(int(s) for s in sections_found)
@@ -431,7 +449,7 @@ if missing_sec or missing_app:
 
 manifest 업데이트:
 ```json
-"phase6": {"status": "completed", "output": "disclosure.md"}
+"phase6": {"status": "completed", "output": "(YYYYMMDD 발명자) 발명명칭vN.md"}
 ```
 
 ---
@@ -446,13 +464,13 @@ Agent(
   subagent_type="general-purpose",
   model="sonnet",
   prompt="Read {SKILL_ROOT}/agents/phase6b-diagram-generator.md for instructions.
-         Read {output_dir}/disclosure.md for §6 and §9 content.
+         Read the Phase 6 output MD file (the latest vN.md in {output_dir}) for §6 and §9 content.
          Read {output_dir}/triz_system.json for system components.
          Read {output_dir}/evaluation.json for top IFRs.
 
          Input: {manifest.input}
          Output directory: {output_dir}/diagrams/
-         Also update: {output_dir}/disclosure.md §9 with diagram references
+         Also update: the Phase 6 output MD file (latest vN.md in {output_dir}) §9 with diagram references
 
          Generate at minimum:
          1. 전체 시스템 구성도
@@ -482,7 +500,7 @@ Agent(
   model="sonnet",
   prompt="Read {SKILL_ROOT}/agents/phase7-hwpx-converter.md for instructions.
          Read {SKILL_ROOT}/reference/kimm-template-mapping.md for cell mapping.
-         Read {output_dir}/disclosure.md for content to insert.
+         Read the Phase 6 output MD file (the latest vN.md in {output_dir}) for content to insert.
 
          Template: {SKILL_ROOT}/assets/[KIMM]직무발명내용설명서_양식.hwpx
          fix_namespaces: {HWPX_SKILL}/scripts/fix_namespaces.py
@@ -542,15 +560,16 @@ manifest 최종 업데이트:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ### 출력 파일
-- 📄 `{output_dir}/(YYYYMMDD 발명자) {발명명칭}v1.md` — Obsidian 호환 마크다운 (9개 섹션 + 부록 3개)
-- 📋 `{output_dir}/(YYYYMMDD 발명자) {발명명칭}v1.hwpx` — KIMM 양식 한글 파일
-- 🔍 `{output_dir}/{발명명칭}_선행특허분석.md` — EPO 선행특허 분석
+- 📄 `{output_dir}/(YYYYMMDD 발명자) {발명명칭}vN.md` — Obsidian 호환 마크다운 (9개 섹션 + 부록 3개)
+- 📋 `{output_dir}/(YYYYMMDD 발명자) {발명명칭}vN.hwpx` — KIMM 양식 한글 파일
+- 🔍 `{output_dir}/{발명명칭}_선행특허분석.md` — KIPRIS 선행특허 분석
 - 🎨 `{output_dir}/diagrams/` — 기술 도면 {N}개
 
 > [!important] 파일명 규칙
-> - HWPX와 MD 파일은 `(YYYYMMDD 발명자) 발명명칭vN` 형식으로 명명
-> - 수정본이 생길 때마다 v2, v3 형태로 버전 번호를 증가
-> - disclosure.md는 중간 작업용으로 유지하되, 최종본은 위 형식으로 복사
+> - MD와 HWPX 파일은 `(YYYYMMDD 발명자) 발명명칭vN` 형식으로 명명
+> - 초판은 v1, 수정본이 생길 때마다 v2, v3 형태로 버전 번호를 증가
+> - 버전 결정: output_dir에서 동일 발명명칭의 기존 파일을 검색하여 최대 버전 + 1
+> - MD와 HWPX의 버전 번호는 항상 일치시킴
 
 ### TRIZ 분석 요약
 - 기술적 모순: {N}개 도출
@@ -575,9 +594,9 @@ manifest 최종 업데이트:
 | Phase | 실패 모드 | 대응 |
 |-------|-----------|------|
 | Phase 2 | IFR < 10개 | 재시도 2회, 이후 현재 결과로 진행 |
-| Phase 5 | EPO API 실패 | graceful degradation, 수동 보완 안내 |
+| Phase 5 | KIPRIS API 실패 | graceful degradation, 수동 보완 안내 |
 | Phase 6 | 섹션/부록 누락 | 1회 재생성, 이후 부분 결과 제공 |
-| Phase 6b | matplotlib 실패 | Mermaid만 disclosure.md에 포함 |
+| Phase 6b | matplotlib 실패 | Mermaid만 발명내용설명서 MD에 포함 |
 | Phase 7 | HWPX 변환 실패 | MD fallback |
 | Phase 7 | validate.py 실패 | MD fallback + 에러 로그 |
 

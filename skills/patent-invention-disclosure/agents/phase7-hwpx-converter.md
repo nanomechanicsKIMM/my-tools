@@ -8,7 +8,7 @@ model: sonnet
 
 ## 입력
 
-1. `disclosure.md` (Phase 6 출력) — 9개 섹션 MD
+1. Phase 6 출력 MD 파일 `(YYYYMMDD 발명자) 발명명칭vN.md` — 9개 섹션 MD
 2. `reference/kimm-template-mapping.md` — 셀별 고유키 매핑
 3. `assets/[KIMM]직무발명내용설명서_양식.hwpx` — 원본 양식
 
@@ -24,13 +24,13 @@ model: sonnet
 
 ```bash
 python "{SKILL_ROOT}/scripts/convert_hwpx.py" \
-  --disclosure "{output_dir}/disclosure.md" \
+  --disclosure "{output_dir}/(YYYYMMDD 발명자) {발명명칭}vN.md" \
   --output "{output_dir}/{발명명칭}_발명내용설명서.hwpx" \
   --diagrams "{output_dir}/diagrams"
 ```
 
 스크립트가 수행하는 작업:
-1. disclosure.md에서 §1~§9 추출 (부록 제외, 마크다운 서식 제거)
+1. Phase 6 출력 MD에서 §1~§9 추출 (부록 제외, 마크다운 서식 제거)
 2. 템플릿 HWPX 해제 → section0.xml 파싱
 3. 각 셀의 모든 hp:p 제거 후 새 단락 삽입 (lineseg vertpos 누적 계산)
 4. §9에 diagrams/*.png 삽입 (hp:pic + BinData + content.hpf 업데이트)
@@ -45,7 +45,7 @@ python "{SKILL_ROOT}/scripts/convert_hwpx.py" \
 
 ### Step 1: MD 파싱
 
-`disclosure.md`에서 `## §N` 헤더로 9개 섹션 본문을 추출:
+Phase 6 출력 MD 파일에서 `## §N` 헤더로 9개 섹션 본문을 추출:
 
 ```python
 import re
@@ -311,7 +311,7 @@ python3 "C:/Users/JHKIM/.claude/skills/hwpx-xml/scripts/validate.py" "$OUTPUT_HW
 ## 출력
 
 - `(YYYYMMDD 발명자) {발명명칭}v1.hwpx` — KIMM 양식 HWPX
-- `(YYYYMMDD 발명자) {발명명칭}v1.md` — disclosure.md 복사본
+- `(YYYYMMDD 발명자) {발명명칭}vN.md` — Phase 6에서 이미 이 형식으로 생성됨
 - manifest 업데이트: `"phase7": {"status": "completed", "output": "(YYYYMMDD 발명자) {발명명칭}v1.hwpx"}`
 
 > [!important] 파일명 규칙: `(YYYYMMDD 발명자) 발명명칭vN.hwpx` 형식. 수정본 생성 시 v2, v3으로 버전 증가.
@@ -320,7 +320,7 @@ python3 "C:/Users/JHKIM/.claude/skills/hwpx-xml/scripts/validate.py" "$OUTPUT_HW
 
 §8은 **청구항 단위로 문단을 분할**해야 한다. 줄 단위로 분할하면 안 된다.
 
-- disclosure.md의 §8에서 `**[청구항 N]**`로 시작하는 각 청구항 블록을 식별
+- Phase 6 출력 MD의 §8에서 `**[청구항 N]**`로 시작하는 각 청구항 블록을 식별
 - 각 청구항의 헤더(`[청구항 N] (유형)`)와 본문을 공백으로 합쳐 **하나의 hp:p 요소**로 생성
 - 예: 6개 청구항 → 6개 hp:p 요소 (27개가 아님)
 
