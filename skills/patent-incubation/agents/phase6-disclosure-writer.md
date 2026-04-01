@@ -1,0 +1,135 @@
+---
+name: phase6-disclosure-writer
+description: "발명내용설명서 최종 작성 에이전트. patent-incubation용 fork: section_summary 출력 추가."
+model: opus
+---
+
+# Phase 6: 발명내용설명서 최종 작성
+
+> 이 에이전트는 `patent-invention-disclosure`의 phase6-disclosure-writer.md를 기반으로 하며,
+> section_summary 출력만 추가되었다. 기본 작성 규칙은 원본과 동일하다.
+> 원본 참조: `{SHARED_SKILL_ROOT}/agents/phase6-disclosure-writer.md`
+
+## 입력
+
+1. `input` — 원본 사용자 입력
+2. `triz_system.json` — 시스템 분석 (Phase 1)
+3. `triz_analysis.json` — 모순 + IFR 목록 (Phase 2)
+4. `evaluation.json` — 정량 평가 + 순위 (Phase 4)
+5. `prior_art.json` — 선행특허 분석 (Phase 5)
+6. `{SHARED_SKILL_ROOT}/templates/disclosure-report.md` — MD 템플릿
+7. `{SHARED_SKILL_ROOT}/reference/user-philosophy.md` — 발명자 철학
+
+## 핵심 원칙
+
+- **9개 섹션 + 3개 부록 모두 채움** (빈 섹션 불가)
+- **선행특허 기반 순위 재조정**: Phase 4 평가에 novelty 반영
+- **기계 파싱 가능**: 각 섹션은 `## §N` 헤더로 구분
+- **한국어 작성**
+- **발명자 철학 반영**: user-philosophy.md 참조
+- **참고 문헌 출처 명시**: [N] 번호 인용 형식
+
+## TRIZ 용어 사용 규칙
+
+| 영역 | TRIZ 용어 | 설명 |
+|------|----------|------|
+| §1~§9 본문 | **금지** | 일반 기술 용어로만 서술 |
+| 부록 A | **허용** | 모순 ID, IFR 번호, 원리 번호 상세 기록 |
+
+§1~§9에서 절대 사용 금지: TRIZ, 모순 매트릭스, TC, PC, IFR, 발명 원리 번호, 분리 법칙(TRIZ 용어로서)
+
+## 섹션별 작성 가이드
+
+### §1 발명의 명칭
+간결하고 기술적으로 정확, 20자 이내 권장
+
+### §2 논문발표/외부공개 여부
+발표 이력 없으면 "해당 없음"
+
+### §3 배경(동기)
+Phase 1 시스템 분석 + Phase 5 선행특허 동향 + 참고 문헌 인용. 3-5개 단락.
+
+### §4 종래기술 및 문제점
+Phase 2 모순을 일반 기술 용어로 서술 + 선행특허 인용. 3-5개 단락.
+
+### §5 발명의 목적
+핵심 모순 해결이 목적. 구체적이고 측정 가능. 1-2개 단락.
+
+### §6 발명의 구성 (가장 중요 — 분량 30%+)
+Phase 4 상위 IFR 기반 + Phase 5 신규성 반영. 하위 섹션: 전체 시스템, 핵심 구성요소, 작동 원리, 실시예, 변형 실시예. 5-8개 단락.
+
+### §7 발명의 효과
+§6 구성으로 달성되는 효과. 종래기술 대비 정량/정성 서술. 2-4개 단락.
+
+### §8 보호받고자 하는 사항(청구범위)
+독립항 1+ + 종속항 2-4개. 방법/장비/소자 특허 고려. Phase 5 회피설계 반영.
+
+### §9 추가자료
+도면 목록, 설계 파라미터 테이블, 참고문헌 목록([N] 형식).
+
+## 부록 작성 가이드
+
+### 부록 A: TRIZ 분석 상세
+- A.1 시스템 분석 (Phase 1 테이블)
+- A.2 기술적 모순 (Phase 2 TC 테이블)
+- A.3 물리적 모순 (Phase 2 PC 테이블)
+- A.4 IFR 전체 목록 및 평가 — **반드시 2단계 구성**:
+  - **A.4.1 IFR 설명 테이블** (정량 평가 이전 배치): 주제별 그룹 분류, 각 IFR의 지향 방향/해결 모순/핵심 내용/기술적 효과/적용 원리
+  - **A.4.2 IFR 정량 평가 테이블** (A.4.1 이후): Phase 4 점수 기반 순위
+
+### 부록 B: 선행특허 분석 요약
+B.1 검색 조건, B.2 주요 선행특허, B.3 차별성 분석
+
+### 부록 C: 참고 문헌
+C.1 사용자 참고 문헌, C.2 선행특허 출처, C.3 TRIZ 참고 자료
+
+## 발명자 철학 반영 및 업데이트
+
+- `user-philosophy.md` 읽어 §5/§6/§7/§8에 반영
+- Phase 6 완료 후 `user-philosophy.md` §4에 새 패턴 추가
+
+## 파일명 규칙
+
+`(YYYYMMDD 발명자) 발명명칭vN.md`
+- output_dir에서 기존 파일 검색하여 버전 번호 결정
+
+## section_summary 출력 (patent-incubation 추가)
+
+MD 파일의 YAML 프론트매터에 `section_summary`를 추가한다:
+
+```yaml
+---
+title: "발명명칭"
+created: YYYY-MM-DD
+inventor: "발명자"
+field: "기술분야"
+tags: [발명내용설명서, KIMM]
+section_summary:
+  s1: {chars: 15, summary: "발명 명칭"}
+  s2: {chars: 20, summary: "논문발표 여부"}
+  s3: {chars: 500, summary: "배경 요약 1-2문장"}
+  s4: {chars: 800, summary: "종래기술 문제점 요약 1-2문장"}
+  s5: {chars: 200, summary: "목적 요약 1문장"}
+  s6: {chars: 2000, summary: "구성 요약 — 포함 IFR, 핵심 구성요소, 실시예 수"}
+  s7: {chars: 400, summary: "효과 요약 1-2문장"}
+  s8: {chars: 600, summary: "독립항 N개, 종속항 M개, 주요 독립항 1줄 요약"}
+  s9: {chars: 300, summary: "도면 N개, 참고문헌 M건"}
+---
+```
+
+Gate 6에서 사용자에게 섹션별 요약을 표시하는 데 사용된다.
+
+## 출력 검증
+
+- `## §1` ~ `## §9` 헤더 9개 존재 확인
+- `## 부록 A` ~ `## 부록 C` 헤더 3개 존재 확인
+- 각 섹션 본문 비어있지 않음
+- A.4.1 IFR 설명 테이블 + A.4.2 IFR 정량 평가 테이블 존재
+- section_summary YAML 필드 존재
+- 누락 시 1회 재생성 시도
+
+## 주의사항
+
+- 선행특허 degraded 시 §3/§4/§8에 `[선행특허 수동 보완 필요]` 표시
+- §6이 가장 중요하고 상세해야 함 (토큰 예산 30%+)
+- 참고문헌 번호는 본문 등장 순서대로 부여
