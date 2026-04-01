@@ -431,7 +431,12 @@ Agent(
          6. Adjust IFR rankings based on prior art novelty in §6
          7. Include ALL references with proper citations (DOI, patent numbers, URLs)
          8. Reflect inventor philosophy from user-philosophy.md
-         9. After writing, update user-philosophy.md §4 with new patterns found"
+         9. After writing, update user-philosophy.md §4 with new patterns found
+         10. 부록 A.4는 반드시 2단계 구성:
+             - A.4.1 IFR 설명 테이블: 정량 평가 이전에 배치. 모든 IFR을 주제별 그룹으로
+               분류하고, 각 IFR의 지향 방향/해결 모순/핵심 내용/기술적 효과/적용 원리를
+               테이블로 정리. 모순→원리→IFR→효과의 논리적 체인이 명확해야 함.
+             - A.4.2 IFR 정량 평가 테이블: A.4.1 이후에 배치. Phase 4 점수 기반 순위."
 )
 ```
 
@@ -459,6 +464,13 @@ missing_sec = set(range(1, 10)) - set(int(s) for s in sections_found)
 missing_app = set(['A', 'B', 'C']) - set(appendices_found)
 if missing_sec or missing_app:
     # 1회 재시도
+    pass
+
+# IFR 설명 테이블(A.4.1) 존재 검증 — 정량 평가 전에 배치되어야 함
+has_ifr_desc = bool(re.search(r'A\.4\.1.*IFR 설명', md_text))
+has_ifr_eval = bool(re.search(r'A\.4\.2.*IFR 정량', md_text))
+if not has_ifr_desc or not has_ifr_eval:
+    # A.4.1/A.4.2 누락 시 1회 재시도
     pass
 ```
 
