@@ -189,6 +189,17 @@ install_visual_generator() { install_local_plugin "visual-generator"; }
 install_hwpx_tools()       { install_local_plugin "hwpx-tools"; }
 install_patent_tools()     { install_local_plugin "patent-tools"; }
 
+install_docling_tools() {
+    local plugin_src="$REPO_ROOT/plugins/docling-tools"
+    echo; echo "Installing docling-tools (pip dependencies)..."
+    if [[ -f "$plugin_src/requirements.txt" ]]; then
+        pip install -r "$plugin_src/requirements.txt"
+        echo "  docling-tools installed."
+    else
+        echo "  plugins/docling-tools/requirements.txt not found; skipping."
+    fi
+}
+
 install_playwright() {
     local marketplace="claude-plugins-official"
     local repo="anthropics/claude-plugins-official"
@@ -229,4 +240,5 @@ install_playwright
 install_visual_generator
 install_hwpx_tools
 install_patent_tools
+install_docling_tools
 echo; echo "Done! Restart Claude Code to activate plugins."

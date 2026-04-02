@@ -173,6 +173,17 @@ function Install-VisualGeneratorPlugin { Install-LocalPlugin "visual-generator" 
 function Install-HwpxToolsPlugin       { Install-LocalPlugin "hwpx-tools" }
 function Install-PatentToolsPlugin     { Install-LocalPlugin "patent-tools" }
 
+function Install-DoclingTools {
+    $reqFile = Join-Path $RepoRoot "plugins\docling-tools\requirements.txt"
+    Write-Host "`nInstalling docling-tools (pip dependencies)..."
+    if (Test-Path $reqFile) {
+        pip install -r $reqFile
+        Write-Host "  docling-tools installed." -ForegroundColor Green
+    } else {
+        Write-Host "  plugins/docling-tools/requirements.txt not found; skipping."
+    }
+}
+
 function Install-PlaywrightPlugin {
     $marketplace = "claude-plugins-official"
     $repo        = "anthropics/claude-plugins-official"
@@ -215,4 +226,5 @@ Install-PlaywrightPlugin
 Install-VisualGeneratorPlugin
 Install-HwpxToolsPlugin
 Install-PatentToolsPlugin
+Install-DoclingTools
 Write-Host "`nDone! Restart Claude Code to activate plugins." -ForegroundColor Green
