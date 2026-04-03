@@ -191,12 +191,23 @@ install_patent_tools()     { install_local_plugin "patent-tools"; }
 
 install_docling_tools() {
     local plugin_src="$REPO_ROOT/plugins/docling-tools"
-    echo; echo "Installing docling-tools (pip dependencies)..."
+    echo; echo "Installing docling-tools (pip + slash command)..."
     if [[ -f "$plugin_src/requirements.txt" ]]; then
         pip install -r "$plugin_src/requirements.txt"
-        echo "  docling-tools installed."
+        echo "  docling-tools pip dependencies installed."
     else
         echo "  plugins/docling-tools/requirements.txt not found; skipping."
+    fi
+
+    # Install slash commands
+    local claude_commands="$HOME/.claude/commands"
+    mkdir -p "$claude_commands"
+    if [[ -d "$plugin_src/commands" ]]; then
+        for cmd in "$plugin_src/commands"/*.md; do
+            [[ -f "$cmd" ]] || continue
+            cp "$cmd" "$claude_commands/"
+            echo "  Command installed: $(basename "$cmd")"
+        done
     fi
 }
 

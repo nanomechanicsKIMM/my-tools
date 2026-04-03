@@ -6,8 +6,23 @@ import sys
 from pathlib import Path
 
 
+def _patch_ssl_for_hf():
+    """Bypass SSL verification for HuggingFace Hub (corporate proxy workaround)."""
+    try:
+        import httpx
+        _orig_init = httpx.Client.__init__
+        def _patched_init(self, *args, **kwargs):
+            kwargs.setdefault("verify", False)
+            return _orig_init(self, *args, **kwargs)
+        httpx.Client.__init__ = _patched_init
+    except ImportError:
+        pass
+
+
 def convert_file(input_path: str, output_path: str | None = None) -> str:
     """Convert a single file to Markdown."""
+    _patch_ssl_for_hf()
+
     from docling.datamodel.base_models import InputFormat
     from docling.datamodel.pipeline_options import PdfPipelineOptions
     from docling.document_converter import DocumentConverter, PdfFormatOption
