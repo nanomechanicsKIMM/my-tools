@@ -227,6 +227,41 @@ PYTHONUTF8=1 python scripts/build_survey.py --input data.json --output result.hw
 - 심사 통과 (80점 이상, REVISE 0개) 또는 3회 반복 완료
 - 국내외 동향에서 학자명 대신 기관명 사용
 
+## 자동실행 모드 (user_idea.md 기반)
+
+`user_idea.md`를 프로젝트 폴더에 미리 작성하면 Phase 1~1.5 대화를 건너뛰고 자동 실행 가능.
+
+### 사용법
+
+1. `templates/user_idea.md` 템플릿을 프로젝트 폴더에 복사
+2. 필수 항목(제안자, 지원유형, 기술주제, 기술후보군, 융합분야, 단계구성, TRL, Q1~Q4)을 채움
+3. `/nrf-tech-survey` 실행 시 자동으로 user_idea를 읽어 Phase 1.7부터 진행
+
+### 자동실행 흐름
+
+```
+user_idea.md → Phase 1.7 (3개 조사 Agent 병렬)
+             → Phase 2 (서술식 초안 ~10,000자)
+             → Phase 3.5 (심사자 Agent, 80점 기준)
+             → Phase 3.7 (수정, 최대 3회 반복)
+             → Phase 4 (개조식 변환 + JSON + HWPX)
+             → Phase 5 (검증 + 사용자 고려사항 MD)
+```
+
+### 심사 반복 전략 (실증 결과)
+
+| Round | 주요 개선 | 점수 변화 |
+|-------|----------|----------|
+| v1→v2 | 비교표, 광학논증, 정량목표, 리스크분석 | 62→83 (+21) |
+| v2→v3 | DOF문헌, 색재현율, 연구팀매핑, 예산근거, FOV대안, 인용형식 | 83→95 (+12) |
+
+90점 이상 달성을 위한 핵심 체크포인트:
+- **니즈 포괄성**: VAC 접근법 비교표 + 한계 솔직한 인정 (가장 큰 감점 요인)
+- **정량 목표**: State-of-Art 대비표, FOV 기하학적 상한 vs 유효 FOV 구분
+- **실현 가능성**: 역량-기관 매핑표, 예산 배분 근거(장비/인건비/재료비), Go/No-Go 기준
+- **인용 형식**: 제1저자 et al., 저널, 연도 통일
+- **DOF 근거**: Campbell(1957), Charman & Whitefoot(1977), Marcos(1999)
+
 ## 파일 구조
 
 ```
@@ -245,6 +280,7 @@ nrf-tech-survey/
 ├── templates/
 │   └── user_idea.md         # 사용자 입력 템플릿 (자동 실행용)
 └── examples/
-    ├── sample_data.json     # 2단계 테스트 데이터
-    └── sample_data_3step.json  # 3단계 테스트 데이터
+    ├── sample_data.json           # 2단계 테스트 데이터
+    ├── sample_data_3step.json     # 3단계 테스트 데이터 (오리가미 메타물질)
+    └── sample_data_NED_3step.json # 3단계 테스트 데이터 (근안 디스플레이, 95점)
 ```
