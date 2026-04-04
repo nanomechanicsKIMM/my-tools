@@ -242,6 +242,8 @@ nrf-tech-survey/
 │   ├── reviewer_prompt.md   # 심사자 Agent 프롬프트
 │   ├── image_prompt.md      # 기술 설명 그림 생성 프롬프트
 │   └── writing_guidelines.md # 작성 가이드라인 (스타일·분량·규칙)
+├── templates/
+│   └── user_idea.md         # 사용자 입력 템플릿 (자동 실행용)
 └── examples/
     ├── sample_data.json     # 2단계 테스트 데이터
     └── sample_data_3step.json  # 3단계 테스트 데이터
