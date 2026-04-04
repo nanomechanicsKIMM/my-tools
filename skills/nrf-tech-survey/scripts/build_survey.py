@@ -20,7 +20,9 @@ from lxml import etree
 # ── 경로 설정 ──────────────────────────────────────────────
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _SKILL_DIR = _SCRIPT_DIR.parent
-TEMPLATE_HWPX = _SKILL_DIR / "assets" / "NRF_기술수요조사서_양식.hwpx"
+TEMPLATE_HWPX_2STEP = _SKILL_DIR / "assets" / "NRF_기술수요조사서_양식.hwpx"
+TEMPLATE_HWPX_3STEP = _SKILL_DIR / "assets" / "NRF_기술수요조사서_양식_3단계.hwpx"
+TEMPLATE_HWPX = TEMPLATE_HWPX_2STEP  # default
 UNPACK_PY = Path("C:/Users/JHKIM/.claude/skills/hwpx-xml/scripts/office/unpack.py")
 PACK_PY = Path("C:/Users/JHKIM/.claude/skills/hwpx-xml/scripts/office/pack.py")
 FIX_NS_PY = Path("C:/Users/JHKIM/.claude/skills/hwpx/scripts/fix_namespaces.py")
@@ -220,12 +222,18 @@ def set_multiline_text(cell, text, para_pr_override=None):
 #  메인 빌드 로직
 # ══════════════════════════════════════════════════════════
 
-def build(data: dict, output_path: Path):
+def build(data: dict, output_path: Path, steps: int = 2):
     """JSON 데이터를 기반으로 기술수요조사서 HWPX를 생성한다."""
+
+    template = TEMPLATE_HWPX_3STEP if steps == 3 else TEMPLATE_HWPX_2STEP
+    if not template.exists():
+        print(f"ERROR: 템플릿을 찾을 수 없습니다: {template}", file=sys.stderr)
+        sys.exit(1)
+    print(f"Using template: {template.name} ({steps}-step)")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # 1. 템플릿 언팩
-        run_cmd([sys.executable, str(UNPACK_PY), str(TEMPLATE_HWPX), tmpdir])
+        run_cmd([sys.executable, str(UNPACK_PY), str(template), tmpdir])
 
         # 2. header.xml에 내어쓰기 25pt paraPr 추가 (id=50)
         HH = "http://www.hancom.co.kr/hwpml/2011/head"
@@ -415,11 +423,21 @@ def build(data: dict, output_path: Path):
             set_simple_text(target, f"(2단계) {data['2단계목표']}")
             set_cell_margin(target, top=CELL_PAD, bottom=CELL_PAD)
 
-        if data.get("연구개발내용"):
+        if steps == 3 and data.get("3단계목표"):
             row3_cells = tables[TBL_GOAL].findall("hp:tr", NS)[3].findall("hp:tc", NS)
-            target = row3_cells[-1]
-            set_multiline_text(target, data["연구개발내용"], para_pr_override=HANGING_PARA_PR)
+            target = row3_cells[-1] if len(row3_cells) > 1 else row3_cells[0]
+            set_simple_text(target, f"(3단계) {data['3단계목표']}")
             set_cell_margin(target, top=CELL_PAD, bottom=CELL_PAD)
+
+        # 연구개발내용: 3단계 템플릿은 row 4, 2단계 템플릿은 row 3
+        dev_row_idx = 4 if steps == 3 else 3
+        if data.get("연구개발내용"):
+            dev_rows = tables[TBL_GOAL].findall("hp:tr", NS)
+            if dev_row_idx < len(dev_rows):
+                dev_cells = dev_rows[dev_row_idx].findall("hp:tc", NS)
+                target = dev_cells[-1]
+                set_multiline_text(target, data["연구개발내용"], para_pr_override=HANGING_PARA_PR)
+                set_cell_margin(target, top=CELL_PAD, bottom=CELL_PAD)
 
         # ── tbl[4]: 제안취지 ─────────────────────────────
 
@@ -455,11 +473,19 @@ def build(data: dict, output_path: Path):
         # ── tbl[7]: 예산 ─────────────────────────────────
 
         budget = data.get("예산", {})
-        budget_fields = [
-            ("1단계", 1, 1),
-            ("2단계", 1, 2),
-            ("합계",  1, 3),
-        ]
+        if steps == 3:
+            budget_fields = [
+                ("1단계", 1, 1),
+                ("2단계", 1, 2),
+                ("3단계", 1, 3),
+                ("합계",  1, 4),
+            ]
+        else:
+            budget_fields = [
+                ("1단계", 1, 1),
+                ("2단계", 1, 2),
+                ("합계",  1, 3),
+            ]
         for key, row, col in budget_fields:
             val = budget.get(key)
             if val is not None:
@@ -497,6 +523,8 @@ def main():
     )
     parser.add_argument("--input", "-i", required=True, help="JSON 입력 파일 경로")
     parser.add_argument("--output", "-o", required=True, help="출력 HWPX 파일 경로")
+    parser.add_argument("--steps", type=int, default=2, choices=[2, 3],
+                        help="단계 수 (2 또는 3, 기본값: 2)")
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -516,7 +544,7 @@ def main():
     data.pop("_scholar", None)
 
     output_path = Path(args.output)
-    build(data, output_path)
+    build(data, output_path, steps=args.steps)
 
 
 if __name__ == "__main__":

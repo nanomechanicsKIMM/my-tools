@@ -1,6 +1,7 @@
 # NRF 기술수요조사서 자동 생성 스킬
 
 NRF 미래개척융합과학기술개발사업 기술수요조사서 양식(HWPX)을 자동으로 채워 생성하는 스킬.
+2단계/3단계 템플릿을 모두 지원하며, 심사자 Agent를 통한 반복 개선 워크플로우를 포함한다.
 
 ## Triggers
 
@@ -40,7 +41,7 @@ NRF 미래개척융합과학기술개발사업 기술수요조사서 양식(HWPX
 | 현재 기술의 한계/병목은? | 핵심기술내용, 제안취지 | Y |
 | 핵심 요소기술 2~4개 나열 | 핵심기술내용, 기술기능범위 | Y |
 | TRL 착수/종료 수준 | TRL | Y |
-| 단계별 목표 구분 | 최종/1단계/2단계 목표 | Y |
+| 단계별 목표 구분 (2단계 또는 3단계) | 최종/단계별 목표 | Y |
 | 국내외 유사연구 대비 차별점 | 동향 | 선택 |
 | 참고 키워드/논문 | Scholar 검색 입력 | 선택 |
 | 예상 연구비 및 단계별 배분 | 예산 | Y |
@@ -48,42 +49,110 @@ NRF 미래개척융합과학기술개발사업 기술수요조사서 양식(HWPX
 
 선택 질문 스킵 시 AI가 자동 생성.
 
-### Phase 1.7: Google Scholar 기반 연구동향 조사 (자동)
+### Phase 1.7: 연구동향 + 시장/산업 조사 (자동)
 
-1. 기술 주제 + 요소기술 키워드로 검색 쿼리 2~3개 자동 구성
-2. WebSearch로 최근 3~5년 논문 검색 (쿼리당 상위 5~10건)
-3. 국내/해외 분류 후 동향 초안 자동 작성 (□/◦/- 구조)
-4. **검색 결과에 없는 논문 인용 금지**
+**3개 Agent 병렬 실행**:
 
-### Phase 2: AI 내용 생성 (자동)
+1. **학술 조사 Agent** — Google Scholar 해외/국내 논문 검색 (최근 3~5년)
+2. **시장/산업 조사 Agent** — 시장 규모, CAGR, 기업 동향
+3. **정책/사회 조사 Agent** — 정부 R&D 정책, 뇌질환 사회적 비용
 
-Phase 1.5 답변 + Phase 1.7 검색 결과를 컨텍스트로 프롬프트 구성.
-`prompts/survey_prompt.md` 템플릿 기반으로 각 섹션 내용 생성.
+규칙:
+- 쿼리당 상위 5~10건 수집
+- **검색 결과에 없는 논문 인용 금지**
+- 핵심 성과의 정량 수치 반드시 추출
 
-### Phase 2.5: 초안 검토/수정 (대화)
+### Phase 1.8: 참고 논문 PDF 수집 (자동)
 
-생성된 내용을 섹션 단위로 사용자에게 미리보기 제공:
-- 연구개발개요 (300자)
-- 핵심기술내용
-- 최종/단계별 목표
-- 국내외 동향 (인용 논문 목록 포함)
-- 파급효과
-
-수정 요청 시 해당 섹션만 재생성.
-
-### Phase 3: JSON 조립 + HWPX 빌드 (자동)
+`/paper-review` 스킬의 `download_refs.py`를 활용하여 DOI 기반 PDF 자동 다운로드.
 
 ```bash
-PYTHONUTF8=1 uv run python scripts/build_survey.py --input data.json --output result.hwpx
+PYTHONUTF8=1 python {paper-review}/scripts/download_refs.py --input doi_list.txt --output refs/
 ```
 
-### Phase 4: 검증 + 결과 전달
+다운로드 소스: Semantic Scholar → Publisher → Sci-Hub → Google Scholar
+
+### Phase 2: AI 내용 생성 — 서술식 확장본 (자동)
+
+**2단계 작성 전략**:
+1. Phase 2: 서술식("~이다" 체), HWPX의 3배 분량(~10,000자) — 다양한 아이디어 포괄
+2. Phase 4: 개조식(□/◦/-), 양식 분량(~3,600자) — 핵심만 압축
+
+생성 순서 (섹션 간 상호 참조):
+1. **국내외 동향** 먼저 (state-of-art 정량치 확보)
+2. **목표** (동향 기반 정량치 설정)
+3. **기술 개요** (목표와 일관된 기술 내용)
+4. **파급효과** (니즈·목표 연결)
+
+핵심 원칙 — **니즈 중심 포괄성**:
+- 수요조사서는 기술 니즈를 파악하는 문서이며, 해결책을 하나로 제한하지 않음
+- 다양한 접근법/대안을 포괄적으로 기술
+
+### Phase 2.5: 수요조사서 초안 MD 저장
+
+서술식 확장본을 `수요조사서_초안_{기술명}_v{N}.md`로 저장.
+부록에 조사 원자료(Scholar 결과, 시장 데이터, 정책 자료) 포함.
+
+### Phase 3: 사용자 검토/수정 (대화)
+
+저장된 MD 파일 기반으로 섹션 단위 미리보기 및 수정.
+
+### Phase 3.5: 심사자 Agent 비평 (자동)
+
+**Agent (opus 모델, critic 역할)**이 8개 기준(100점)으로 비판적 평가.
+심사 의견서를 `심사의견서_{기술명}_v{N}.md`로 저장.
+
+심사 기준 (8개 항목):
+
+| # | 심사 항목 | 배점 |
+|---|----------|------|
+| 1 | 논리적 일관성 | 15 |
+| 2 | 정량적 목표의 타당성 | 15 |
+| 3 | 동향-목표 연결 | 10 |
+| 4 | 니즈 분석의 충실도 | 10 |
+| 5 | **니즈 중심 포괄성** | **15** |
+| 6 | 기술 차별성 | 10 |
+| 7 | 실현 가능성 | 15 |
+| 8 | 형식 준수 | 10 |
+
+통과 기준: 합계 80점 이상 AND REVISE 0개
+심사자 프롬프트: `prompts/reviewer_prompt.md`
+
+### Phase 3.7: 비평 기반 수정 (반복, 최대 3회)
+
+심사 의견서의 수정 우선순위(Critical→Major→Minor)에 따라 초안 업데이트.
+수정 후 Phase 3.5 재실행.
+
+### Phase 4: 개조식 변환 + JSON 조립 + HWPX 빌드 (자동)
+
+서술식 초안(~10,000자) → 개조식(□/◦/-, ~3,600자) 압축 변환 → JSON 조립 → HWPX 빌드.
+
+```bash
+# 2단계 (기본)
+PYTHONUTF8=1 python scripts/build_survey.py --input data.json --output result.hwpx
+
+# 3단계
+PYTHONUTF8=1 python scripts/build_survey.py --input data.json --output result.hwpx --steps 3
+```
+
+**HWPX 작성 스타일 규칙**:
+- 전체 5페이지를 꽉 채우되 초과 금지
+- 개조식(□/◦/-) 형식이되, 의미가 전달되는 충실한 내용
+- "기술 내용" 셀: 정량 수치 최소화, 기술적 난제·흥미로운 연구 주제 중심
+- "기능" 셀: 응용 관점 — 기능, 적용 환경, 안전성/신뢰성, 규격/인증
+- 국내외 동향: 학자명 대신 기관명 사용, 의미 전달 중심 서술
+- 제안취지: 충실한 분량으로 니즈의 맥락과 근거를 상세 기술
+
+### Phase 5: 검증 + 결과 전달
 
 - validate.py 자동 실행
 - 생성된 HWPX 파일 경로 안내
+- 최종 초안 MD + 심사 의견서 MD 경로 안내
 - **한글(HWP)에서 열어 양식 유지 확인 권장**
 
 ## JSON 입력 스키마
+
+### 2단계용
 
 ```json
 {
@@ -114,6 +183,15 @@ PYTHONUTF8=1 uv run python scripts/build_survey.py --input data.json --output re
 }
 ```
 
+### 3단계용 (추가 필드)
+
+```json
+{
+  "3단계목표": "...",
+  "예산": {"1단계": 6, "2단계": 16, "3단계": 16, "합계": 38}
+}
+```
+
 ## 기술후보군 목록
 
 ### 도전형 (13개)
@@ -141,11 +219,13 @@ PYTHONUTF8=1 uv run python scripts/build_survey.py --input data.json --output re
 
 ## 제약사항
 
-- 5페이지 이내 (양식 규격)
+- 5페이지 이내 (양식 규격, 초과 금지)
 - 멀티라인 텍스트는 □/◦/- 계층 구조 형식
 - 연구개발개요는 300자 이내
 - 체크박스는 □→■ 변환
 - fix_namespaces.py 후처리 필수
+- 심사 통과 (80점 이상, REVISE 0개) 또는 3회 반복 완료
+- 국내외 동향에서 학자명 대신 기관명 사용
 
 ## 파일 구조
 
@@ -153,11 +233,14 @@ PYTHONUTF8=1 uv run python scripts/build_survey.py --input data.json --output re
 nrf-tech-survey/
 ├── SKILL.md                 # 이 파일
 ├── assets/
-│   └── NRF_기술수요조사서_양식.hwpx  # 원본 양식 템플릿
+│   ├── NRF_기술수요조사서_양식.hwpx        # 2단계 양식 템플릿
+│   └── NRF_기술수요조사서_양식_3단계.hwpx   # 3단계 양식 템플릿
 ├── scripts/
-│   └── build_survey.py      # HWPX 빌드 스크립트
+│   └── build_survey.py      # HWPX 빌드 스크립트 (--steps 2|3)
 ├── prompts/
-│   └── survey_prompt.md     # AI 내용 생성 프롬프트
+│   ├── survey_prompt.md     # AI 내용 생성 프롬프트
+│   └── reviewer_prompt.md   # 심사자 Agent 프롬프트
 └── examples/
-    └── sample_data.json     # 테스트 데이터
+    ├── sample_data.json     # 2단계 테스트 데이터
+    └── sample_data_3step.json  # 3단계 테스트 데이터
 ```
