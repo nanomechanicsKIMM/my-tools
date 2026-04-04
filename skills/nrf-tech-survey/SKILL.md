@@ -239,7 +239,9 @@ nrf-tech-survey/
 │   └── build_survey.py      # HWPX 빌드 스크립트 (--steps 2|3)
 ├── prompts/
 │   ├── survey_prompt.md     # AI 내용 생성 프롬프트
-│   └── reviewer_prompt.md   # 심사자 Agent 프롬프트
+│   ├── reviewer_prompt.md   # 심사자 Agent 프롬프트
+│   ├── image_prompt.md      # 기술 설명 그림 생성 프롬프트
+│   └── writing_guidelines.md # 작성 가이드라인 (스타일·분량·규칙)
 └── examples/
     ├── sample_data.json     # 2단계 테스트 데이터
     └── sample_data_3step.json  # 3단계 테스트 데이터
