@@ -55,22 +55,48 @@ NRF 미래개척융합과학기술개발사업 기술수요조사서 양식(HWPX
 
 1. **학술 조사 Agent** — Google Scholar 해외/국내 논문 검색 (최근 3~5년)
 2. **시장/산업 조사 Agent** — 시장 규모, CAGR, 기업 동향
-3. **정책/사회 조사 Agent** — 정부 R&D 정책, 뇌질환 사회적 비용
+3. **정책/사회 조사 Agent** — 정부 R&D 정책, 사회적 비용
 
 규칙:
 - 쿼리당 상위 5~10건 수집
 - **검색 결과에 없는 논문 인용 금지**
 - 핵심 성과의 정량 수치 반드시 추출
+- **학술 조사 Agent는 반드시 각 논문의 DOI를 수집**하고, literature survey MD 말미에 `## 참고문헌` 섹션으로 DOI 리스트를 출력할 것
 
-### Phase 1.8: 참고 논문 PDF 수집 (자동)
-
-`/paper-review` 스킬의 `download_refs.py`를 활용하여 DOI 기반 PDF 자동 다운로드.
-
-```bash
-PYTHONUTF8=1 python {paper-review}/scripts/download_refs.py --input doi_list.txt --output refs/
+학술 조사 Agent 프롬프트에 반드시 포함할 지시:
+```
+For each paper found, you MUST extract the DOI (e.g., 10.1038/s41586-024-07386-0).
+At the end of your output, create a "## 참고문헌" section listing all papers in the format:
+- Author et al., "Title", Journal, Year. DOI: 10.xxxx/xxxxx
+Also create a plain text DOI list (one DOI per line) for automated PDF download.
 ```
 
+### Phase 1.8: 참고문헌 정리 + 논문 PDF 수집 (자동)
+
+Phase 1.7 학술 조사 Agent 결과에서 참고문헌 리스트와 DOI를 추출하여 정리하고, PDF를 자동 다운로드한다.
+
+**Step 1**: literature survey MD 말미의 `## 참고문헌` 섹션에서 DOI 추출 → `refs/doi_list.txt` 저장
+```
+# doi_list.txt 형식 (한 줄에 DOI 하나)
+10.1038/s41586-024-07386-0
+10.1038/s41467-024-00001-1
+...
+```
+
+**Step 2**: `/paper-review` 스킬의 `download_refs.py`로 PDF 자동 다운로드
+```bash
+mkdir -p refs
+PYTHONUTF8=1 python {paper-review}/scripts/download_refs.py --input refs/doi_list.txt --output refs/
+```
+
+**Step 3**: 다운로드 결과 확인 및 literature survey MD에 PDF 경로 추가
+
 다운로드 소스: Semantic Scholar → Publisher → Sci-Hub → Google Scholar
+
+> [!important] 자동실행 시 주의
+> - 학술 조사 Agent가 DOI를 수집하지 못한 논문은 제목+저널 기반 수동 검색 필요
+> - 다운로드 실패 시 해당 논문은 `refs/failed.txt`에 기록됨
+> - PDF 수집은 연구 참고용이며, 수요조사서 본문에 직접 첨부하지 않음
 
 ### Phase 2: AI 내용 생성 — 서술식 확장본 (자동)
 
@@ -240,7 +266,8 @@ PYTHONUTF8=1 python scripts/build_survey.py --input data.json --output result.hw
 ### 자동실행 흐름
 
 ```
-user_idea.md → Phase 1.7 (3개 조사 Agent 병렬)
+user_idea.md → Phase 1.7 (3개 조사 Agent 병렬, 학술 Agent는 DOI 필수 수집)
+             → Phase 1.8 (참고문헌 DOI 리스트 정리 + PDF 자동 다운로드)
              → Phase 2 (서술식 초안 ~10,000자)
              → Phase 3.5 (심사자 Agent, 80점 기준)
              → Phase 3.7 (수정, 최대 3회 반복)
