@@ -98,6 +98,14 @@ PYTHONUTF8=1 python {paper-review}/scripts/download_refs.py --input refs/doi_lis
 > - 다운로드 실패 시 해당 논문은 `refs/failed.txt`에 기록됨
 > - PDF 수집은 연구 참고용이며, 수요조사서 본문에 직접 첨부하지 않음
 
+### Phase 1.9: 기술 설명 그림 프롬프트 생성 (자동)
+
+`prompts/image_prompt.md`를 **참조 템플릿**으로 활용하여, 해당 기술 주제에 맞는 이미지 프롬프트를 생성한다.
+
+- 프로젝트 폴더에 `image_prompt_{기술명}.md`로 저장
+- 최소 4개 프롬프트: (1) 전체 개념도, (2) 요소기술 통합 다이어그램, (3) 접근법 비교, (4) 핵심 원리 광학/기하학 설명
+- 수요조사서 5페이지 제한 상 **그림 1개 권장** — 가장 효과적인 것을 선별
+
 ### Phase 2: AI 내용 생성 — 서술식 확장본 (자동)
 
 **2단계 작성 전략**:
@@ -268,6 +276,7 @@ PYTHONUTF8=1 python scripts/build_survey.py --input data.json --output result.hw
 ```
 user_idea.md → Phase 1.7 (3개 조사 Agent 병렬, 학술 Agent는 DOI 필수 수집)
              → Phase 1.8 (참고문헌 DOI 리스트 정리 + PDF 자동 다운로드)
+             → Phase 1.9 (기술 설명 그림 프롬프트 생성)
              → Phase 2 (서술식 초안 ~10,000자)
              → Phase 3.5 (심사자 Agent, 80점 기준)
              → Phase 3.7 (수정, 최대 3회 반복)
