@@ -1,28 +1,43 @@
 {
-  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "my-tools",
-  "description": "Custom tools for HWPX document generation, patent strategy reports, and visual content creation",
   "owner": {
     "name": "nanomechanicsKIMM"
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "description": "개인 도구 모음 - HWPX 문서 생성, 특허 전략 보고서, 시각자료 생성"
   },
   "plugins": [
     {
       "name": "hwpx-tools",
-      "description": "HWPX 문서 생성·편집 도구 모음 (python-hwpx API, XML 직접 작성, 과업지시서 자동 생성)",
       "source": "./plugins/hwpx-tools",
-      "category": "productivity"
+      "description": "HWPX 문서 생성·편집 도구 모음 (python-hwpx API, XML 직접 작성, 과업지시서 자동 생성)",
+      "version": "1.0.0",
+      "strict": true,
+      "skills": ["./skills"]
     },
     {
       "name": "patent-tools",
-      "description": "특허 전략 보고서 자동 생성 도구 모음 (Google Patents CSV 분석, RFP 기반 전략 보고서, 세부기술 분해)",
       "source": "./plugins/patent-tools",
-      "category": "productivity"
+      "description": "특허 전략 보고서 자동 생성 도구 모음 (Google Patents CSV 분석, RFP 기반 전략 보고서, 세부기술 분해)",
+      "version": "1.0.0",
+      "strict": true,
+      "skills": ["./skills"]
     },
     {
       "name": "visual-generator",
-      "description": "시각자료 프롬프트 생성 및 이미지 렌더링 (Kurzgesagt/Gov/Seminar/WhatIf/Pitch/Comparison + Renderer)",
       "source": "./plugins/visual-generator",
-      "category": "productivity"
+      "description": "시각자료 프롬프트 생성 및 이미지 렌더링 (4-block, Kurzgesagt/Gov/Seminar/WhatIf/Pitch/Comparison + Renderer)",
+      "version": "1.0.0",
+      "strict": true,
+      "agents": [
+        "./agents/content-organizer.md",
+        "./agents/content-reviewer.md",
+        "./agents/prompt-designer.md",
+        "./agents/prompt-validator.md",
+        "./agents/renderer-agent.md"
+      ],
+      "skills": ["./skills"]
     }
   ]
 }
