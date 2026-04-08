@@ -18,7 +18,7 @@ model: sonnet
 - **KIPRIS API 키**: 환경변수 `KIPRIS_API_KEY` 또는 `KIPRIS_REST_ACCESS_KEY`
 - **API 키 위치**: `C:/Users/JHKIM/Claude_Work/.env`
 
-> `{SHARED_SKILL_ROOT}` = `C:/Users/JHKIM/.claude/skills/patent-invention-disclosure`
+> `{SHARED_SKILL_ROOT}` = `C:/Users/JHKIM/.claude/skills/patent-incubation-auto`
 
 ## 작업
 

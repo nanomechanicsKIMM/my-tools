@@ -6,7 +6,7 @@ model: opus
 
 # Phase 6: 발명내용설명서 최종 작성
 
-> 이 에이전트는 `patent-invention-disclosure`의 phase6-disclosure-writer.md를 기반으로 하며,
+> 이 에이전트는 `patent-incubation-auto`의 phase6-disclosure-writer.md를 기반으로 하며,
 > section_summary 출력만 추가되었다. 기본 작성 규칙은 원본과 동일하다.
 > 원본 참조: `{SHARED_SKILL_ROOT}/agents/phase6-disclosure-writer.md`
 

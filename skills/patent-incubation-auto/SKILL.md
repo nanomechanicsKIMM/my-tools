@@ -1,5 +1,5 @@
 ---
-name: patent-invention-disclosure
+name: patent-incubation-auto
 description: "TRIZ 기반 발명내용설명서 작성 스킬. 기술분야/해결과제/핵심아이디어를 입력받아 TRIZ 모순 분석, IFR 도출, 선행특허 조사를 거쳐 KIMM 직무발명내용설명서(HWPX)를 자동 생성한다."
 ---
 
@@ -16,7 +16,7 @@ KIMM 연구원이 특허 아이디어를 입력하면, TRIZ 방법론으로 체�
 ## Skill Constants
 
 ```
-SKILL_ROOT = C:/Users/JHKIM/.claude/skills/patent-invention-disclosure
+SKILL_ROOT = C:/Users/JHKIM/.claude/skills/patent-incubation-auto
 HWPX_SKILL = C:/Users/JHKIM/.claude/skills/hwpx
 HWPX_XML_SKILL = C:/Users/JHKIM/.claude/skills/hwpx-xml
 PATENT_STRATEGY_SKILL = C:/Users/JHKIM/.claude/skills/patent-strategy-pro

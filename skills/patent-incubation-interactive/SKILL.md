@@ -6,19 +6,19 @@
 
 - 사용자가 발명 아이디어를 함께 발전시키고 싶을 때
 - "발명 인큐베이션", "patent incubation", "발명 같이 하자", "아이디어 발전" 언급 시
-- 기존 `patent-invention-disclosure`의 자동화 모드 대신, 각 단계를 직접 검토하며 진행하고 싶을 때
+- 기존 `patent-incubation-auto`의 자동화 모드 대신, 각 단계를 직접 검토하며 진행하고 싶을 때
 
 ## Skill Constants
 
 ```
-SKILL_ROOT = C:/Users/JHKIM/.claude/skills/patent-incubation
-SHARED_SKILL_ROOT = C:/Users/JHKIM/.claude/skills/patent-invention-disclosure
+SKILL_ROOT = C:/Users/JHKIM/.claude/skills/patent-incubation-interactive
+SHARED_SKILL_ROOT = C:/Users/JHKIM/.claude/skills/patent-incubation-auto
 HWPX_SKILL = C:/Users/JHKIM/.claude/skills/hwpx
 HWPX_XML_SKILL = C:/Users/JHKIM/.claude/skills/hwpx-xml
 KIPRIS_ENV_FILE = C:/Users/JHKIM/Claude_Work/.env
 ```
 
-### 공유 자원 (patent-invention-disclosure에서 참조)
+### 공유 자원 (patent-incubation-auto에서 참조)
 
 ```
 reference/   → {SHARED_SKILL_ROOT}/reference/

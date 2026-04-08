@@ -7,7 +7,7 @@ tags: [발명철학, 사용자선호, patent-philosophy]
 
 # 발명자 철학 및 선호 사항
 
-> 이 파일은 patent-invention-disclosure 스킬이 실행될 때마다 자동으로 업데이트된다.
+> 이 파일은 patent-incubation-auto 스킬이 실행될 때마다 자동으로 업데이트된다.
 > 발명자의 기술적 철학, 발명 접근 방식, 선호 사항을 축적하여 발명내용설명서 작성 품질을 지속적으로 향상시킨다.
 
 ---
