@@ -46,14 +46,17 @@ PYTHONUTF8=1 uv run python ~/.claude/skills/overseas-trip-plan/scripts/build_tri
 ├── scripts/
 │   ├── build_trip_plan.py              # 메인 엔트리 포인트
 │   ├── parse_user_input.py             # user_input.md → dict 파서
-│   ├── zip_replace.py                  # ZIP-level 텍스트 치환
+│   ├── zip_replace.py                  # ZIP-level 텍스트 치환 (v0.1)
+│   ├── table_utils.py                  # lxml 기반 구조 편집 (v0.2) ⭐
 │   ├── fetch_reference_pdf.py          # Advance Program PDF 다운로드
 │   ├── validate.py                     # HWPX 구조 검증
 │   ├── requirements.txt
 │   └── office/
 │       ├── unpack.py                   # HWPX → 디렉터리
 │       └── pack.py                     # 디렉터리 → HWPX
-├── references/                         # (스킬 공통 참고자료)
+├── references/
+│   ├── placeholder_map.md              # 플레이스홀더 맵 문서
+│   └── hwpx_lxml_editing_patterns.md   # lxml 편집 패턴 교훈 (v0.2) ⭐
 └── examples/
     └── README.md
 ```
@@ -175,6 +178,70 @@ HWPX ZIP 파일 내 모든 XML/RDF/HPF 파트에서 텍스트 치환. 이미지�
 - 필수 파트 존재 (`mimetype`, `Contents/section0.xml`, `META-INF/manifest.xml`, …)
 - `mimetype` 내용 검사 (`hwp` 포함)
 - `section0.xml` well-formed 검증
+
+### `table_utils.py` (v0.2) ⭐
+
+lxml 기반 HWPX 구조 편집 유틸리티. 모든 편집 함수가 5가지 핵심 규칙(phantom paragraph 방지 / linesegarray 제거 / rowCnt·rowAddr 재번호 / HWP 호환 XML 선언 / 빈 셀 주입)을 내부에서 자동 처리.
+
+```python
+from table_utils import (
+    hp,                      # HP 네임스페이스 tag helper
+    set_p_text_flow,         # 문단 텍스트 교체 + linesegarray 제거
+    set_cell_text_flow,      # 셀 텍스트 교체 (단일 줄, phantom 방지)
+    set_cell_text_lines,     # 셀 텍스트 교체 (2~3줄 등 멀티라인)
+    remove_paragraph,        # 빈 문단 DOM 완전 삭제
+    strip_linesegarray,      # linesegarray 제거 (HWP 재계산 유도)
+    find_table_by_anchor,    # 앵커 문자열로 <hp:tbl> 탐색
+    renumber_table,          # rowCnt + cellAddr rowAddr 재부여
+    insert_row_clone,        # 행 복제 + 삽입
+    remove_row_safe,         # 행 삭제 + 병합 rowSpan 감소
+    get_rowspan, set_rowspan,
+    cell_text, element_text,
+    write_hwpx_xml,          # HWP 호환 double-quote XML 선언 저장
+)
+```
+
+**단일 줄 셀 편집**:
+```python
+set_cell_text_flow(cell, "Emissive Track")
+# - 여분 <hp:p> 제거 (phantom 방지)
+# - <hp:linesegarray> 제거 (HWP 재계산)
+# - 빈 <hp:t> 셀도 지원 (_set_text_in_p 내부 주입)
+```
+
+**멀티라인 셀 편집 (발표제목 2~3개 등)**:
+```python
+set_cell_text_lines(cell, [
+    "Perovskites: Challenges and Opportunities",
+    "High-Efficiency Electroluminescent Perovskites",
+    "Lead-Free Perovskite Derivatives for Display",
+])
+# - 각 줄을 별도 <hp:p> 로 배치
+# - 첫 <hp:p> 템플릿을 deepcopy 하여 각 줄에 재사용
+# - 모든 <hp:p> 에서 linesegarray 제거
+```
+
+**행 삽입 + 자동 재번호**:
+```python
+tbl = find_table_by_anchor(root, ["최근 3년간 국외출장 실적"])
+reference_row = tbl.findall(hp("tr"))[3]
+
+def modify_new_row(new_cells):
+    set_cell_text_flow(new_cells[0], "2025.05.11 ~ 2025.05.22")
+    set_cell_text_flow(new_cells[1], "미국 (로스앤젤레스)")
+    set_cell_text_flow(new_cells[2], "SID Display Week 2025 참석")
+
+insert_row_clone(reference_row, insert_after=True, cell_modifier=modify_new_row)
+renumber_table(tbl)  # 필수 — rowCnt + rowAddr 재부여
+```
+
+**XML 저장**:
+```python
+write_hwpx_xml(tree, sec_path)
+# → <?xml version="1.0" encoding="UTF-8" standalone="yes" ?>... (HWP 호환)
+```
+
+자세한 편집 패턴과 함정은 [references/hwpx_lxml_editing_patterns.md](references/hwpx_lxml_editing_patterns.md) 참조.
 
 ## 🎯 user_input.md 작성 가이드
 

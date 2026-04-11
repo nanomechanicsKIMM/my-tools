@@ -212,11 +212,49 @@ MainWindowTitle 이:
 
 ---
 
+## 규칙 6: 멀티라인 셀 (`set_cell_text_lines`)
+
+### 상황
+표 셀에 2~3 줄의 내용을 표시해야 하는 경우 (예: 관심 세션의 발표제목 여러 개,
+기관별 방문 상세의 협의 주제 여러 개).
+
+### 문제
+단순히 개행 문자 `\n` 을 넣거나 1개 `<hp:p>` 에 긴 텍스트를 넣으면 HWP 가
+원하는 위치에서 줄바꿈을 하지 않는다. HWPX 의 "줄" 은 `<hp:p>` 단위이다.
+
+### 해결
+`set_cell_text_lines(cell, lines: list[str])` 사용:
+1. 첫 `<hp:p>` 를 템플릿으로 `deepcopy`
+2. deepcopy 의 `<hp:linesegarray>` 제거 (clean template)
+3. 첫 줄은 기존 첫 `<hp:p>` 에 설정 + linesegarray 제거
+4. 추가 줄마다 clean_template `deepcopy` → `<hp:t>` 설정 → `subList` 에 append
+5. 모든 `<hp:p>` 는 linesegarray 가 없어 HWP 가 로드 시 자동 재계산
+
+```python
+set_cell_text_lines(title_cell, [
+    "Perovskites: Challenges and Opportunities",
+    "High-Efficiency Electroluminescent Perovskites",
+    "Lead-Free Perovskite Derivatives for Display",
+])
+```
+
+### 왜 `clean_template` 이 필요한가
+`template_p` 자체는 첫 줄 설정 시 `strip_linesegarray()` 로 linesegarray 가
+제거된다. 하지만 `<hp:run>` / `<hp:t>` 구조는 남아있어, 이를 deepcopy 한 뒤
+추가 줄의 내용만 바꾸어 재사용하면 동일한 서식이 유지된다.
+
+단, 만약 `template_p` 를 deepcopy 하지 않고 그대로 수정한 상태에서
+`addnext()` 하면 얕은 복사 문제로 parent·sibling 체인이 꼬인다. 반드시
+**사전에** clean_template 을 복사해두는 것이 안전하다.
+
+---
+
 ## 체크리스트
 
 lxml 로 HWPX 를 편집할 때:
 
-- [ ] `set_cell_text_flow()` 로 셀 텍스트 편집 (phantom 방지)
+- [ ] `set_cell_text_flow()` 로 셀 텍스트 편집 (phantom 방지, 단일 줄)
+- [ ] `set_cell_text_lines()` 로 셀 멀티라인 편집 (2~3 줄)
 - [ ] `set_p_text_flow()` 로 문단 텍스트 편집 (linesegarray 제거)
 - [ ] 빈 문단은 `remove_paragraph()` 로 DOM 에서 완전 삭제
 - [ ] 행 삽입·삭제 후 `renumber_table(tbl)` 호출 (rowCnt + rowAddr)
