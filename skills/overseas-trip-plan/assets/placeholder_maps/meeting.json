@@ -1,0 +1,31 @@
+{
+  "_meta": {
+    "template": "template_meeting.hwpx",
+    "base_source": "20240605 국외출장계획서-미국(류석현 원장님).hwpx",
+    "description": "Template A (기관방문·회담형) 플레이스홀더 매핑. 원본 문자열 → user_input 필드.",
+    "version": "0.1",
+    "notes": "원장실·원장 등은 본문 다른 곳에 나타날 수 있으므로 v0.1에서는 사용자 성명·제출일자만 안전하게 치환."
+  },
+  "fields": {
+    "applicant.department": {
+      "placeholder": "원장실",
+      "required": true,
+      "description": "신청자 소속"
+    },
+    "applicant.position": {
+      "placeholder": "원장",
+      "required": true,
+      "description": "신청자 직급 (주의: 본문에도 등장할 수 있음)"
+    },
+    "applicant.name": {
+      "placeholder": "류 석 현",
+      "required": true,
+      "description": "신청자 성명 (공백 포함)"
+    },
+    "submission_date": {
+      "placeholder": "2024. 06. 05.",
+      "required": true,
+      "description": "제출일자"
+    }
+  }
+}

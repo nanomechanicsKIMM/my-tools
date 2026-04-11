@@ -1,0 +1,31 @@
+{
+  "_meta": {
+    "template": "template_conference.hwpx",
+    "base_source": "(20250428) 국외출장계획서_김재현.hwpx",
+    "description": "Template B (학회·전시회형) 플레이스홀더 매핑. 원본 문자열 → user_input 필드.",
+    "version": "0.1",
+    "notes": "ZIP-level 치환 방식이므로 원본에서 유일한 식별 가능한 문자열만 사용."
+  },
+  "fields": {
+    "applicant.department": {
+      "placeholder": "나노디스플레이연구실",
+      "required": true,
+      "description": "신청자 소속"
+    },
+    "applicant.position": {
+      "placeholder": "책임연구원",
+      "required": true,
+      "description": "신청자 직급"
+    },
+    "applicant.name": {
+      "placeholder": "김 재 현",
+      "required": true,
+      "description": "신청자 성명 (공백 포함)"
+    },
+    "submission_date": {
+      "placeholder": "2025. 04. 28.",
+      "required": true,
+      "description": "제출일자"
+    }
+  }
+}
