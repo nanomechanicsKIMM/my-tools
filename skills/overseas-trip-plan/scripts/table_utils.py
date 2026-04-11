@@ -133,7 +133,10 @@ def set_cell_text_flow(cell, text: str) -> bool:
     1. subList 내 **첫 번째 <hp:p> 만 유지**, 나머지 <hp:p> 는 제거
        (phantom paragraph 방지)
     2. 첫 <hp:p> 의 첫 <hp:t> 에 text 설정, 나머지 <hp:t> 는 빈 문자열
-    3. 첫 <hp:p> 의 <hp:linesegarray> 완전 제거
+    3. **빈 셀 대응**: <hp:t> 가 아예 없으면(`<hp:run charPrIDRef=".."/>` 처럼
+       self-closing 인 경우) 첫 <hp:run> 내부에 새 `<hp:t>` 를 injection 한다.
+       <hp:run> 도 없으면 새로 생성.
+    4. 첫 <hp:p> 의 <hp:linesegarray> 완전 제거
        → HWP 가 cellSz 기준으로 자동 레이아웃 재계산
     """
     sublist = cell.find(hp("subList"))
@@ -146,13 +149,23 @@ def set_cell_text_flow(cell, text: str) -> bool:
 
     first_p = ps[0]
 
-    # 텍스트 설정
+    # 텍스트 설정 (<hp:t> 가 있으면 기존 것에, 없으면 생성)
     ts = list(first_p.iter(hp("t")))
-    if not ts:
-        return False
-    ts[0].text = text
-    for t in ts[1:]:
-        t.text = ""
+    if ts:
+        ts[0].text = text
+        for t in ts[1:]:
+            t.text = ""
+    else:
+        # <hp:t> 가 없는 빈 셀 → 첫 <hp:run> 내부에 주입
+        runs = first_p.findall(hp("run"))
+        if runs:
+            target_run = runs[0]
+        else:
+            # <hp:run> 도 없으면 생성 (charPrIDRef 기본값 0)
+            target_run = etree.SubElement(first_p, hp("run"))
+            target_run.set("charPrIDRef", "0")
+        new_t = etree.SubElement(target_run, hp("t"))
+        new_t.text = text
 
     # linesegarray 제거 → HWP 재계산
     strip_linesegarray(first_p)
