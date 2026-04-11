@@ -127,6 +127,81 @@ def remove_paragraph(p) -> bool:
 # 셀 텍스트 편집 (Table cells)
 # ===========================================================================
 
+def _set_text_in_p(p, text: str) -> bool:
+    """문단 내 첫 <hp:t> 에 텍스트 설정. <hp:t> 가 없으면 주입."""
+    ts = list(p.iter(hp("t")))
+    if ts:
+        ts[0].text = text
+        for t in ts[1:]:
+            t.text = ""
+        return True
+
+    # <hp:t> 가 없는 빈 문단 → 첫 <hp:run> 에 주입
+    runs = p.findall(hp("run"))
+    if runs:
+        target_run = runs[0]
+    else:
+        target_run = etree.SubElement(p, hp("run"))
+        target_run.set("charPrIDRef", "0")
+    new_t = etree.SubElement(target_run, hp("t"))
+    new_t.text = text
+    return True
+
+
+def set_cell_text_lines(cell, lines: list[str]) -> bool:
+    """셀에 여러 줄의 텍스트를 설정한다 (각 줄을 별도 <hp:p> 로 표시).
+
+    - 첫 <hp:p> 를 템플릿으로 사용하여 deep copy 후 각 줄에 재사용
+    - 모든 복제된 <hp:p> 의 <hp:linesegarray> 는 제거 (HWP 재계산)
+    - 빈 <hp:t> 셀도 지원 (`_set_text_in_p` 내부 주입 로직)
+
+    Args:
+        cell: <hp:tc> element
+        lines: 문단별 텍스트 리스트 (["line1", "line2", ...])
+
+    Example:
+        set_cell_text_lines(cell, [
+            "AR Light Engine (TrendForce, GlobalFoundries, TDK)",
+            "MicroLED Array for Waveguide AR",
+            "LCoS-Based AR Light Engine",
+        ])
+    """
+    if not lines:
+        lines = [""]
+
+    sublist = cell.find(hp("subList"))
+    if sublist is None:
+        return False
+
+    ps = sublist.findall(hp("p"))
+    if not ps:
+        return False
+
+    # 기존 추가 <hp:p> 제거, 첫 <hp:p> 만 유지
+    template_p = ps[0]
+    for p in ps[1:]:
+        sublist.remove(p)
+
+    # 깨끗한 템플릿 복사 (원본 구조 보존)
+    clean_template = deepcopy(template_p)
+    # 템플릿의 linesegarray/t는 나중에 제거·설정되므로 clean 에서 확실히 제거
+    clean_lsa = clean_template.find(hp("linesegarray"))
+    if clean_lsa is not None:
+        clean_template.remove(clean_lsa)
+
+    # 첫 줄: 기존 첫 <hp:p> 에 설정
+    _set_text_in_p(template_p, lines[0])
+    strip_linesegarray(template_p)
+
+    # 추가 줄: clean_template 복제하여 subList 에 append
+    for line in lines[1:]:
+        new_p = deepcopy(clean_template)
+        _set_text_in_p(new_p, line)
+        sublist.append(new_p)
+
+    return True
+
+
 def set_cell_text_flow(cell, text: str) -> bool:
     """<hp:tc> 텍스트를 교체하고 다음 작업을 수행한다:
 
