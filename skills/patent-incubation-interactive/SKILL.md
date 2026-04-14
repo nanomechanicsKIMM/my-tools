@@ -514,6 +514,22 @@ Agent(
 )
 ```
 
+#### 선택: 위험 등급 선행특허 원문 PDF 확보
+
+Gate 5 제시 전, 위험도 '중간' 이상 선행특허의 원문 PDF를 내려받아 청구항 전문으로 차별화 포인트를 재검증할 수 있다.
+
+```bash
+PYTHONUTF8=1 C:/Users/JHKIM/miniconda3/python \
+  ~/.claude/skills/_shared/scripts/download_patent_pdf.py \
+  --kr <applno...> --gp <GooglePatentsID...> \
+  --out {output_dir}/prior_art_pdfs/ --verify
+```
+
+- KR 특허: KIPRIS `getPubFullTextInfoSearch`/`getAnnFullTextInfoSearch` 사용(출원번호 입력)
+- 국외 특허: Google Patents ID 직접 사용
+- `--verify` 옵션으로 첫 페이지 서지와 검색 결과가 일치하는지 자동 확인
+- 상세 규칙: `~/.claude/skills/_shared/patent_pdf_download.md`
+
 ### Gate 5: 차별성 전략 결정 [필수]
 
 ```

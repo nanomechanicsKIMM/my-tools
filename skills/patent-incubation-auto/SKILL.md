@@ -356,6 +356,21 @@ KIPRIS 검색 실패 시:
 - 사용자에게 안내: "선행특허 자동 검색에 실패했습니다. §3, §4, §8 섹션은 수동 보완이 필요합니다."
 - Phase 6는 degraded 상태로 계속 진행
 
+### 선택: 상위 선행특허 원문 PDF 심화 분석
+
+서지 기반 검색만으로 변별력이 부족할 때, 상위 1~3건의 원문 PDF를 받아 청구항 전문을 비교한다.
+
+```bash
+PYTHONUTF8=1 C:/Users/JHKIM/miniconda3/python \
+  ~/.claude/skills/_shared/scripts/download_patent_pdf.py \
+  --kr <applno1> <applno2> --out {output_dir}/prior_art_pdfs/ --verify
+```
+
+- KR 특허는 KIPRIS `getPubFullTextInfoSearch`/`getAnnFullTextInfoSearch`로 PDF 직접 수신
+- 국외 특허는 `--gp <GooglePatentsID>`
+- 다운로드 직후 `pdf-to-md`로 변환하여 청구항 섹션만 추출하여 비교
+- 상세 절차: `~/.claude/skills/_shared/patent_pdf_download.md`
+
 manifest 업데이트:
 ```json
 "phase5": {"status": "completed|degraded", "output": "prior_art.json"}

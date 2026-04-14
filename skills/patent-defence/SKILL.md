@@ -28,7 +28,7 @@ description: 특허 거절이유 통지에 대한 당소의견안 분석 및 업
 | Step | 모델 | 이유 |
 |------|------|------|
 | 1 (파일 변환) | **haiku** | 기계적 스크립트 실행, 추론 불필요 |
-| 1.5 (인용발명 수집) | **메인** (WebFetch) | Google Patents에서 인용발명 원문 병렬 수집, md 저장 |
+| 1.5 (인용발명 수집) | **메인** (스크립트 + WebFetch) | KIPRIS(KR) / Google Patents(국외)로 인용발명 원문 PDF 다운로드 + md 변환 |
 | 2 (문서 파싱) | **sonnet** | 구조화된 텍스트 추출, 패턴 인식 |
 | 5 (대비 분석) | **opus** (메인) | 핵심 교차 분석, 권리범위 판단 |
 | 6 (업데이트내역) | **sonnet** | 분석 결과를 템플릿에 맞춰 구조화 |
@@ -57,28 +57,64 @@ pdf/docx 파일을 md로 변환한다. 이미 md인 경우 스킵.
 
 변환 후 글자 수를 확인하여 누락 여부를 검증한다.
 
-### Step 1.5: 인용발명 원문 수집 `[WebFetch 병렬]`
+### Step 1.5: 인용발명 원문 수집 `[스크립트 + WebFetch 병렬]`
 
-당소의견안 파싱에서 추출한 인용발명 공보번호를 이용하여 Google Patents에서 원문을 수집한다.
+당소의견안 파싱에서 추출한 인용발명 공보/출원번호를 이용하여 **원문 PDF를 먼저 다운로드**한 뒤 MD로 변환하여 수집한다.
 
-**URL 구성**: `https://patents.google.com/patent/{공보번호}` (예: US20090296188A1)
+> **왜 스크립트 우선인가**: 과거에 WebFetch로 Google Patents 페이지만 크롤링하면 `HTTP 503`(봇 차단) 또는 출원번호↔공개번호 혼동으로 무관한 문헌이 수집되는 사례가 있었다. 특히 한국 특허는 **출원번호(10-YYYY-NNNNNNN)**와 **공개번호(10-YYYY-NNNNNNN)**의 형식이 동일해 Google Patents ID로 그대로 쓰면 전혀 다른 문헌을 받을 수 있다(예: KR 10-2023-0164912 → "닭꼬치 제조방법" 수신). 반드시 KIPRIS 서지조회로 공개번호를 먼저 확정한다.
 
-**WebFetch 프롬프트**: 각 인용발명에 대해 다음 정보를 구조화된 markdown으로 추출:
-- Title, Abstract
-- Claims (전체 또는 독립항 중심)
-- Detailed Description 핵심 단락 (발명 구조, 층 구성, 광학/기계/전기 특성)
-- 본원발명과의 비교에 필요한 기술적 특징
+**권장 절차**:
 
-**병렬 실행**: 모든 인용발명을 WebFetch로 동시 호출한다.
+1. **PDF 다운로드** — `~/.claude/skills/_shared/scripts/download_patent_pdf.py` 사용
+   ```bash
+   # 한국 특허 (출원번호 13자리)
+   PYTHONUTF8=1 C:/Users/JHKIM/miniconda3/python \
+     ~/.claude/skills/_shared/scripts/download_patent_pdf.py \
+     --kr 1020230164912 1020230191689 \
+     --out {출력디렉토리}/pdfs/ --verify
 
-**출력**: `{출력디렉토리}/인용{n}_{공보번호}.md` — 각 인용발명별 md 파일로 저장. 각 파일에 포함할 내용:
+   # 국외 특허 (Google Patents ID)
+   PYTHONUTF8=1 C:/Users/JHKIM/miniconda3/python \
+     ~/.claude/skills/_shared/scripts/download_patent_pdf.py \
+     --gp WO2020016250A1 US8088067B2 \
+     --out {출력디렉토리}/pdfs/ --verify
+   ```
+   - KR: `$HOME/Claude_work/.env`의 `KIPRIS_REST_AccessKey`로 `getPubFullTextInfoSearch`/`getAnnFullTextInfoSearch` 호출 → PDF 바이너리 직접 다운로드
+   - 국외: Google Patents 페이지에서 `patentimages.storage.googleapis.com` PDF URL 스크레이핑(503 발생 시 재시도+백오프)
+   - `--verify`는 첫 페이지 텍스트에서 공개번호/제목을 출력하여 정합성 즉시 확인
+
+2. **MD 변환** — `pdf-to-md` 스킬(`opendataloader-pdf`)로 첫 5~10페이지를 변환
+   ```bash
+   PYTHONUTF8=1 C:/Users/JHKIM/miniconda3/python \
+     ~/.claude/skills/pdf-to-md/scripts/pdf_to_md.py \
+     --input {출력디렉토리}/pdfs/*.pdf \
+     --output {출력디렉토리}/md/ --format markdown --pages "1-10"
+   ```
+   이미지 전용 PDF(스캔)는 PyMuPDF로 첫 페이지를 PNG 렌더링하여 시각 확인한다.
+
+3. **내용 정합성 검증** — 변환된 MD 파일 첫 50줄에서 다음을 확인하고 기대값과 불일치하면 재조회:
+   - `공개번호`/`Pub. No.` 일치
+   - 발명의 명칭이 인용 사유와 부합
+   - 출원인/Applicant가 인용한 권리자와 일치
+
+4. **Agent 분석** — 검증 통과한 MD를 Agent(model: sonnet)로 병렬 분석하여 다음을 구조화된 markdown으로 추출:
+   - Title, Abstract
+   - Claims (전체 또는 독립항 중심)
+   - Detailed Description 핵심 단락 (발명 구조, 층 구성, 광학/기계/전기 특성)
+   - 본원발명과의 비교에 필요한 기술적 특징
+
+**출력**: `{출력디렉토리}/인용{n}_{공보번호}.md` — 각 인용발명별 분석 md 파일. 포함할 내용:
 - 서지사항 (공보번호, 출원일, 출원인, 발명자, IPC)
 - Abstract
 - 핵심 구조 및 작동 원리
 - 청구항 요약 (독립항 중심)
 - **본원발명과의 핵심 차이 비교표** (구분 | 인용발명 | 본원 형식)
 
-**참조 논문**: 당소의견안에서 참조하는 논문이 있는 경우, DOI 또는 출판사 URL로 WebFetch하여 핵심 내용을 추출하고 `{출력디렉토리}/{논문식별자}.md`로 저장한다.
+**참조 논문**: 당소의견안에서 참조하는 논문이 있는 경우, DOI 또는 오픈액세스 미러(PMC, arXiv, HAL, 저자 홈페이지)로 WebFetch하여 핵심 내용을 추출하고 `{출력디렉토리}/{논문식별자}.md`로 저장한다. **DOI는 사전 CrossRef 조회로 실존 확인 필수**(허구 DOI 사례 있음).
+
+**폴백**: 자동 다운로드가 모두 실패(503/SSL/타임아웃)할 경우, `{출력디렉토리}/download_report.md`에 실패 목록과 수동 KIPRIS/Google Patents 링크를 정리하고 사용자에게 수동 확보를 요청한다.
+
+> 상세 절차·번호 체계·실패 대응: `~/.claude/skills/_shared/patent_pdf_download.md` 참조
 
 ### Step 2: 문서 파싱 및 구조화 `[Agent: sonnet]`
 

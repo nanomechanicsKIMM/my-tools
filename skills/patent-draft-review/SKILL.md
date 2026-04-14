@@ -30,6 +30,7 @@ triggers:
 - 출원 전 특허 명세서(HWPX/MD/PDF) 초안의 **종합 검토**가 필요할 때
 - 명세서의 **진보성·청구범위·오탈자·요약** 품질을 한 번에 점검하고 싶을 때
 - 선행특허 분석 결과(이미 조사한 MD 파일)가 있어 이를 명세서와 통합 검토하려 할 때
+  - **선행특허 PDF 확보**가 필요하면 `~/.claude/skills/_shared/scripts/download_patent_pdf.py`(KIPRIS/Google Patents)로 먼저 받고 `pdf-to-md` 스킬로 MD 변환. 절차 표준은 `~/.claude/skills/_shared/patent_pdf_download.md` 참조. **출원번호↔공개번호 혼동 금지**(KR 번호 체계 주의).
 - TRIZ 방법론으로 명세서가 해결한 모순 vs 남은 모순을 진단하고 싶을 때
 - "명세서 검토", "특허 초안 검토", "진보성 향상" 등 키워드 언급 시
 
