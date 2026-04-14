@@ -258,6 +258,18 @@ write_hwpx_xml(tree, sec_path)
 | `delete_column(tbl, col_index)` | 반출 장비 테이블 등에서 출장자 컬럼 DOM 제거 + colAddr/colCnt 보정 |
 | `find_column_by_header(tbl, header)` | 헤더 텍스트로 `colAddr` 탐색 |
 
+### v0.4 섹션 삽입 helper ⭐
+
+테이블 뒤에 분석·주석·후속 계획 등 **일련의 paragraph 를 일괄 삽입**할 때:
+
+| 함수 | 용도 |
+|------|------|
+| `find_containing_paragraph(elem)` | 임의 element(table, run 등) → 조상 `<hp:p>` 찾기 |
+| `clone_paragraph_with_text(template_p, text)` | 템플릿 <hp:p> 복제 + 내부 table 제거 + linesegarray 제거 + 텍스트 주입 |
+| `insert_paragraphs_after(anchor_p, items, templates)` | (kind, text) 튜플 리스트를 기준 paragraph 뒤에 일괄 삽입, 스타일 맵 지원 |
+
+상세는 [`bulk_table_editing.md §8`](references/bulk_table_editing.md).
+
 진단 도구:
 - `scripts/scan_tables.py <section0.xml>` — 테이블 전체 인덱스·행/열·앵커 출력
 - `scripts/dump_tables.py <section0.xml> <idx>...` — 지정 테이블 셀 내용 dump
@@ -399,6 +411,7 @@ Invoke-Item 'C:\path\to\file.hwpx'
 | Phase 6.7 | Advance Program PDF 참고자료 저장 | ✅ v0.1 |
 | **v0.2 교훈** | **Phantom paragraph 방지 + linesegarray 제거 + rowCnt/rowAddr 재번호** | ✅ [`table_utils.py`](scripts/table_utils.py) |
 | **v0.3 대량 편집** | **블록 삭제, 테이블 rebuild, 컬럼 삭제, multi-run paragraph, 진단 도구** | ✅ [`bulk_table_editing.md`](references/bulk_table_editing.md) |
+| **v0.4 섹션 삽입** | **테이블 뒤 분석·주석 섹션 일괄 삽입 (`insert_paragraphs_after`)** | ✅ [`bulk_table_editing.md §8`](references/bulk_table_editing.md) |
 
 ## 🔗 관련 스킬
 

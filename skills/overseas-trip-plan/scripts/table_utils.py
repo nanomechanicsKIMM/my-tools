@@ -574,6 +574,115 @@ def find_column_by_header(tbl, header_text: str) -> int | None:
 
 
 # ===========================================================================
+# 섹션 단위 paragraph 삽입 (v0.4)
+# ===========================================================================
+
+def find_containing_paragraph(elem):
+    """`elem` 을 포함하는 가장 가까운 <hp:p> 조상 반환.
+
+    `elem` 자체가 <hp:p> 이면 그대로 반환. 조상이 없으면 None.
+    테이블(<hp:tbl>)이나 run(<hp:run>) 등 nested 요소에서 섹션 단위 paragraph 를
+    찾을 때 사용.
+
+    Example:
+        tbl = find_table_by_anchor(root, [...])
+        wrapper_p = find_containing_paragraph(tbl)
+        # 이 wrapper_p 뒤에 새 paragraph 들 insert
+    """
+    node = elem
+    while node is not None and node.tag != hp("p"):
+        node = node.getparent()
+    return node
+
+
+def clone_paragraph_with_text(template_p, text: str):
+    """템플릿 <hp:p> 를 deepcopy 하여 단일 텍스트 paragraph 를 생성한다.
+
+    처리 순서:
+    1. 내부에 포함된 <hp:tbl> 을 모두 제거 (테이블을 품은 paragraph 를 템플릿으로
+       쓸 때, 단순 텍스트 paragraph 로 변환).
+    2. `<hp:linesegarray>` 제거 → HWP 로드 시 레이아웃 재계산.
+    3. 첫 `<hp:t>` 에 `text` 설정, 나머지 `<hp:t>` 는 빈 문자열.
+    4. `<hp:t>` 가 없으면 첫 `<hp:run>` 에 <hp:t> 주입 (run 도 없으면 새로 생성).
+
+    이 helper 는 `insert_paragraphs_after` 의 내부 엔진. 단독 사용도 가능.
+    """
+    new_p = deepcopy(template_p)
+    # 내부 table 제거 (run 하위의 tbl)
+    for run in list(new_p.findall(hp("run"))):
+        for tbl in list(run.findall(hp("tbl"))):
+            run.remove(tbl)
+    strip_linesegarray(new_p)
+
+    ts = list(new_p.iter(hp("t")))
+    if ts:
+        ts[0].text = text
+        for t in ts[1:]:
+            t.text = ""
+        return new_p
+
+    runs = new_p.findall(hp("run"))
+    if runs:
+        target = runs[0]
+    else:
+        target = etree.SubElement(new_p, hp("run"))
+        target.set("charPrIDRef", "0")
+    new_t = etree.SubElement(target, hp("t"))
+    new_t.text = text
+    return new_p
+
+
+def insert_paragraphs_after(
+    anchor_p,
+    items: Iterable[tuple[str, str]],
+    templates: dict,
+) -> int:
+    """`anchor_p` 직후에 일련의 새 <hp:p> 를 순서대로 삽입.
+
+    각 item 의 `kind` 로 `templates` dict 에서 스타일 템플릿을 선택 → 텍스트 주입.
+
+    Args:
+        anchor_p: 기준 <hp:p> (삽입 위치의 직전 paragraph)
+        items: [(kind, text), ...] 튜플 iterable
+        templates: {kind_key: template_p, ...} — 사용할 paragraph 템플릿 맵
+            예: {"H": heading_tpl, "S": sub_tpl, "B": body_tpl, "X": empty_tpl}
+            `items`의 kind 가 `templates`에 없으면 **첫 번째 템플릿**으로 fallback.
+
+    Returns:
+        삽입된 paragraph 수.
+
+    **활용 사례**:
+    - 테이블 뒤 "관심 세션 분석 / 과제별 협력 분석" 섹션 추가
+    - 섹션 중간 주석/코멘트 블록 삽입
+    - 보고서 본문 일괄 생성 (개별 섹션 헤더 + 본문 paragraph 반복)
+
+    Example:
+        tbl = find_table_by_anchor(root, ["날짜", "Session"])
+        anchor = find_containing_paragraph(tbl)
+        heading_tpl = find_paragraph_by_text(root, "2. 행사 개요")
+        body_tpl = find_paragraph_by_text(root, "행사의 중요성")
+        insert_paragraphs_after(anchor, [
+            ("H", "3. 분석 섹션"),
+            ("B", "본문 첫 단락 ..."),
+            ("B", "본문 두 번째 단락 ..."),
+        ], templates={"H": heading_tpl, "B": body_tpl})
+    """
+    if not templates:
+        raise ValueError("insert_paragraphs_after: templates 가 비어 있음")
+    first_tpl = next(iter(templates.values()))
+
+    cur = anchor_p
+    inserted = 0
+    for kind, text in items:
+        tpl = templates.get(kind, first_tpl)
+        new_p = clone_paragraph_with_text(tpl, text)
+        cur.addnext(new_p)
+        cur = new_p
+        inserted += 1
+    return inserted
+
+
+# ===========================================================================
 # XML 직렬화 (HWP 호환)
 # ===========================================================================
 

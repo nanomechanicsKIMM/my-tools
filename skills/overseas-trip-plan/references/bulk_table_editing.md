@@ -217,10 +217,86 @@ PYTHONUTF8=1 python scripts/dump_tables.py  unpacked/Contents/section0.xml  2 6 
    - 스케줄 테이블 rebuild (`rebuild_table_data_rows`)
    - 과제 연결 / 예산 테이블 rebuild (같은 helper, 헤더 + data rows)
    - 반출 장비 테이블 컬럼 삭제 (`delete_column`)
-   - 관심 세션 테이블 rebuild
+   - 관심 세션 테이블 rebuild (multi-line 셀 = `set_cell_text_lines`)
+   - **테이블 뒤 분석 섹션 삽입** (`insert_paragraphs_after`) — v0.4
 4. `BinData/image*.jpg` 교체 (필요 시)
 5. `write_hwpx_xml` → `pack.py` → `validate.py`
 6. `dump_tables.py` 로 결과 검증
+
+---
+
+## 10. 테이블 뒤에 분석·주석 섹션 추가 (v0.4)
+
+기존 테이블의 뒤에 "분석 섹션 / 해설 / 후속 계획" 을 여러 paragraph 로 삽입하는 패턴.
+
+### 10.1. 기본 흐름
+
+```python
+from table_utils import (
+    find_table_by_anchor, find_containing_paragraph,
+    find_paragraph_by_text, insert_paragraphs_after,
+)
+
+# 1) 기준이 될 테이블과 그 테이블을 감싸는 <hp:p> 찾기
+tbl = find_table_by_anchor(root, ["날짜", "Session", "발표제목", "참석자"])
+anchor = find_containing_paragraph(tbl)
+
+# 2) 두 가지 스타일 템플릿 확보 (섹션 헤더 / 본문)
+heading_tpl = find_paragraph_by_text(root, "2. Display Week 2026 주요 행사")
+body_tpl    = find_paragraph_by_text(root, "행사의 중요성")
+
+# 3) 삽입할 내용 (kind, text) 리스트 구성
+content = [
+    ("H", "3. 관심 세션 심층 분석"),
+    ("B", "본 섹션에서는 관련 기관·발표를 매핑하고 ..."),
+    ("H", "3.1. 프로젝트 A 관점"),
+    ("B", "■ Samsung Display — Large-area CMP ..."),
+    ("B", "■ Meta — Ray-Ban Light Engine ..."),
+    ("B", "가. 협력 가능성"),
+    ("B", "Samsung Display 는 국내 컨소시엄 구성원으로 ..."),
+    # ...수십 개
+]
+
+# 4) 일괄 삽입
+n = insert_paragraphs_after(
+    anchor,
+    content,
+    templates={"H": heading_tpl, "B": body_tpl},
+)
+print(f"inserted {n} paragraphs")
+```
+
+### 10.2. 주의 사항
+
+- 템플릿 paragraph 는 **섹션 루트 레벨의 <hp:p>** 를 선택 (테이블·셀 내부 <hp:p> 금지)
+  → `find_paragraph_by_text(root, ...)` 가 첫 match 를 반환하므로 충분히 특이한 문자열 사용.
+- `clone_paragraph_with_text()` 가 내부의 `<hp:tbl>` 과 `<hp:linesegarray>` 를 자동 제거
+  → 같은 섹션의 "행사 소개(테이블 없는 본문)" 같은 깨끗한 paragraph 를 템플릿으로 쓰면
+  가장 안전.
+- **여러 스타일**을 쓰려면 `templates` dict 에 더 많은 kind 추가:
+  ```python
+  templates = {"H": heading_tpl, "S": sub_tpl, "B": body_tpl, "X": empty_tpl}
+  ```
+- `items` 의 `kind` 가 `templates` 에 없으면 첫 번째 템플릿으로 자동 fallback → 에러 대신
+  문서가 로드 가능한 상태 유지.
+
+### 10.3. 도식화 (기관-발표 매핑) 표현
+
+대량의 "관련 기관 → 발표 → 관계" 매핑을 본문에 표현할 때, 별도 <hp:tbl> 을 생성하는 대신
+**bullet-style body paragraph 로 나열**하는 것이 구현·관리 비용이 낮다:
+
+```python
+mapping = [
+    "■ Samsung Display — Large-area CMP · MicroLED Panel | 관계: 국내 컨소시엄 (협력)",
+    "■ Meta (Ajit Ninan) — Ray-Ban Light Engine | 관계: 수요기업/end-user",
+    # ...
+]
+items = [("B", row) for row in mapping]
+insert_paragraphs_after(anchor, items, templates={"B": body_tpl})
+```
+
+필요 시 나중에 이 bullet 들을 `rebuild_table_data_rows` 기반의 실제 table 로 프로모트할 수도
+있지만, 일회용 출장계획서 본문에는 bullet 형태가 충분하다.
 
 ---
 
@@ -235,3 +311,11 @@ PYTHONUTF8=1 python scripts/dump_tables.py  unpacked/Contents/section0.xml  2 6 
 | `rebuild_table_data_rows(tbl, rows)` | 헤더 유지, data rows 전면 재작성 |
 | `delete_column(tbl, col_index)` | 컬럼 DOM 제거 + colAddr/colCnt 보정 |
 | `find_column_by_header(tbl, header_text)` | 헤더 텍스트로 `colAddr` 탐색 |
+
+## v0.4 추가된 helper 요약
+
+| 함수 | 용도 |
+|------|------|
+| `find_containing_paragraph(elem)` | 임의 element → 조상 `<hp:p>` 추적 (테이블 wrapper 찾기) |
+| `clone_paragraph_with_text(template_p, text)` | 템플릿 복제 + 내부 table 제거 + linesegarray 제거 + 텍스트 주입 |
+| `insert_paragraphs_after(anchor_p, items, templates)` | (kind, text) 튜플 리스트 → 기준 paragraph 뒤에 일괄 삽입, 스타일 맵 지원 |
