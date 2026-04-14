@@ -22,7 +22,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +44,38 @@ APPLICANT_KEY_MAP = {
     "직급": "applicant.position",
     "성명": "applicant.name",
 }
+
+
+def _parse_year_from_date(date_str: str) -> int | None:
+    """'2025.05.04.(월)' 형태에서 연도 4자리 추출."""
+    if not date_str:
+        return None
+    m = re.search(r"(\d{4})", date_str)
+    return int(m.group(1)) if m else None
+
+
+def _parse_date(date_str: str) -> datetime | None:
+    """'2025.05.04.(월)' 또는 '2025.05.04' 파싱."""
+    if not date_str:
+        return None
+    m = re.match(r"(\d{4})\.(\d{1,2})\.(\d{1,2})", date_str.strip())
+    if not m:
+        return None
+    try:
+        return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    except ValueError:
+        return None
+
+
+def _compute_duration(start: str, end: str) -> str:
+    """시작·종료 문자열 → 'N박 M일'. 실패 시 빈 문자열."""
+    s = _parse_date(start)
+    e = _parse_date(end)
+    if not s or not e or e < s:
+        return ""
+    days = (e - s).days + 1
+    nights = days - 1
+    return f"{nights}박 {days}일"
 
 
 def _detect_trip_type(data: dict[str, Any], cli_type: str | None) -> str:
@@ -82,27 +116,93 @@ def _build_replacements(
 ) -> tuple[dict[str, str], list[str]]:
     """user_input 데이터 + 플레이스홀더 맵 → 치환 딕셔너리 생성.
 
+    Phase 4A: 신청자(4) + 출장개요(2) + 섹션 제목(2) + 출장자 일정(최대 3) 필드.
+
     Returns:
         (replacements, missing_fields)
     """
     replacements: dict[str, str] = {}
     missing: list[str] = []
 
-    applicant = data.get("applicant", {})  # {"제출일자": ..., "소속": ..., ...}
+    applicant = data.get("applicant", {})
+    overview = data.get("trip_overview", {})
+    companions = data.get("companions", [])
+    frontmatter = data.get("frontmatter", {})
+    sections = data.get("sections", {})
 
-    # 논리 필드명 → 값
     field_values: dict[str, str] = {}
+
+    # --- 1. 신청자 정보 (기존) ---
     for kr_key, logical in APPLICANT_KEY_MAP.items():
         if kr_key in applicant:
             field_values[logical] = applicant[kr_key]
 
-    # placeholder 맵 순회
+    # --- 2. 출장 개요: 국가·도시 ---
+    country = (overview.get("출장 국가") or "").strip()
+    city = (overview.get("방문 도시") or "").strip()
+    if country and city:
+        field_values["overview.country_city"] = (
+            f"  ○ 출장국가 및 출장도시 : {country}({city})"
+        )
+    elif country:
+        field_values["overview.country_city"] = (
+            f"  ○ 출장국가 및 출장도시 : {country}"
+        )
+
+    # --- 3. 출장 개요: 주 목적 한 줄 ---
+    purpose = (overview.get("주 목적 한 줄") or "").strip()
+    if purpose:
+        field_values["overview.purpose_oneline"] = f"  ○ 출장목적: {purpose}"
+
+    # --- 4. 행사 연도 결정 (frontmatter > 시작일에서 추출) ---
+    start_date = (overview.get("출장 기간 (시작)") or "").strip()
+    end_date = (overview.get("출장 기간 (종료)") or "").strip()
+    conf_year = frontmatter.get("conference_year")
+    if not conf_year:
+        conf_year = _parse_year_from_date(start_date)
+
+    # --- 5. 섹션 2 제목: 행사명 + 연도 ---
+    sec4_kv = sections.get(4, {}).get("kv", {}) if isinstance(sections, dict) else {}
+    event_name = (sec4_kv.get("행사명") or "Display Week").strip()
+    if conf_year:
+        # 원본 템플릿은 trailing space 포함 ("2. Display Week 2025 주요 행사 ")
+        field_values["event.section_title"] = (
+            f"2. {event_name} {conf_year} 주요 행사 "
+        )
+
+    # --- 6. 섹션 4 제목: 최근 3년 범위 ---
+    if conf_year:
+        y_start, y_end = int(conf_year) - 3, int(conf_year) - 1
+        field_values["event.past_trips_title"] = (
+            f"4. 최근 3년간 국외출장 실적({y_start}~{y_end})"
+        )
+
+    # --- 7. 출장자 일정 라인 (최대 3명) ---
+    duration_label = (overview.get("일수 라벨") or "").strip()
+    if not duration_label:
+        duration_label = _compute_duration(start_date, end_date)
+
+    for idx, row in enumerate(companions[:3], start=1):
+        name = (
+            row.get("성명")
+            or row.get("이름")
+            or row.get("No")
+            or ""
+        ).strip()
+        if not name or not start_date or not end_date:
+            continue
+        if duration_label:
+            line = f"    - {name} : {start_date} - {end_date}, ({duration_label})"
+        else:
+            line = f"    - {name} : {start_date} - {end_date}"
+        field_values[f"traveler.line_{idx}"] = line
+
+    # --- 8. placeholder 맵 순회 → 치환 딕셔너리 ---
     fields = pmap.get("fields", {})
     for logical, spec in fields.items():
         placeholder = spec.get("placeholder", "")
         value = field_values.get(logical)
         if value and placeholder:
-            # 동일 placeholder에 중복 지정 시 마지막 값이 우선
             replacements[placeholder] = value
         elif spec.get("required") and not value:
             missing.append(logical)

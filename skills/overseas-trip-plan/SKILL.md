@@ -243,6 +243,34 @@ write_hwpx_xml(tree, sec_path)
 
 자세한 편집 패턴과 함정은 [references/hwpx_lxml_editing_patterns.md](references/hwpx_lxml_editing_patterns.md) 참조.
 
+### v0.3 대량 편집 helper ⭐
+
+이전 연도 템플릿을 당해 출장계획서로 재작성할 때 자주 쓰는 구조적 편집을 위해
+`table_utils.py` 에 다음 helper 추가:
+
+| 함수 | 용도 |
+|------|------|
+| `set_multi_run_text(p, texts)` | 다중 `<hp:run>` paragraph 의 각 `<hp:t>` 를 서식 보존하며 교체 |
+| `find_paragraph_by_text(root, needle)` | 텍스트 포함 `<hp:p>` 탐색 |
+| `find_table_after(heading_p)` | heading 이후 첫 `<hp:tbl>` |
+| `delete_range_between(root, start, end)` | 두 anchor paragraph 사이(start 포함 ~ end 직전) DOM 통째 삭제 — Meta/Apple 블록 제거 등 |
+| `rebuild_table_data_rows(tbl, rows)` | 헤더 유지, data rows 전면 재작성 (스케줄·예산·과제 연결 공통) |
+| `delete_column(tbl, col_index)` | 반출 장비 테이블 등에서 출장자 컬럼 DOM 제거 + colAddr/colCnt 보정 |
+| `find_column_by_header(tbl, header)` | 헤더 텍스트로 `colAddr` 탐색 |
+
+진단 도구:
+- `scripts/scan_tables.py <section0.xml>` — 테이블 전체 인덱스·행/열·앵커 출력
+- `scripts/dump_tables.py <section0.xml> <idx>...` — 지정 테이블 셀 내용 dump
+
+상세 사용 예시는 [references/bulk_table_editing.md](references/bulk_table_editing.md) 참조.
+
+**WebFetch SSL 차단 우회**: 일부 학회 사이트(`displayweek.org` 등)는 중간 인증서
+체인 문제로 Claude WebFetch 가 실패한다. Git Bash 에서 `curl -sSLk` 로 우회:
+```bash
+curl -sSLk --max-time 20 "https://www.displayweek.org/" -o /tmp/dw.html
+```
+상세는 `references/bulk_table_editing.md` §7 참조.
+
 ## 🎯 user_input.md 작성 가이드
 
 ### Frontmatter 필수 필드
@@ -370,6 +398,7 @@ Invoke-Item 'C:\path\to\file.hwpx'
 | Phase 6.6 | WebFetch 통합 (Claude 주도) | ✅ v0.1 (문서화) |
 | Phase 6.7 | Advance Program PDF 참고자료 저장 | ✅ v0.1 |
 | **v0.2 교훈** | **Phantom paragraph 방지 + linesegarray 제거 + rowCnt/rowAddr 재번호** | ✅ [`table_utils.py`](scripts/table_utils.py) |
+| **v0.3 대량 편집** | **블록 삭제, 테이블 rebuild, 컬럼 삭제, multi-run paragraph, 진단 도구** | ✅ [`bulk_table_editing.md`](references/bulk_table_editing.md) |
 
 ## 🔗 관련 스킬
 

@@ -5,6 +5,7 @@ tags: [trip-plan, input-form, overseas-trip]
 trip_type: conference
 conference_url: ""
 program_urls: []
+conference_year: ""  # 선택: 행사 연도(숫자). 비우면 섹션 2 시작일에서 자동 추출.
 output_filename: "국외출장계획서.hwpx"
 ---
 

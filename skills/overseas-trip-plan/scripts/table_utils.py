@@ -123,6 +123,90 @@ def remove_paragraph(p) -> bool:
     return True
 
 
+def set_multi_run_text(p, texts: list[str]) -> bool:
+    """연속한 <hp:t> 요소에 순서대로 텍스트를 매핑. linesegarray 는 제거.
+
+    `set_p_text_flow`와 달리 **다중 <hp:run>을 유지**한다. 문단이
+    "라벨 (bold) + 본문 (regular) + trailing space" 처럼 런 단위로 서식이
+    다른 경우(예: "행사 소개: " 뒤 본문), 각 런의 charPrIDRef 를 보존해야 할
+    때 사용.
+
+    초과 <hp:t>는 빈 문자열로 채우고, 부족하면 `texts`만큼만 설정한다.
+
+    Example:
+        _set_multi_run_text(p, ["행사 소개: ", "본문 내용 ...", " "])
+
+    Returns:
+        성공 여부 (True 항상).
+    """
+    ts = list(p.iter(hp("t")))
+    for i, t in enumerate(ts):
+        t.text = texts[i] if i < len(texts) else ""
+    strip_linesegarray(p)
+    return True
+
+
+def find_paragraph_by_text(root, needle: str):
+    """<hp:t> 텍스트 연결 결과에 `needle` 이 포함된 첫 <hp:p> 반환.
+
+    단일 run 이건 다중 run 이건 모두 처리한다 (element 전체 텍스트 기준).
+    """
+    for p in root.iter(hp("p")):
+        text = "".join((t.text or "") for t in p.iter(hp("t")))
+        if needle in text:
+            return p
+    return None
+
+
+def delete_range_between(root, start_needle: str, end_needle: str) -> int:
+    """`start_needle` 포함 paragraph(inclusive)부터 `end_needle` 포함 paragraph
+    직전(exclusive)까지 DOM 에서 완전 삭제한다.
+
+    두 경계 paragraph 는 **같은 parent 의 sibling** 이어야 한다. 섹션 블록
+    (예: Meta/Apple 방문 블록 + 이미지 + 캡션)을 통째로 제거할 때 사용.
+
+    Returns:
+        삭제된 paragraph 수.
+    """
+    start_p = find_paragraph_by_text(root, start_needle)
+    end_p = find_paragraph_by_text(root, end_needle)
+    if start_p is None or end_p is None:
+        raise RuntimeError(
+            f"range 경계 탐색 실패: start={start_p is not None}, end={end_p is not None}"
+        )
+    parent = start_p.getparent()
+    if end_p.getparent() is not parent:
+        raise RuntimeError("start/end paragraphs must be siblings")
+
+    to_delete = []
+    collecting = False
+    for child in list(parent):
+        if child is start_p:
+            collecting = True
+        if child is end_p:
+            break
+        if collecting:
+            to_delete.append(child)
+
+    for c in to_delete:
+        parent.remove(c)
+    return len(to_delete)
+
+
+def find_table_after(heading_p):
+    """heading paragraph 이후(같은 parent 내) 처음 등장하는 <hp:tbl> 반환."""
+    parent = heading_p.getparent()
+    found = False
+    for child in parent:
+        if child is heading_p:
+            found = True
+            continue
+        if found:
+            for tbl in child.iter(hp("tbl")):
+                return tbl
+    return None
+
+
 # ===========================================================================
 # 셀 텍스트 편집 (Table cells)
 # ===========================================================================
@@ -362,6 +446,131 @@ def remove_row_safe(row, decrement_rowspan_of=None) -> None:
     parent = row.getparent()
     if parent is not None:
         parent.remove(row)
+
+
+def _reset_cell_span(cell) -> None:
+    """cell 의 rowSpan/colSpan 을 1로 리셋."""
+    span = cell.find(hp("cellSpan"))
+    if span is not None:
+        span.set("rowSpan", "1")
+        span.set("colSpan", "1")
+
+
+def rebuild_table_data_rows(
+    tbl,
+    rows_data: list[list[str]],
+    template_row_index: int = 1,
+) -> int:
+    """테이블의 **헤더 유지, 데이터 rows 전면 교체**. 스케줄/과제/예산 등
+    구조가 단순한 N×M 테이블에 사용.
+
+    - `template_row_index` 행을 깨끗한 row 템플릿으로 선택(기본: 첫 data row)
+    - 템플릿의 모든 cell 에 대해 rowSpan/colSpan=1 리셋(병합 풀기)
+    - 기존 모든 data rows 삭제
+    - `rows_data` 각 항목마다 템플릿을 deepcopy 하고 cell 텍스트 설정
+    - `renumber_table` 자동 호출
+
+    Args:
+        tbl: <hp:tbl>
+        rows_data: [[cell_text, ...], ...] — 각 row 의 cell 텍스트 리스트
+        template_row_index: 템플릿으로 사용할 row 인덱스 (기본 1 = 첫 data row).
+            헤더만 있는 테이블인 경우 0 (header) 을 지정 가능.
+
+    Returns:
+        삽입된 data row 수.
+
+    Example:
+        rebuild_table_data_rows(tbl, [
+            ["김재현", "MT8600", "...", "..."],
+            ["장봉균", "MT8600", "...", "..."],
+            ["김경식", "NB3710", "...", "..."],
+        ])
+    """
+    rows = tbl.findall(hp("tr"))
+    if len(rows) < 2:
+        raise RuntimeError("rebuild_table_data_rows: 헤더 + 최소 1 data row 필요")
+
+    colCnt = int(tbl.get("colCnt", "0"))
+    # 템플릿: 요청된 index 부터 시작해 colCnt 일치하는 첫 row 를 선택
+    template = None
+    for r in rows[template_row_index:]:
+        if len(r.findall(hp("tc"))) == colCnt:
+            template = r
+            break
+    if template is None:
+        template = rows[template_row_index]  # fallback
+    template = deepcopy(template)
+    for tc in template.findall(hp("tc")):
+        _reset_cell_span(tc)
+
+    # 모든 data rows 삭제
+    for r in rows[1:]:
+        tbl.remove(r)
+
+    # 새 rows 삽입
+    for row_data in rows_data:
+        new_row = deepcopy(template)
+        new_cells = new_row.findall(hp("tc"))
+        for i, text in enumerate(row_data):
+            if i < len(new_cells):
+                set_cell_text_flow(new_cells[i], text if text else "")
+        tbl.append(new_row)
+
+    renumber_table(tbl)
+    return len(rows_data)
+
+
+def delete_column(tbl, col_index: int) -> int:
+    """테이블에서 지정 컬럼을 모든 row 에서 제거하고 colAddr/colCnt 보정.
+
+    - 각 row 에서 `colAddr == col_index` 인 <hp:tc> 제거
+    - 남은 cells 중 colAddr > col_index 인 것의 colAddr 를 -1
+    - `<hp:tbl colCnt>` 를 -1
+
+    **주의**: 해당 컬럼에 colSpan 병합 셀이 있을 경우 구조가 깨질 수 있다.
+    일반적으로 colSpan=1 인 단순 테이블에서만 사용.
+
+    Returns:
+        제거된 cell 수 (= 보통 row 수와 동일).
+    """
+    colCnt = int(tbl.get("colCnt", "0"))
+    rows = tbl.findall(hp("tr"))
+    removed = 0
+    for row in rows:
+        target = None
+        for tc in row.findall(hp("tc")):
+            addr = tc.find(hp("cellAddr"))
+            if addr is not None and int(addr.get("colAddr", "-1")) == col_index:
+                target = tc
+                break
+        if target is not None:
+            row.remove(target)
+            removed += 1
+        # 나머지 cells 의 colAddr 를 -1
+        for tc in row.findall(hp("tc")):
+            addr = tc.find(hp("cellAddr"))
+            if addr is not None:
+                c = int(addr.get("colAddr", "0"))
+                if c > col_index:
+                    addr.set("colAddr", str(c - 1))
+    tbl.set("colCnt", str(colCnt - 1))
+    return removed
+
+
+def find_column_by_header(tbl, header_text: str) -> int | None:
+    """헤더 row 에서 `header_text` 와 일치하는 cell 의 colAddr 반환.
+
+    매치 실패 시 None. `delete_column` 호출 전 인덱스 탐색에 사용.
+    """
+    rows = tbl.findall(hp("tr"))
+    if not rows:
+        return None
+    for tc in rows[0].findall(hp("tc")):
+        if element_text(tc).strip() == header_text:
+            addr = tc.find(hp("cellAddr"))
+            if addr is not None:
+                return int(addr.get("colAddr", "-1"))
+    return None
 
 
 # ===========================================================================

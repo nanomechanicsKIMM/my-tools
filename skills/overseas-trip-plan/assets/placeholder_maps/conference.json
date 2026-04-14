@@ -3,8 +3,8 @@
     "template": "template_conference.hwpx",
     "base_source": "(20250428) 국외출장계획서_김재현.hwpx",
     "description": "Template B (학회·전시회형) 플레이스홀더 매핑. 원본 문자열 → user_input 필드.",
-    "version": "0.1",
-    "notes": "ZIP-level 치환 방식이므로 원본에서 유일한 식별 가능한 문자열만 사용."
+    "version": "0.2",
+    "notes": "ZIP-level 치환 방식이므로 원본에서 유일한 식별 가능한 문자열만 사용. v0.2: Phase 4A 확장 (출장개요·섹션 제목·출장자 일정 라인)."
   },
   "fields": {
     "applicant.department": {
@@ -26,6 +26,41 @@
       "placeholder": "2025. 04. 28.",
       "required": true,
       "description": "제출일자"
+    },
+    "overview.country_city": {
+      "placeholder": "  ○ 출장국가 및 출장도시 : 미국(San Jose, Boston, Akansas)",
+      "required": false,
+      "description": "출장 개요 - 국가·도시 라인 (섹션 2 '출장 국가' + '방문 도시' 조립)"
+    },
+    "overview.purpose_oneline": {
+      "placeholder": "  ○ 출장목적: SID Display Week 및 국제공동연구 워크숍 참석",
+      "required": false,
+      "description": "출장 개요 - 주 목적 한 줄 (섹션 2 '주 목적 한 줄')"
+    },
+    "event.section_title": {
+      "placeholder": "2. Display Week 2025 주요 행사 ",
+      "required": false,
+      "description": "섹션 2 제목 - 행사명·연도 (섹션 4 행사명 + frontmatter conference_year)"
+    },
+    "event.past_trips_title": {
+      "placeholder": "4. 최근 3년간 국외출장 실적(2020~2022)",
+      "required": false,
+      "description": "섹션 4 제목 - 최근 3년 범위 (출장 연도 기준 자동 계산)"
+    },
+    "traveler.line_1": {
+      "placeholder": "    - 김재현, 김현돈 : 2025.05.11(일) - 2025.05.22(목), (10박 12일)",
+      "required": false,
+      "description": "출장자 1행 일정 라인 (섹션 6 rows[0] + 섹션 2 날짜)"
+    },
+    "traveler.line_2": {
+      "placeholder": "    - 김경식 : 2025.05.11(일) - 2025.05.19(월), (7박 9일)",
+      "required": false,
+      "description": "출장자 2행 일정 라인 (섹션 6 rows[1] + 섹션 2 날짜)"
+    },
+    "traveler.line_3": {
+      "placeholder": "    - 장봉균 : 2025.05.11(일) - 2025.05.17(월), (5박 7일)",
+      "required": false,
+      "description": "출장자 3행 일정 라인 (섹션 6 rows[2] + 섹션 2 날짜)"
     }
   }
 }
