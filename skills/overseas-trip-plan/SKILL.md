@@ -270,6 +270,100 @@ write_hwpx_xml(tree, sec_path)
 
 상세는 [`bulk_table_editing.md §8`](references/bulk_table_editing.md).
 
+### v0.5 계층적 글머리표 helper ⭐⭐
+
+단일 본문 템플릿을 deepcopy 할 때 `paraPrIDRef` 가 상속되어 **❍ 글머리표가
+모든 문단에 자동 삽입**되는 증상을 제어. 계층별로 paragraph 스타일 명시 지정.
+
+| 함수 | 용도 |
+|------|------|
+| `set_paragraph_style(p, para_pr_id_ref, char_pr_id_ref, page_break)` | 기존 `<hp:p>` 스타일 명시 덮어쓰기 |
+| `clone_paragraph_with_style(template_p, text, para_pr_id_ref, char_pr_id_ref)` | 복제 + 텍스트 + 스타일 one-shot |
+| `insert_styled_paragraphs(anchor_p, items, base_template)` | `[(text, paraPrID[, charPrID]), ...]` 일괄 삽입 |
+
+```python
+# 계층적 글머리표 예시: ❍ → - → 본문(no bullet)
+base = find_paragraph_by_text(root, "행사의 중요성")  # paraPrIDRef="41"
+insert_styled_paragraphs(anchor, [
+    ("관심 세션 심층 분석",            "41"),  # ❍ 최상위
+    ("DW 2026 세션을 두 과제 …",      "1"),   # 본문 (no bullet)
+    ("KIAT 국제공동과제 (MT8600)",     "41"),  # ❍
+    ("관련 기관 및 발표 매핑",         "42"),  # - 하위
+    ("Samsung Display — …",           "42"),  # -
+    ("가. 협력 가능성",                "42"),  # -
+    ("Samsung Display 는 …",          "1"),   # 본문
+], base)
+```
+
+**bullet 레벨 매핑** (`header.xml` `<hh:paraPr>` 확인 필요, 템플릿마다 ID 상이):
+- **❍ 최상위 bullet**: `paraPrIDRef="41"` (BULLET idRef=2)
+- **- 하위 bullet**: `paraPrIDRef="42"` (BULLET idRef=1, 들여쓰기)
+- **· 최하위 bullet** *(3-레벨 필요 시)*: `header.xml` 에 `<hh:bullet id="3">` +
+  `<hh:paraPr id="58">` 추가 (bulk_table_editing.md §12)
+- **본문 (no bullet)**: `paraPrIDRef="1"` (NONE, 들여쓰기 없음) /
+  또는 `id="59"` 신규 paraPr (NONE, level-2 text 위치 들여쓰기)
+
+**중요**: 본문 paragraph 는 반드시 `paraPrIDRef="1"` 같은 no-bullet 스타일로
+명시 덮어쓰기. 누락 시 템플릿의 ❍ 가 모든 복제 문단에 상속된다 ("모든 문단에
+❍ 자동 삽입" 증상의 유일한 원인).
+
+상세는 [`bulk_table_editing.md §11`](references/bulk_table_editing.md).
+
+### v0.6 이미지 삽입 + 슬라이드 생성 helper ⭐⭐⭐
+
+분석 다이어그램·차트·NotebookLM 스타일 슬라이드를 PNG 로 렌더 후 HWPX 본문에
+삽입. `image_utils.py` (삽입) + `generate_risk_slide.py` (PIL 슬라이드 생성)
+두 모듈 제공.
+
+| 모듈 | 함수 | 용도 |
+|------|------|------|
+| `image_utils` | `register_image_in_hpf(hpf, id, href, mime)` | content.hpf 에 `<opf:item>` idempotent 추가 |
+| `image_utils` | `find_pic_wrapper_by_binary_id(root, id)` | 기존 이미지 wrapper `<hp:p>` 탐색 (템플릿) |
+| `image_utils` | `clone_pic_paragraph(tpl, binary_id, orig_px, ...)` | 템플릿 deepcopy + 크기/scale/binary_id 재설정 |
+| `generate_risk_slide` | `render_risk_slide(...)` | 4행 위험-대응 슬라이드 PNG (PIL + Malgun Gothic) |
+
+```python
+# 1. PIL 로 PNG 생성
+from generate_risk_slide import render_risk_slide
+render_risk_slide(
+    out_path="mt8600_risk.png",
+    title_line1="위험요인 분석 및 대응 전략:",
+    title_line2="시장 위협 대비 기술 포지셔닝 (MT8600)",
+    rows=[
+        (["위험 라인1", "위험 라인2"],
+         ["대응 라인1", "대응 라인2"]),
+        # ... 최대 4쌍
+    ],
+)
+
+# 2. HWPX 에 삽입 (3단계)
+import shutil
+from image_utils import (
+    register_image_in_hpf, find_pic_wrapper_by_binary_id, clone_pic_paragraph,
+)
+shutil.copy("mt8600_risk.png", unpacked / "BinData" / "image9.png")
+register_image_in_hpf(
+    unpacked / "Contents" / "content.hpf",
+    img_id="image9", href="BinData/image9.png", media_type="image/png",
+)
+template = find_pic_wrapper_by_binary_id(root, "image5")
+new_wrap = clone_pic_paragraph(
+    template, binary_id="image9",
+    orig_px=(1280, 720), display_w_hwpunit=42520,
+    pic_id=1900000009, instid=800000009, zorder=20,
+)
+target_paragraph.addnext(new_wrap)
+```
+
+**HWPUNIT 변환**: 1px @ 96DPI = **75 HWPUNIT** (`image_utils.HWPUNIT_PER_PX`).
+`<hp:orgSz>` = px × 75, `<hp:curSz>` = display 목표 (~42520 = 15cm).
+
+**표 오른쪽 정렬**: `treatAsChar="1"` 인라인 표는 wrapper `<hp:p>` 의 paragraph
+정렬을 따름. RIGHT 정렬 원하면 `set_paragraph_style(wrap_p, para_pr_id_ref="33")`
+로 교체 (header.xml 에서 `horizontal="RIGHT"` paraPr id 확인).
+
+상세는 [`bulk_table_editing.md §14, §15`](references/bulk_table_editing.md).
+
 진단 도구:
 - `scripts/scan_tables.py <section0.xml>` — 테이블 전체 인덱스·행/열·앵커 출력
 - `scripts/dump_tables.py <section0.xml> <idx>...` — 지정 테이블 셀 내용 dump
@@ -412,6 +506,11 @@ Invoke-Item 'C:\path\to\file.hwpx'
 | **v0.2 교훈** | **Phantom paragraph 방지 + linesegarray 제거 + rowCnt/rowAddr 재번호** | ✅ [`table_utils.py`](scripts/table_utils.py) |
 | **v0.3 대량 편집** | **블록 삭제, 테이블 rebuild, 컬럼 삭제, multi-run paragraph, 진단 도구** | ✅ [`bulk_table_editing.md`](references/bulk_table_editing.md) |
 | **v0.4 섹션 삽입** | **테이블 뒤 분석·주석 섹션 일괄 삽입 (`insert_paragraphs_after`)** | ✅ [`bulk_table_editing.md §8`](references/bulk_table_editing.md) |
+| **v0.5 계층 글머리표** | **❍ → - → 본문 계층 제어 (`set_paragraph_style`, `clone_paragraph_with_style`, `insert_styled_paragraphs`)** | ✅ [`bulk_table_editing.md §11`](references/bulk_table_editing.md) |
+| **v0.5.1 헤더 확장** | **header.xml 에 level-3 bullet + paraPr 추가 패턴 (itemCnt 갱신, idempotent)** | ✅ [`bulk_table_editing.md §12`](references/bulk_table_editing.md) |
+| **v0.5.2 표 변환** | **Bullet 리스트 → N-col 표 (template deepcopy + delete_column + width swap + rebuild)** | ✅ [`bulk_table_editing.md §13`](references/bulk_table_editing.md) |
+| **v0.6 이미지 삽입** | **PNG/JPG 삽입 (`image_utils.py`) + PIL 슬라이드 생성 (`generate_risk_slide.py`)** | ✅ [`bulk_table_editing.md §14`](references/bulk_table_editing.md) |
+| **v0.6.1 표 정렬** | **인라인 표 오른쪽 정렬 (wrapper `paraPrIDRef` 교체)** | ✅ [`bulk_table_editing.md §15`](references/bulk_table_editing.md) |
 
 ## 🔗 관련 스킬
 

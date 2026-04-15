@@ -319,3 +319,414 @@ insert_paragraphs_after(anchor, items, templates={"B": body_tpl})
 | `find_containing_paragraph(elem)` | 임의 element → 조상 `<hp:p>` 추적 (테이블 wrapper 찾기) |
 | `clone_paragraph_with_text(template_p, text)` | 템플릿 복제 + 내부 table 제거 + linesegarray 제거 + 텍스트 주입 |
 | `insert_paragraphs_after(anchor_p, items, templates)` | (kind, text) 튜플 리스트 → 기준 paragraph 뒤에 일괄 삽입, 스타일 맵 지원 |
+
+---
+
+## 11. 계층적 글머리표 (❍ / - / 본문) 제어 — v0.5
+
+### 11.1. 문제
+
+템플릿의 본문 스타일 paragraph(예: `paraPrIDRef="41"`, `styleIDRef="0"`) 가
+`header.xml` 상 `<hh:heading type="BULLET" idRef="2"/>` 를 가지고 있으면,
+한컴 한글은 **해당 paraPrIDRef 를 쓰는 모든 문단 앞에 ❍ 글머리표를 자동
+렌더**한다. `clone_paragraph_with_text()` 는 `paraPrIDRef` 속성도 그대로
+deepcopy 하므로, 단일 본문 템플릿을 여러 문단으로 복제하면 **모든 문단에
+❍ 가 붙는 현상**이 발생한다.
+
+### 11.2. 해결: `paraPrIDRef` 를 계층별로 명시 지정
+
+`header.xml` 에 일반적으로 정의된 스타일 3종을 활용:
+
+| paraPrIDRef | `<hh:heading>` | 의미 |
+|-------------|----------------|------|
+| `"1"` | `type="NONE"` | 글머리표 없음 — 본문·헤더용 |
+| `"41"` | `type="BULLET" idRef="2"` (❍) | 최상위 글머리표 |
+| `"42"` | `type="BULLET" idRef="1"` (-) | 들여쓰기 + 하위 글머리표 |
+
+**주의**: 실제 ID 는 템플릿마다 다를 수 있다. `header.xml` 에서
+`<hh:paraPr id="…" ...>` 의 `<hh:heading type>` 을 확인하고, `<hh:bullets>` 의
+`char` 값으로 어떤 기호가 붙는지 확인할 것.
+
+### 11.3. 새 helper 로 계층 구성
+
+```python
+from table_utils import (
+    find_table_by_anchor, find_containing_paragraph,
+    find_paragraph_by_text, insert_styled_paragraphs,
+)
+
+tbl = find_table_by_anchor(root, ["날짜", "Session"])
+anchor = find_containing_paragraph(tbl)
+base = find_paragraph_by_text(root, "행사의 중요성")  # paraPrIDRef="41"
+
+items = [
+    # (text, paraPrIDRef)
+    ("관심 세션 심층 분석",                     "41"),  # ❍ 최상위
+    ("DW 2026 공개 페이지 기반 두 과제 …",      "1"),   # 본문 (no bullet)
+    ("KIAT 국제공동과제 (MT8600) — MIT 컨소시엄", "41"), # ❍
+    ("관련 기관 및 발표 매핑",                  "42"),  # - 하위
+    ("Samsung Display — Large-area CMP …",     "42"),  # -
+    ("Meta (Ajit Ninan) — Ray-Ban …",          "42"),  # -
+    ("가. 협력 가능성",                         "42"),  # -
+    ("Samsung Display 는 MT8600 국내 컨소시엄 …", "1"),  # 본문
+    ("나. 위험요인",                            "42"),  # -
+    ("Aledia · PlayNitride · VueReal …",        "1"),   # 본문
+]
+n = insert_styled_paragraphs(anchor, items, base)
+```
+
+### 11.4. 섹션 번호 없이 bullet 블록으로 추가
+
+이전 버전에서 "3. 관심 세션 심층 분석" 처럼 **섹션 헤더** (`paraPrIDRef="1"`
++ `charPrIDRef="29"` 큰 글씨) 로 추가했다면, 섹션 번호 체계가 팽창한다.
+대신 **기존 섹션(예: 2.) 아래 ❍ 최상위 bullet 으로 편입** 하면 번호 체계를
+유지하면서 분석 블록을 넣을 수 있다:
+
+```python
+# Before (새 섹션 헤더 추가 — 번호 체계 팽창)
+items = [("H", "3. 관심 세션 심층 분석"), ("B", "...")]
+
+# After (기존 섹션 안의 ❍ 최상위 bullet — 번호 유지)
+items = [("관심 세션 심층 분석", "41"), ("...", "1")]
+```
+
+### 11.5. 주의 — 본문은 반드시 `paraPrIDRef="1"` (또는 `"NONE"` 스타일)
+
+복제한 템플릿의 `paraPrIDRef` 를 명시 교체하지 않으면 기존 bullet 스타일이
+상속되어 ❍/- 가 본문 전체에 붙는다. **본문 paragraph 는 반드시**
+`para_pr_id_ref="1"` 같은 no-bullet 스타일로 덮어써야 한다. 이 누락이
+"동그라미 글머리표가 모든 문단에 삽입" 되는 증상의 유일한 원인이다.
+
+## v0.5 추가된 helper 요약
+
+| 함수 | 용도 |
+|------|------|
+| `set_paragraph_style(p, para_pr_id_ref, char_pr_id_ref, page_break)` | 기존 `<hp:p>` 의 스타일 속성 명시 덮어쓰기 |
+| `clone_paragraph_with_style(template_p, text, para_pr_id_ref, char_pr_id_ref)` | 복제 + 텍스트 + 스타일 덮어쓰기 one-shot |
+| `insert_styled_paragraphs(anchor_p, items, base_template)` | `[(text, paraPrID[, charPrID]), ...]` 일괄 삽입 (계층적 글머리표) |
+
+---
+
+## 12. 3-레벨 계층 확장 — header.xml 에 bullet · paraPr 추가 (v0.5)
+
+### 12.1. 상황
+
+기존 템플릿은 일반적으로 **2단계 bullet**(`❍` + `-`) 만 `header.xml` 에 정의한다.
+매핑 리스트(예: Samsung Display, Meta …)와 가·나·다·라·마 소제목이 같은
+`-` bullet 을 공유하면 계층이 모호해진다. 이때 `header.xml` 에 **level-3 bullet
+과 연관 paraPr 2개**를 **순수 추가(additive)** 로 패치하면 3-레벨 계층이 완성된다.
+
+### 12.2. 패치 대상 (header.xml 3 곳)
+
+```xml
+<!-- (1) bullets itemCnt 갱신 + 새 bullet id=3 삽입 -->
+<hh:bullets itemCnt="3">                              <!-- was 2 -->
+  <hh:bullet id="1" char="-"  ...>...</hh:bullet>
+  <hh:bullet id="2" char="❍" ...>...</hh:bullet>
+  <hh:bullet id="3" char="·"  useImage="0">           <!-- NEW -->
+    <hh:paraHead level="0" align="LEFT" useInstWidth="0" autoIndent="1"
+                 widthAdjust="0" textOffsetType="PERCENT" textOffset="50"
+                 numFormat="DIGIT" charPrIDRef="4294967295" checkable="0"/>
+  </hh:bullet>
+</hh:bullets>
+
+<!-- (2) paraProperties itemCnt 갱신 -->
+<hh:paraProperties itemCnt="60">                      <!-- was 58 -->
+
+<!-- (3) </hh:paraProperties> 직전에 paraPr 2개 추가 -->
+<hh:paraPr id="58" ...>                               <!-- level-3 bullet (·) -->
+  <hh:align horizontal="JUSTIFY" vertical="BASELINE"/>
+  <hh:heading type="BULLET" idRef="3" level="0"/>
+  ...
+  <hh:margin><hc:left value="7324" unit="HWPUNIT"/></hh:margin>
+  <!-- level-2 의 2x 들여쓰기 -->
+</hh:paraPr>
+<hh:paraPr id="59" ...>                               <!-- level-3 body (no bullet) -->
+  <hh:align horizontal="JUSTIFY" vertical="BASELINE"/>
+  <hh:heading type="NONE" idRef="0" level="0"/>
+  ...
+  <hh:margin><hc:left value="5493" unit="HWPUNIT"/></hh:margin>
+  <!-- level-2 text 위치로 들여쓰기 -->
+</hh:paraPr>
+```
+
+**주의**: 기존 bullet/paraPr 는 **건드리지 않는다**(순수 추가). `itemCnt` 2개만
+갱신하므로 기존 섹션 렌더링은 변화 없음.
+
+### 12.3. 들여쓰기 단위 (HWPUNIT)
+
+| level | 역할 | 권장 margin.left (default) |
+|-------|------|---------------------------|
+| 1 (❍) | 최상위 | 0 |
+| 2 (-) | 중간 | 3662  (~13 mm) |
+| 3 (·) | 최하위 리스트 | 7324  (~26 mm) — level-2 의 2x |
+| 3 body | 본문 (no bullet) | 5493  (~19 mm) — level-2 text 위치 |
+
+※ `<hp:case required-namespace="HwpUnitChar">` 블록은 default 의 절반 사용
+(예: 3662 → 1831, 5493 → 2747, 7324 → 3662). HWP 구버전 호환.
+
+### 12.4. 4-레벨 구조 사용 예
+
+```python
+TOP, SUB, ITEM, BODY, INTRO = "41", "42", "58", "59", "1"
+
+items = [
+    ("관심 세션 심층 분석",     TOP),    # ❍
+    (INTRO_PARA,              INTRO),  # 본문 (들여쓰기 없음)
+    ("KIAT 국제공동과제 …",    TOP),    # ❍
+    ("관련 기관 및 발표 매핑",  SUB),    # -
+    ("Samsung Display — …",   ITEM),   # ·
+    ("Meta — …",             ITEM),   # ·
+    ("협력 가능성",            SUB),    # -
+    ("Samsung Display 는 …",  BODY),   # body (들여쓰기, no bullet)
+    ("위험요인",               SUB),    # -
+    ("Aledia · PlayNitride …", BODY),   # body
+]
+insert_styled_paragraphs(anchor, items, base_tpl)
+```
+
+결과 레이아웃:
+```
+❍ 관심 세션 심층 분석
+DW 2026 세션 …                             (INTRO 본문, no indent)
+
+❍ KIAT 국제공동과제 …
+    - 관련 기관 및 발표 매핑
+        · Samsung Display — …
+        · Meta — …
+    - 협력 가능성
+            Samsung Display 는 …           (BODY, indented)
+    - 위험요인
+            Aledia · PlayNitride …         (BODY, indented)
+```
+
+### 12.5. 패치 스크립트 템플릿
+
+문자열 치환으로 충분 (순수 추가 + itemCnt 갱신):
+
+```python
+def patch_header(header_path):
+    txt = header_path.read_text(encoding="utf-8")
+    if 'hh:bullet id="3"' in txt:
+        return  # 이미 적용됨 — idempotent
+    txt = txt.replace('<hh:bullets itemCnt="2">',
+                      '<hh:bullets itemCnt="3">', 1)
+    txt = txt.replace('    </hh:bullets>',
+                      NEW_BULLET + '    </hh:bullets>', 1)
+    txt = txt.replace('<hh:paraProperties itemCnt="58">',
+                      '<hh:paraProperties itemCnt="60">', 1)
+    txt = txt.replace('    </hh:paraProperties>',
+                      NEW_PARAPR_58 + NEW_PARAPR_59 + '    </hh:paraProperties>', 1)
+    header_path.write_text(txt, encoding="utf-8")
+```
+
+### 12.6. 함정
+
+- **`itemCnt` 갱신 누락**: 한컴 한글이 실제 개수와 itemCnt 불일치 시 로드 거부.
+- **기존 id 충돌**: 추가할 paraPr id 는 **기존 최대값 + 1** 이상이어야 한다.
+  `grep 'hh:paraPr id=' header.xml` 로 최대 id 확인 후 선택.
+- **스타일 ID 재할당 금지**: 이미 사용 중인 paraPr id 를 수정하면 기존 섹션의
+  렌더링이 바뀐다. 반드시 **새 id** 로 추가하고 새 문단만 참조하도록 한다.
+- **idempotent 체크**: 같은 템플릿을 여러 번 패치하면 중복 삽입 위험. `if 'id="3"'
+  in txt: return` 방어선 필수.
+
+---
+
+## 13. Bullet 리스트 → 3-col 표 변환 패턴
+
+긴 리스트(10+ 항목)를 bullet 으로 나열하면 가독성이 떨어진다. 기존 문서 내 **다른
+섹션의 표**를 템플릿으로 재사용해 구조화.
+
+### 13.1. 워크플로우
+
+```python
+# 1. 템플릿 표 탐색 (예: 4-col 출장 실적 표)
+t05 = find_table_by_anchor(root, ["성명", "출 장 기 간", "출장국가(지역)", "출 장 목 적"])
+t05_wrapper = find_containing_paragraph(t05)
+
+# 2. deepcopy → 구조 변환 → 데이터 재작성
+def build_mapping_table_wrapper(template_wrapper, data_rows_3col):
+    new_wrap = deepcopy(template_wrapper)
+    strip_linesegarray(new_wrap)
+
+    tbl = next(new_wrap.iter(hp("tbl")), None)
+
+    # 2a. 불필요 컬럼 삭제 (4 → 3)
+    delete_column(tbl, 0)
+
+    # 2b. 남은 컬럼 width 재배치 (예: col1 ↔ col2 swap)
+    #     긴 컨텐츠가 들어갈 컬럼을 wide 슬롯으로 옮김
+    for row in tbl.findall(hp("tr")):
+        cells = row.findall(hp("tc"))
+        if len(cells) < 3: continue
+        sz1, sz2 = cells[1].find(hp("cellSz")), cells[2].find(hp("cellSz"))
+        w1 = sz1.get("width")
+        sz1.set("width", sz2.get("width"))
+        sz2.set("width", w1)
+
+    # 2c. 표 outer <hp:sz width> 갱신 — 삭제된 컬럼 폭 차감
+    first_row_cells = tbl.findall(hp("tr"))[0].findall(hp("tc"))
+    new_total = sum(int(c.find(hp("cellSz")).get("width"))
+                    for c in first_row_cells[:3])
+    tsz = tbl.find(hp("sz"))
+    if tsz is not None:
+        tsz.set("width", str(new_total))
+
+    # 2d. 헤더 행 텍스트 갱신
+    header_cells = tbl.findall(hp("tr"))[0].findall(hp("tc"))
+    for i, text in enumerate(["기관", "세션", "관계"]):
+        set_cell_text_flow(header_cells[i], text)
+
+    # 2e. 데이터 rows 재작성 (헤더 유지)
+    rebuild_table_data_rows(tbl, data_rows_3col)
+
+    return new_wrap
+
+# 3. 분석 paragraph 삽입 후 "관련 기관 및 발표 매핑" 뒤에 표 삽입
+heading_p = find_paragraph_by_text(root, "관련 기관 및 발표 매핑")
+tbl_wrap = build_mapping_table_wrapper(t05_wrapper, parsed_rows)
+heading_p.addnext(tbl_wrap)
+```
+
+### 13.2. 함정
+
+- **`<hp:sz width>` 갱신 누락**: `delete_column` 은 `colCnt` 만 갱신, outer
+  `<hp:sz width>` 는 유지. 실제 cellSz 합계와 불일치 시 HWP 가 빈 공간 렌더
+  또는 테두리 깨짐. **반드시 수동 갱신**.
+- **linesegarray 잔존**: deepcopy 한 wrapper `<hp:p>` 의 `<hp:linesegarray>` 를
+  `strip_linesegarray` 로 제거해야 HWP 가 재레이아웃.
+- **colAddr 재번호**: `delete_column` 이 내부적으로 처리. 별도 `renumber_table`
+  불필요 (이미 rebuild_table_data_rows 내에서 호출).
+- **템플릿 표 선택 기준**:
+  - colCnt 근접 (3→3 이상적, 4→3 1컬럼 삭제)
+  - rowspan/colspan 병합 **없는** 행을 템플릿으로 (있으면 `_reset_cell_span`
+    이 자동 해제하지만 레이아웃 예측성 감소)
+  - cellSz 총 width 가 페이지 폭 대비 적절 (너무 좁거나 넓으면 재조정 필요)
+- **중복 heading 매치**: `find_paragraph_by_text` 는 첫 매치만 반환. 같은 문구가
+  여러 번 나타나면 (예: KIAT/NC 양쪽의 "관련 기관 및 발표 매핑") 전체 순회로
+  모든 matches 수집.
+
+---
+
+## 14. 이미지 삽입 (PNG/JPG) — `image_utils.py` (v0.6)
+
+분석 다이어그램·차트·슬라이드 PNG 를 본문에 삽입해야 할 때 3단계 패턴으로
+처리. 기존 이미지 wrapper `<hp:p>` 을 템플릿으로 deepcopy 하면 복잡한
+`<hp:pic>` 내부 속성을 모두 자동 처리.
+
+### 14.1. 3단계 삽입 패턴
+
+```python
+import shutil
+from pathlib import Path
+from image_utils import (
+    register_image_in_hpf,
+    find_pic_wrapper_by_binary_id,
+    clone_pic_paragraph,
+    HWPUNIT_PER_PX,
+)
+
+# (1) BinData/ 에 파일 복사
+shutil.copy("risk_slide.png", unpacked / "BinData" / "image9.png")
+
+# (2) content.hpf 에 <opf:item> 등록 (idempotent, 마지막 image 뒤 auto-anchor)
+register_image_in_hpf(
+    unpacked / "Contents" / "content.hpf",
+    img_id="image9", href="BinData/image9.png", media_type="image/png",
+)
+
+# (3) section0.xml 에 <hp:pic> wrapper <hp:p> 삽입
+template = find_pic_wrapper_by_binary_id(root, "image5")   # 기존 이미지 재사용
+new_wrap = clone_pic_paragraph(
+    template,
+    binary_id="image9",
+    orig_px=(1280, 720),            # 원본 PNG 픽셀
+    display_w_hwpunit=42520,        # 문서 내 표시 폭 (~15cm)
+    pic_id=1900000009, instid=800000009, zorder=20,
+)
+target_paragraph.addnext(new_wrap)
+```
+
+### 14.2. HWPUNIT 변환 (1px @ 96DPI = 75 HWPUNIT)
+
+| 요소 | 값 | 비고 |
+|------|----|----|
+| `<hp:orgSz width/height>` | `px × 75` | 원본 픽셀 크기 × 75 |
+| `<hp:curSz width/height>` | display 목표 | 일반적 `42520 × ?` (≈15cm) |
+| `<hc:scaMatrix e1/e5>` | `disp_w / orig_w_hwpunit` | 약 0.44 |
+| `<hp:imgRect pt0..3>` | 원본 크기 직사각형 | (0,0)-(W,0)-(W,H)-(0,H) |
+| `<hp:imgClip right/bottom>` | 원본 크기 | clip 영역 |
+| `<hp:imgDim dimwidth/dimheight>` | 원본 크기 | |
+| `<hp:sz width/height>` | display 크기 | 페이지 레이아웃용 |
+
+### 14.3. 함정
+
+- **ID 충돌**: `<hp:pic id>`, `<hp:pic instid>`, `<hp:pic zOrder>` 는 문서 내
+  유일해야 한다. 기존 이미지 id 범위 확인 후 충돌 없는 값 선택.
+- **shapeComment 누락**: deepcopy 시 원본 파일명이 남음 → `clone_pic_paragraph`
+  가 자동 제거.
+- **linesegarray 잔존**: wrapper paragraph `<hp:linesegarray>` 는 원본 이미지 크기
+  기준으로 layout 계산. 제거 필수 (helper 가 자동 처리).
+- **content.hpf itemCnt 불일치**: `register_image_in_hpf` 는 `<opf:manifest>` 는
+  itemCnt 가 없어 자동으로 안전. (`<hh:bullets itemCnt>` 같은 헤더와 다름)
+- **이미지 파일 경로**: `href` 는 `BinData/imageN.ext` 상대 경로. Windows 절대
+  경로 사용 금지.
+
+### 14.4. PIL 기반 슬라이드 생성 (`generate_risk_slide.py`)
+
+NotebookLM 스타일 4행 [위험 요인 ▶ 대응 전략] 슬라이드를 Malgun Gothic 폰트로
+렌더. Gemini API 호출 없이 로컬 생성, 재현성 확보.
+
+```python
+from generate_risk_slide import render_risk_slide
+
+render_risk_slide(
+    out_path="mt8600_risk.png",
+    title_line1="위험요인 분석 및 대응 전략:",
+    title_line2="시장 위협 대비 KIMM 기술의 포지셔닝 (MT8600)",
+    rows=[
+        (["Wafer-level mass transfer",
+          "선행 상용화 (Aledia, PlayNitride 등)"],
+         ["Yield/Throughput 지표 공개 시,",
+          "8인치 연속 롤 전사의 우위 수치화 및 재평가."]),
+        # ... 최대 4쌍
+    ],
+)
+```
+
+CLI:
+```bash
+PYTHONUTF8=1 uv run python scripts/generate_risk_slide.py \
+    --out risk.png \
+    --title "위험요인 분석 및 대응 전략:" \
+    --subtitle "시장 위협 대비 기술 포지셔닝" \
+    --json rows.json
+```
+
+---
+
+## 15. 표 오른쪽 정렬 (wrapper paragraph paraPrIDRef 교체)
+
+`treatAsChar="1"` 인라인 표는 감싸는 `<hp:p>` 의 paragraph 정렬 속성을 따른다.
+RIGHT-alignment 를 원하면 wrapper `<hp:p>` 의 `paraPrIDRef` 를 RIGHT 정렬 스타일로
+교체.
+
+```python
+from table_utils import set_paragraph_style
+
+# RIGHT-aligned paraPr id 탐색 (header.xml 에서 grep):
+#   grep 'horizontal="RIGHT"' header.xml
+# 예: id=33 이면
+set_paragraph_style(tbl_wrapper_p, para_pr_id_ref="33")
+```
+
+적절한 RIGHT 스타일이 없으면 header.xml 에 추가 (12절 패턴 참조).
+
+## v0.6 추가된 helper 요약
+
+| 모듈 | 함수 | 용도 |
+|------|------|------|
+| `image_utils` | `register_image_in_hpf(hpf, id, href, mime)` | content.hpf 에 `<opf:item>` idempotent 추가 |
+| `image_utils` | `find_pic_wrapper_by_binary_id(root, id)` | 기존 이미지 wrapper `<hp:p>` 탐색 (템플릿) |
+| `image_utils` | `clone_pic_paragraph(tpl, binary_id, orig_px, ...)` | 템플릿 deepcopy + 크기/scale/binary_id 재설정 |
+| `generate_risk_slide` | `render_risk_slide(...)` | 4행 위험-대응 슬라이드 PNG (PIL + Malgun Gothic) |

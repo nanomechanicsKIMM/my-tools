@@ -632,6 +632,124 @@ def clone_paragraph_with_text(template_p, text: str):
     return new_p
 
 
+def set_paragraph_style(
+    p,
+    para_pr_id_ref: Optional[str] = None,
+    char_pr_id_ref: Optional[str] = None,
+    page_break: Optional[bool] = None,
+) -> None:
+    """<hp:p> 의 paragraph/run 스타일 속성을 명시적으로 덮어쓴다.
+
+    - `para_pr_id_ref`: `<hp:p paraPrIDRef>` 변경. 글머리표 계층 (❍ / - / 없음) 제어.
+    - `char_pr_id_ref`: 내부 모든 `<hp:run>` 의 `charPrIDRef` 일괄 교체. 글꼴·굵기·색
+      변경. None 이면 건드리지 않는다.
+    - `page_break`: True → `pageBreak="1"`, False → `"0"`. None 유지.
+
+    **핵심 사용 처**: 한 개의 템플릿 paragraph(예: `paraPrIDRef="41"` = ❍) 를
+    deepcopy 한 뒤, 계층별로 다른 글머리표 레벨을 적용하고 싶을 때.
+    템플릿을 복제만 하면 원본의 글머리표가 **모든 문단에 상속**되므로,
+    본문 paragraph 에는 `para_pr_id_ref` 를 no-bullet 스타일(예: `"1"`)로
+    바꾸어야 한다.
+    """
+    if para_pr_id_ref is not None:
+        p.set("paraPrIDRef", str(para_pr_id_ref))
+    if char_pr_id_ref is not None:
+        for run in p.findall(hp("run")):
+            run.set("charPrIDRef", str(char_pr_id_ref))
+    if page_break is not None:
+        p.set("pageBreak", "1" if page_break else "0")
+
+
+def clone_paragraph_with_style(
+    template_p,
+    text: str,
+    para_pr_id_ref: Optional[str] = None,
+    char_pr_id_ref: Optional[str] = None,
+    page_break: Optional[bool] = None,
+):
+    """템플릿을 deepcopy 해서 `text` 를 주입하고 스타일 속성을 덮어쓴다.
+
+    `clone_paragraph_with_text` + `set_paragraph_style` 의 편의 래퍼.
+    계층적 글머리표 블록을 만들 때 한 템플릿만으로 여러 레벨을 표현할 수 있다.
+
+    Example:
+        top_bullet = clone_paragraph_with_style(tpl, "관심 세션 심층 분석",
+                                                para_pr_id_ref="41")   # ❍
+        sub_bullet = clone_paragraph_with_style(tpl, "가. 협력 가능성",
+                                                para_pr_id_ref="42")   # -
+        body       = clone_paragraph_with_style(tpl, "Samsung 은 ...",
+                                                para_pr_id_ref="1")    # no bullet
+    """
+    new_p = clone_paragraph_with_text(template_p, text)
+    set_paragraph_style(
+        new_p,
+        para_pr_id_ref=para_pr_id_ref,
+        char_pr_id_ref=char_pr_id_ref,
+        page_break=page_break,
+    )
+    return new_p
+
+
+def insert_styled_paragraphs(
+    anchor_p,
+    items: Iterable[tuple],
+    base_template,
+) -> int:
+    """`anchor_p` 뒤에 per-item 스타일을 가진 paragraph 를 순서대로 삽입.
+
+    `insert_paragraphs_after` 가 (kind → template) 맵 기반이라면 이 함수는
+    (text, paraPrIDRef, charPrIDRef) 직접 지정 방식이다. 한 템플릿만으로
+    계층적 글머리표 블록(❍ → - → plain body) 을 구성할 때 사용.
+
+    Args:
+        anchor_p: 기준 <hp:p> (삽입 직전 paragraph)
+        items: iterable of tuples. 2~3 튜플 지원:
+            - (text, para_pr_id_ref)
+            - (text, para_pr_id_ref, char_pr_id_ref)
+        base_template: 복제 원본 <hp:p> (한 개). 내부 run/t 구조가 텍스트 주입
+            가능해야 한다.
+
+    Returns:
+        삽입된 paragraph 수.
+
+    Example:
+        tbl = find_table_by_anchor(root, ["날짜", "Session"])
+        anchor = find_containing_paragraph(tbl)
+        base = find_paragraph_by_text(root, "행사의 중요성")   # paraPrIDRef=41
+        insert_styled_paragraphs(anchor, [
+            ("관심 세션 심층 분석",            "41"),   # ❍ 최상위
+            ("DW 2026 세션을 두 과제 관점 …", "1"),    # 본문(글머리표 없음)
+            ("KIAT 국제공동과제 — MIT 컨소시엄", "41"),  # ❍
+            ("관련 기관 및 발표 매핑",         "42"),   # - 하위
+            ("Samsung Display — ...",        "42"),   # - 하위
+            ("가. 협력 가능성",               "42"),   # - 하위
+            ("Samsung Display 는 ...",       "1"),    # 본문
+        ], base)
+    """
+    cur = anchor_p
+    inserted = 0
+    for item in items:
+        if len(item) == 2:
+            text, para_pr = item
+            char_pr = None
+        elif len(item) == 3:
+            text, para_pr, char_pr = item
+        else:
+            raise ValueError(
+                f"insert_styled_paragraphs: item 튜플 길이는 2 또는 3 (got {len(item)})"
+            )
+        new_p = clone_paragraph_with_style(
+            base_template,
+            text,
+            para_pr_id_ref=para_pr,
+            char_pr_id_ref=char_pr,
+        )
+        cur.addnext(new_p)
+        cur = new_p
+        inserted += 1
+    return inserted
+
+
 def insert_paragraphs_after(
     anchor_p,
     items: Iterable[tuple[str, str]],
