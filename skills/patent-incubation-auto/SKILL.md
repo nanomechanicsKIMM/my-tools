@@ -88,6 +88,7 @@ Step 5: 선행특허 조사 (Phase 5) ─────── sonnet 에이전트
 Step 5b: 중간 진행 보고 ────────────── 사용자에게 진행 상황 표시
 Step 6: 발명내용설명서 작성 (Phase 6) ── opus 에이전트
 Step 6b: 도면 생성 (Phase 6b) ───────── sonnet 에이전트
+Step 6c: 인용문헌 정합성 검증 & PDF (Phase 6c) ── sonnet 에이전트
 Step 7: HWPX 변환 (Phase 7) ─────────── sonnet 에이전트
 Step 8: 최종 출력 및 안내 ──────────── 사용자에게 결과 안내
 ```
@@ -531,6 +532,87 @@ manifest 업데이트:
 
 ---
 
+## Step 6c: 인용문헌 정합성 검증 & PDF 저장 (Phase 6c)
+
+**Agent**: `agents/phase6c-reference-verifier.md`
+**Model**: sonnet
+
+발명내용설명서 MD에 기재된 모든 인용문헌(학술 논문·KR/외국 특허·DOI·보고서)에 대해 외부 DB(KIPRIS Plus, CrossRef, OpenAlex, Semantic Scholar, Google Patents)로 직접 접속하여 번호·제목·저자·출원인의 정합성을 확인한다. 검증된 인용에는 `(정합 확인!)` 마커를, 불일치 인용에는 `(정합 불일치 — 수동 확인 필요)` 마커를 부록 C에 삽입하고, 확보 가능한 원문 PDF를 `{output_dir}/reference/` 에 저장한다.
+
+### KIPRIS API 키 로드
+
+```bash
+if [ -f "C:/Users/JHKIM/Claude_Work/.env" ]; then
+  set -a
+  eval "$(cat 'C:/Users/JHKIM/Claude_Work/.env' | sed 's/^[[:space:]]*//' | grep -v '^#')"
+  set +a
+fi
+```
+
+### 에이전트 호출
+
+```
+Agent(
+  subagent_type="general-purpose",
+  model="sonnet",
+  prompt="Read {SKILL_ROOT}/agents/phase6c-reference-verifier.md for instructions.
+         Read the Phase 6 output MD file (the latest vN.md in {output_dir}) for citation extraction.
+         Read {output_dir}/prior_art.json for Phase 5 patent metadata.
+
+         KIPRIS .env file: {KIPRIS_ENV_FILE}
+         Patent PDF downloader: ~/.claude/skills/_shared/scripts/download_patent_pdf.py
+         Zettelkasten 로컬 캐시: D:/Zettelkasten/References/ (학술 논문 1차 조회 경로)
+
+         Before calling download scripts, load env vars:
+         set -a && eval \"$(cat '{KIPRIS_ENV_FILE}' | sed 's/^[[:space:]]*//' | grep -v '^#')\" && set +a
+
+         Input: {manifest.input}
+         Outputs:
+           (1) {output_dir}/reference/ (다운로드된 PDF 모음)
+           (2) {output_dir}/reference_verification.json
+           (3) 업데이트된 Phase 6 MD (버전 번호 유지, (정합 확인!) 마커 및 C.5 요약 추가)
+
+         CRITICAL REQUIREMENTS:
+         1. KR 특허는 download_patent_pdf.py --kr --verify 로 출원번호-제목 자동 대조
+         2. 학술 논문은 CrossRef DOI 확인 → OpenAlex OA URL → Zettelkasten 캐시 순으로 PDF 확보
+         3. 불일치 시 PDF 폐기하고 (정합 불일치) 마커
+         4. KIMM 내부 자문(구두)은 검증 대상 아님 — 스킵
+         5. 부록 C.5 섹션 새로 추가하여 검증 요약표 작성
+         6. §1~§9 본문은 수정하지 않음 (inline 인용 번호는 부록에서 검증된 것을 참조)"
+)
+```
+
+### Graceful Degradation
+
+- KIPRIS API 실패 시: 해당 KR 특허는 `manual_review`, 다른 인용은 계속 처리
+- Google Patents 봇 차단 시: WebFetch 폴백 → 그래도 실패 시 `manual_review`
+- CrossRef/Semantic Scholar 실패 시: Zettelkasten 캐시만으로 PDF 확보 시도, 메타데이터는 `partial`
+- Zettelkasten 접근 불가 시: 메타데이터 검증만 진행, PDF는 skipped
+
+### 출력 MD 업데이트 규칙
+
+부록 C의 각 항목 **뒤에** 마커를 삽입한다 (기존 텍스트는 수정하지 않음):
+
+- 완전 검증: `... 2017. (10 μm 수준 micro-LED EQE 저하 분석) (정합 확인!) — [PDF](reference/xxx.pdf)`
+- PDF 미확보: `... (정합 확인! — PDF 미확보)`
+- 부분 일치: `... (정합 부분 확인 — 수동 재검토 필요)`
+- 불일치: `... (정합 불일치 — 수동 확인 필요)`
+- KIMM 내부 자문(C.2): 마커 삽입하지 않음
+
+부록 C 하단에 새 하위 섹션 `### C.5 정합성 검증 요약` 을 추가한다 (phase6c-reference-verifier.md 스펙 참조).
+
+manifest 업데이트:
+```json
+"phase6c": {
+  "status": "completed|degraded",
+  "output": "reference_verification.json",
+  "pdf_count": N,
+  "verified": K, "mismatch": M, "manual_review": R
+}
+```
+
+---
+
 ## Step 7: HWPX 변환 (Phase 7)
 
 **Agent**: `agents/phase7-hwpx-converter.md`
@@ -602,10 +684,12 @@ manifest 최종 업데이트:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ### 출력 파일
-- 📄 `{output_dir}/(YYYYMMDD 발명자) {발명명칭}vN.md` — Obsidian 호환 마크다운 (9개 섹션 + 부록 3개)
+- 📄 `{output_dir}/(YYYYMMDD 발명자) {발명명칭}vN.md` — Obsidian 호환 마크다운 (9개 섹션 + 부록 3개, 부록 C에 (정합 확인!) 마커 포함)
 - 📋 `{output_dir}/(YYYYMMDD 발명자) {발명명칭}vN.hwpx` — KIMM 양식 한글 파일
 - 🔍 `{output_dir}/{발명명칭}_선행특허분석.md` — KIPRIS 선행특허 분석
 - 🎨 `{output_dir}/diagrams/` — 기술 도면 {N}개
+- 📚 `{output_dir}/reference/` — 인용문헌 원문 PDF {K}건 (학술 논문 + 선행특허)
+- 🧾 `{output_dir}/reference_verification.json` — 인용문헌 정합성 검증 로그
 
 > [!important] 파일명 규칙
 > - MD와 HWPX 파일은 `(YYYYMMDD 발명자) 발명명칭vN` 형식으로 명명
@@ -639,6 +723,8 @@ manifest 최종 업데이트:
 | Phase 5 | KIPRIS API 실패 | graceful degradation, 수동 보완 안내 |
 | Phase 6 | 섹션/부록 누락 | 1회 재생성, 이후 부분 결과 제공 |
 | Phase 6b | matplotlib 실패 | Mermaid만 발명내용설명서 MD에 포함 |
+| Phase 6c | KIPRIS/CrossRef API 실패 | 해당 인용은 manual_review, 나머지 계속 진행 |
+| Phase 6c | PDF 첫 페이지 제목 불일치 | PDF 폐기 + (정합 불일치) 마커 삽입 |
 | Phase 7 | HWPX 변환 실패 | MD fallback |
 | Phase 7 | validate.py 실패 | MD fallback + 에러 로그 |
 
@@ -656,7 +742,7 @@ manifest 최종 업데이트:
 1. Phase 1 → Phase 2 전환
 2. Phase 4 → Phase 5 전환
 3. Step 5b 중간 진행 보고 (표시만)
-4. Phase 6 → Phase 6b → Phase 7 전환
+4. Phase 6 → Phase 6b → Phase 6c → Phase 7 전환
 
 ### 자동 진행 모드 활성화 조건
 
