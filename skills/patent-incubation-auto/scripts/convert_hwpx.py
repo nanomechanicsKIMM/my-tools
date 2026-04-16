@@ -58,16 +58,36 @@ SECTION_STYLES = {
     9: ("12", "6"),
 }
 
-# HWPX 렌더링 상수
+# HWPX 렌더링 상수 (v10_user.hwpx 역공학 결과)
 LINE_HEIGHT = 1600       # vertpos 간격 (한 줄 높이, hwp unit)
-CHAR_WIDTH_AVG = 500     # 평균 글자 폭 (hwp unit, 한글 기준)
-FIRST_LINE_FLAGS = "2490368"
-CONT_LINE_FLAGS = "1441792"
+CHAR_WIDTH_AVG = 850     # 평균 한글 글자 폭 (cell width 41672 / 48 chars ≈ 868)
+FIRST_LINE_FLAGS = "393216"    # 0x60000 — 한/글 에디터가 저장하는 first line 플래그
+CONT_LINE_FLAGS = "1441792"    # 0x160000 — continuation line 플래그
+
+# ─── 계층적 글머리기호 상수 ─────────────────────────────
+BULLET_CHARS = {0: "●", 1: "○", 2: "▪", 3: "-"}
+# paraPrIDRef는 paraProperties 배열 인덱스로 조회되므로 IDs가 순차적이어야 함.
+# 기존 템플릿 paraPr(0..max) 뒤에 이어붙일 시작 ID는 ensure_bullet_parapr_defs에서 동적 결정.
+BULLET_PARA_PR_BASE = None  # 동적 계산 — 전역 변수로 ensure_bullet_parapr_defs에서 설정
+HH_NS = "http://www.hancom.co.kr/hwpml/2011/head"
+# 텍스트 수준 들여쓰기 (전각 공백 U+3000 — 한글 테이블 셀에서 유일하게 작동하는 들여쓰기)
+BULLET_INDENT_TEXT = {0: "", 1: "\u3000\u3000", 2: "\u3000\u3000\u3000\u3000", 3: "\u3000\u3000\u3000\u3000\u3000\u3000"}
+# paraPr 기반 내어쓰기 (v10_user.hwpx 역공학 결과 — 사용자가 한/글에서 수동 설정한 값)
+# 형식: {level: (left, intent_case_HwpUnitChar, intent_default_HWPUNIT_legacy)}
+# case는 2016 HwpUnitChar 네임스페이스용, default는 2011 HWPUNIT 레거시용 (비율 1:2)
+# left=0 유지, intent 음수 → 연속줄이 left-intent 위치로 밀려 내어쓰기 형성
+BULLET_MARGIN = {
+    0: (0,      0,     0),        # L0 ●: 짧은 제목용, 내어쓰기 없음
+    1: (0,  -3072,  -6144),       # L1 ○: 2 full-width + bullet 폭 만큼 hang (user paraPr 15)
+    2: (0,  -4572,  -9144),       # L2 ▪: 4 full-width + bullet (user paraPr 17)
+    3: (0,  -6072, -12144),       # L3 -: 6 full-width + bullet (선형 보간)
+}
 
 
 # ─── MD 파싱 ─────────────────────────────────────────
 def parse_disclosure(md_path):
-    """disclosure.md에서 §1~§9 섹션 본문 추출 (부록 제외)"""
+    """disclosure.md에서 §1~§9 섹션 본문 추출 (부록 제외).
+    markdown bullet(`- `, `* `) 구조는 들여쓰기를 포함하여 그대로 보존한다."""
     with open(md_path, "r", encoding="utf-8") as f:
         text = f.read()
 
@@ -103,6 +123,209 @@ def parse_disclosure(md_path):
         sections[k] = txt
 
     return sections
+
+
+# ─── 계층적 글머리기호 처리 ────────────────────────────
+def has_bullet_structure(text):
+    """텍스트에 markdown 글머리기호가 하나라도 있는지 확인."""
+    return bool(re.search(r"^\s*[-*•]\s+\S", text, re.MULTILINE))
+
+
+def parse_bullet_lines(text):
+    """텍스트에서 markdown 계층적 글머리기호를 파싱한다.
+    규칙:
+      - 공백 2칸 = 1 레벨 (최대 3 레벨)
+      - 기호: `-`, `*`, `•`
+      - bullet 아닌 줄은 직전 bullet의 레벨로 연속 문단(본문) 처리하여
+        글머리기호 위치에 맞춘 들여쓰기를 유지한다.
+    Returns: list of (level: int 0~3, is_bullet: bool, content: str)
+    """
+    result = []
+    bullet_re = re.compile(r"^(\s*)[-*•]\s+(.+)$")
+    current_level = 0
+    has_context = False
+
+    for raw in text.split("\n"):
+        if not raw.strip():
+            continue
+        m = bullet_re.match(raw)
+        if m:
+            level = min(len(m.group(1)) // 2, 3)
+            content = m.group(2).strip()
+            result.append((level, True, content))
+            current_level = level
+            has_context = True
+        else:
+            level = current_level if has_context else 0
+            result.append((level, False, raw.strip()))
+    return result
+
+
+def ensure_bullet_parapr_defs(header_path):
+    """header.xml에 계층적 글머리기호용 paraPr id=100~103이 없으면 추가한다.
+    paraPr id=14(BULLET)를 템플릿으로 복제 후 margin.left만 단계별로 조정.
+    글머리기호 문자는 텍스트로 삽입하므로 heading type을 NONE으로 변경한다."""
+    ET.register_namespace("hh", HH_NS)
+
+    # 원본 XML에서 다른 네임스페이스도 보존하기 위해 수동 등록
+    for event, elem in ET.iterparse(header_path, events=["start-ns"]):
+        prefix, uri = elem
+        if prefix and prefix != "hh":
+            try:
+                ET.register_namespace(prefix, uri)
+            except ValueError:
+                pass
+
+    tree = ET.parse(header_path)
+    root = tree.getroot()
+
+    # paraProperties 컨테이너 찾기
+    container = None
+    for elem in root.iter():
+        if elem.tag.endswith("}paraProperties"):
+            container = elem
+            break
+    if container is None:
+        print("   [경고] paraProperties 컨테이너 없음 — bullet paraPr 생성 생략")
+        return False
+
+    existing_paraprs = container.findall(f"{{{HH_NS}}}paraPr")
+    existing_ids = {p.get("id") for p in existing_paraprs}
+    # paraPrIDRef가 배열 인덱스로 조회되므로 기존 ID 다음부터 순차 할당
+    existing_int_ids = [int(p.get("id")) for p in existing_paraprs if p.get("id", "").isdigit()]
+    base = max(existing_int_ids) + 1 if existing_int_ids else 0
+
+    global BULLET_PARA_PR_BASE
+    BULLET_PARA_PR_BASE = base
+
+    # 템플릿 paraPr id=14 (BULLET level=0) 찾기
+    template_pp = None
+    for p in existing_paraprs:
+        if p.get("id") == "14":
+            template_pp = p
+            break
+    if template_pp is None:
+        print("   [경고] 템플릿 paraPr id=14 없음 — bullet paraPr 생성 생략")
+        return False
+
+    added = 0
+    for level in range(4):
+        new_id = str(base + level)
+        if new_id in existing_ids:
+            continue
+        new_pp = deepcopy(template_pp)
+        new_pp.set("id", new_id)
+        # v10_user.hwpx 분석 결과: 사용자 paraPr 15/17은 snapToGrid="1" 사용
+        # snapToGrid="1"이 한/글이 paraPr.intent를 렌더링 시 적용하도록 트리거
+        new_pp.set("snapToGrid", "1")
+        # 자동 bullet 렌더링 비활성화 (문자는 텍스트로 삽입)
+        heading = new_pp.find(f"{{{HH_NS}}}heading")
+        if heading is not None:
+            heading.set("type", "NONE")
+            heading.set("idRef", "0")
+            heading.set("level", "0")
+        # margin 조정: case(HwpUnitChar 2016) vs default(legacy HWPUNIT) 구분 설정
+        # user paraPr 15/17 패턴: case = default/2 (HwpUnitChar : legacy = 1 : 2)
+        left_val, intent_case, intent_default = BULLET_MARGIN[level]
+        switch = new_pp.find(f"{{{HP_NS}}}switch")
+        if switch is None:
+            for child in new_pp:
+                if child.tag.endswith("}switch"):
+                    switch = child
+                    break
+        blocks = []
+        if switch is not None:
+            case_blk = None
+            default_blk = None
+            for child in switch:
+                if child.tag.endswith("}case"):
+                    case_blk = child
+                elif child.tag.endswith("}default"):
+                    default_blk = child
+            blocks = [(case_blk, intent_case), (default_blk, intent_default)]
+        for blk, intent_val in blocks:
+            if blk is None:
+                continue
+            margin = None
+            for ch in blk:
+                if ch.tag.endswith("}margin"):
+                    margin = ch
+                    break
+            if margin is None:
+                continue
+            for mchild in margin:
+                tag = mchild.tag.split("}")[-1] if "}" in mchild.tag else mchild.tag
+                if tag == "left":
+                    mchild.set("value", str(left_val))
+                elif tag == "intent":
+                    mchild.set("value", str(intent_val))
+        container.append(new_pp)
+        added += 1
+
+    if added:
+        # itemCnt 업데이트
+        try:
+            current_cnt = int(container.get("itemCnt", "0"))
+            container.set("itemCnt", str(current_cnt + added))
+        except ValueError:
+            pass
+        tree.write(header_path, encoding="utf-8", xml_declaration=True)
+        print(f"   bullet paraPr {added}개 추가 (id={BULLET_PARA_PR_BASE}..{BULLET_PARA_PR_BASE+3})")
+    return True
+
+
+def replace_cell_with_bullets(cell, text, base_char_pr="11"):
+    """셀 내용을 계층적 글머리기호 구조로 채운다.
+    한글 테이블 셀은 paraPr margin을 무시하므로 순수 텍스트 수준에서
+    들여쓰기(BULLET_INDENT_TEXT)와 내어쓰기(긴 텍스트 분할 + BULLET_CONT_TEXT)를
+    구현한다. 연속 줄은 글머리기호 뒤 텍스트 시작 위치에 정렬된다."""
+    sublist = cell.find(f"{{{HP_NS}}}subList")
+    if sublist is None:
+        return 0
+
+    horzsize = get_cell_horzsize(cell)
+
+    to_remove = []
+    for child in list(sublist):
+        tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+        if tag in ("p", "pic"):
+            to_remove.append(child)
+    for elem in to_remove:
+        sublist.remove(elem)
+
+    parsed = parse_bullet_lines(text)
+    if not parsed:
+        parsed = [(0, False, " ")]
+
+    cumulative_vert = 0
+    for level, is_bullet, content in parsed:
+        para_pr_id = str(BULLET_PARA_PR_BASE + level)
+        left_val = BULLET_MARGIN[level][0]
+        available_horz = max(5000, horzsize - left_val)
+
+        indent = BULLET_INDENT_TEXT.get(level, "")
+        if is_bullet:
+            marker = BULLET_CHARS.get(level, "-")
+            display = f"{indent}{marker} {content}"
+        else:
+            display = f"{indent}{content}"
+        if not display.strip():
+            display = " "
+
+        escaped = escape(display)
+        p_elem, num_lines = make_paragraph(
+            escaped, para_pr_id, base_char_pr,
+            vert_offset=cumulative_vert,
+            horzsize=available_horz,
+        )
+        sublist.append(p_elem)
+        cumulative_vert += num_lines * LINE_HEIGHT
+
+    csz = cell.find(f"{{{HP_NS}}}cellSz")
+    if csz is not None:
+        new_height = max(cumulative_vert + LINE_HEIGHT, int(csz.get("height", "0")))
+        csz.set("height", str(new_height))
+    return cumulative_vert
 
 
 # ─── lineseg 계산 ─────────────────────────────────────
@@ -516,6 +739,7 @@ def main():
 
     print("3. 네임스페이스 등록 및 XML 파싱...")
     section_xml = os.path.join(tmp_dir, "Contents", "section0.xml")
+    header_xml = os.path.join(tmp_dir, "Contents", "header.xml")
 
     namespaces = {}
     for event, elem in ET.iterparse(section_xml, events=["start-ns"]):
@@ -524,6 +748,9 @@ def main():
         namespaces["hc"] = HC_NS
     for prefix, uri in namespaces.items():
         ET.register_namespace(prefix, uri)
+
+    print("3b. 계층적 글머리기호용 paraPr(100~103) 추가...")
+    ensure_bullet_parapr_defs(header_xml)
 
     tree = ET.parse(section_xml)
     root = tree.getroot()
@@ -543,7 +770,10 @@ def main():
 
         content = sections.get(sec_num, " ")
 
-        if sec_num == 9:
+        if sec_num != 1 and sec_num != 2 and has_bullet_structure(content):
+            # 계층적 글머리기호 구조 감지 → bullet 렌더러 사용 (§9 포함)
+            total_vert = replace_cell_with_bullets(cell, content, base_char_pr=char_pr)
+        elif sec_num == 9:
             total_vert = replace_section9_styled(cell, content)
         else:
             total_vert = replace_cell_content(cell, content, para_pr, char_pr)

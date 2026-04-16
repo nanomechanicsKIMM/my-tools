@@ -30,12 +30,18 @@ python "{SKILL_ROOT}/scripts/convert_hwpx.py" \
 ```
 
 스크립트가 수행하는 작업:
-1. Phase 6 출력 MD에서 §1~§9 추출 (부록 제외, 마크다운 서식 제거)
-2. 템플릿 HWPX 해제 → section0.xml 파싱
-3. 각 셀의 모든 hp:p 제거 후 새 단락 삽입 (lineseg vertpos 누적 계산)
-4. §9에 diagrams/*.png 삽입 (hp:pic + BinData + content.hpf 업데이트)
-5. 템플릿 image1.bmp 제외
-6. fix_namespaces + validate 실행
+1. Phase 6 출력 MD에서 §1~§9 추출 (부록 제외, 마크다운 서식 제거; **markdown 계층 bullet `- `와 들여쓰기는 보존**)
+2. 템플릿 HWPX 해제 → section0.xml + header.xml 파싱
+3. header.xml에 계층 글머리기호용 paraPr id=100~103 자동 주입 (기존 BULLET paraPr 14를 복제하여 margin.left만 0/1000/2000/3000 HWPUNIT로 단계별 조정, heading type=NONE으로 변경)
+4. 각 셀의 모든 hp:p 제거 후 새 단락 삽입 (lineseg vertpos 누적 계산)
+   - **§3~§8 중 markdown bullet이 있는 섹션**은 `replace_cell_with_bullets()`로 계층 렌더링:
+     - 레벨 0/1/2/3 → paraPrIDRef 100/101/102/103 → 좌 여백 0/1000/2000/3000 HWPUNIT
+     - 각 bullet 앞에 `●`, `○`, `▪`, `-` 문자를 텍스트로 삽입
+     - bullet 아닌 연속 줄은 **직전 bullet 레벨로 자동 정렬** (글머리기호 위치에 hanging indent)
+   - 그 외 섹션 또는 bullet 없는 섹션은 기존 `replace_cell_content()`로 평 단락 처리
+5. §9에 diagrams/*.png 삽입 (hp:pic + BinData + content.hpf 업데이트)
+6. 템플릿 image1.bmp 제외
+7. fix_namespaces + validate 실행
 
 스크립트 실행이 성공하면 Phase 7 완료. 실패 시 아래 수동 절차 참조.
 

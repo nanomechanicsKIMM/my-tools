@@ -55,6 +55,25 @@ assets/      → {SHARED_SKILL_ROOT}/assets/
 | HWPX §1~§9 | **금지** | TRIZ, IFR, 모순 매트릭스, 원리 번호 등 불포함 |
 | **Gate 표시** | **번역 필수** | 모든 Gate에서 TRIZ 용어를 일반 기술 언어로 번역하여 제시 |
 
+### 문서 스타일 규칙 (본문 전 섹션 공통)
+
+- **개조식 문체 필수 (§1 제외)**: 모든 문장을 `~함.`, `~있음.`, `~필요함.`, `~됨.`, `~임.`, `~가능함.` 등으로 종결한다. `~이다/~한다/~였다` 평서체 **금지**.
+- **상세 설명 동반**: 짧게 자르지 말고 한 문장 안에 조건·수치·재료·메커니즘·인과를 충분히 담는다. "상세한 설명이 추가된 개조식"이 핵심.
+- **§6 계층적 글머리기호 필수**: `6.1 / 6.2 / 6.1.1` 숫자 하위섹션 **금지**. markdown `- ` + 공백 2칸 = 1 레벨(최대 3레벨) 사용. convert_hwpx.py가 HWPX 변환 시 ●/○/▪/- 계층 bullet + 내어쓰기(hanging indent)로 자동 렌더링.
+
+### 참고문헌 정합 검증 규칙 (필수)
+
+§9.4 참고문헌 및 본문 인용의 모든 외부 문헌(논문·특허)은:
+
+1. **DOI 링크 기재** (논문): `https://doi.org/10.XXXX/...` 형식
+2. **KIPRIS 링크 기재** (한국 특허): `https://doi.org/10.8080/10YYYYNNNNNNN` 형식
+3. **Google Scholar 또는 KIPRIS API로 내용 검증 후** 문헌 설명 끝에 **"(정합 확인!)"** 부착
+4. 검증 불가(내부 메모 등)는 `외부 공개 DOI 없음 — 정합 확인 대상 아님` 표기
+
+**KIPRIS API 키**: `{KIPRIS_ENV_FILE}`의 `KIPRIS_REST_AccessKey` 사용.
+
+**잘못된 인용 탐지 패턴**: 저자·제목·저널·연도 조합이 실제 논문과 다르거나, 같은 PII가 서로 다른 참고문헌에 중복 사용되면 **환각 의심** → 재검증 필수.
+
 ---
 
 ## 워크플로우 전체 구조
@@ -741,6 +760,18 @@ Agent(
          After replacement: run fix_namespaces.py, then validate.py."
 )
 ```
+
+### HWPX 변환 특성 (v15 기준)
+
+`convert_hwpx.py`는 다음 규칙으로 bullet/내어쓰기를 렌더링한다:
+
+1. **paraPrIDRef 순차 ID**: header.xml의 기존 `paraPr(0..max)` 뒤에 순차 ID로 새 paraPr 추가. paraPrIDRef는 배열 인덱스로 조회되므로 건너뛴 ID(예: 100)는 `paraPr[0]` fallback되어 intent 무시됨.
+2. **paraPr.margin.intent 음수**: L1=-3072(case)/-6144(default), L2=-4572/-9144, L3=-6072/-12144. case(2016 HwpUnitChar) : default(legacy HWPUNIT) = 1:2 비율.
+3. **snapToGrid="1"**: intent 렌더링 활성화 필수.
+4. **lineseg flags**: 첫줄 `393216`, 연속줄 `1441792`. `2490368`(wrap 없음 신호) 사용 금지.
+5. **텍스트 전각 공백**: 테이블 셀 내 paraPr.left가 무시되므로 U+3000으로 시각적 계층 들여쓰기.
+
+상세 규칙: `{SHARED_SKILL_ROOT}/reference/hwpx-format-insights.md` 참조.
 
 ### Fallback
 
