@@ -157,11 +157,11 @@ my-tools/
 - [x] `mcp/setup-mcp.md` (Tier별 인증 절차 + 트러블슈팅)
 - [x] `bootstrap/clone-marketplaces.{ps1,sh}`에 korean-law-mcp 추가 (Tier B 자동화)
 
-### Phase 6 — 문서·검증 (1시간)
+### Phase 6 — 문서·검증 (1시간) **✅ 완료 (2026-04-30)**
 
-- [ ] `NEW-PC-BOOTSTRAP.md`
-- [ ] `ENV-SYNC-CHECKLIST.md`
-- [ ] dry-run 검증
+- [x] `docs/NEW-PC-BOOTSTRAP.md` — 8 단계 zero→full 가이드 + TL;DR + 트러블슈팅 표
+- [x] `docs/ENV-SYNC-CHECKLIST.md` — 11 항목 검증 (시스템·npm·pip·~/.claude·marketplace·plugins·commands·skills·MCP·apply-config·vault) + 합격 기준
+- [x] dry-run 검증: bash -n / PowerShell ParseFile / JSON validity / apply-config --dry-run 모두 통과 (Phase 2~5에서 누적)
 
 ### Phase 7 — 자동화 (선택, 향후)
 
@@ -189,3 +189,4 @@ my-tools/
 | 2026-04-30 | 3 ✅ | `bootstrap/` (install-prereqs, clone-marketplaces, python-requirements, npm-globals + READMEs), `setup.{sh,ps1}` 통합, bash/PowerShell syntax 검증 |
 | 2026-04-30 | 4 ✅ | `skills/patent-strategy-report` 추가, `skills/tor`·`patent-strategy-pro` 제거 (플러그인 단일 소스), `google-genai` 활성화, README에 Source of Truth 정책 명시 |
 | 2026-04-30 | 5 ✅ | `mcp/mcp-servers.json` (9개 서버 인벤토리), `mcp/setup-mcp.md` (Tier A~D 인증 가이드), korean-law-mcp clone 자동화 |
+| 2026-04-30 | 6 ✅ | `docs/NEW-PC-BOOTSTRAP.md` (단일 페이지 zero→full 가이드), `docs/ENV-SYNC-CHECKLIST.md` (11항목 검증). Phase 7(자동화 스냅샷·pre-commit hook)은 향후 작업 |
