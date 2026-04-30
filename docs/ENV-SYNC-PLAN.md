@@ -120,12 +120,14 @@ my-tools/
 - [x] 외부 marketplace 디렉토리 `git remote -v` 수집 (3개)
 - [x] 결과를 `snapshots/DESKTOP-L0USAAE-20260430.md`에 저장
 
-### Phase 2 — 설정 템플릿화 (30분)
+### Phase 2 — 설정 템플릿화 (30분) **✅ 완료 (2026-04-30)**
 
-- [ ] settings.json → 템플릿 변환 (placeholder 도입)
-- [ ] CLAUDE.md → 템플릿
-- [ ] `apply-config.ps1` 작성
-- [ ] 슬래시 명령 8개 → `commands/` 복사
+- [x] settings.json → `claude-config/settings.json.template` (3종 placeholder: `{{USER_HOME}}`, `{{USER_HOME_BS}}`, `{{USER_HOME_POSIX}}`)
+- [x] CLAUDE.md → `claude-config/CLAUDE.md.template` (14.5 KB verbatim)
+- [x] `apply-config.py` 작성 — Python 메인 (sed가 백슬래시에서 깨져 Python으로 재구현)
+- [x] `apply-config.ps1` / `.sh` — Python wrapper
+- [x] 슬래시 명령 8개 → `commands/` 복사
+- [x] `--dry-run` 모드로 검증: 모든 placeholder 정확 매핑, JSON validity 통과
 
 ### Phase 3 — 부트스트랩 스크립트 (60분)
 
@@ -173,3 +175,4 @@ my-tools/
 |---|---|---|
 | 2026-04-30 | 0 | 본 plan 작성 + 커밋 |
 | 2026-04-30 | 1 ✅ | `snapshots/DESKTOP-L0USAAE-20260430.md` — 갭 측정, 외부 marketplace 3개 식별, 누락 스킬 1건 (`patent-strategy-report`) |
+| 2026-04-30 | 2 ✅ | `claude-config/` (settings/CLAUDE.md 템플릿 + Python apply-config), `commands/` 8개 백업, dry-run 검증 통과 |

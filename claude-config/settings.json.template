@@ -1,0 +1,54 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(PYTHONUTF8=1 uv run:*)",
+      "Bash(python3:*)",
+      "Bash(__NEW_LINE_ffec14fa59e99d2d__ PYTHONUTF8=1:*)",
+      "Bash(start:*)",
+      "Bash(ls:*)",
+      "Bash(PYTHONUTF8=1 grep:*)",
+      "Bash(__NEW_LINE_03141f51606155a4__ PYTHONUTF8=1:*)",
+      "Bash(PYTHONUTF8=1 {{USER_HOME_POSIX}}/miniconda3/python:*)"
+    ],
+    "defaultMode": "plan"
+  },
+  "enabledPlugins": {
+    "skill-creator@claude-plugins-official": true,
+    "hwpx-generator@honeypot": true,
+    "visual-generator@honeypot": true,
+    "patent-trend-analyzer@honeypot": true,
+    "oh-my-claudecode@omc": true,
+    "investments-portfolio@honeypot": true,
+    "claude-patent-creator-standalone@claude-patent-creator": true
+  },
+  "extraKnownMarketplaces": {
+    "my-tools": {
+      "source": {
+        "source": "directory",
+        "path": "{{USER_HOME}}/my-tools"
+      }
+    },
+    "honeypot": {
+      "source": {
+        "source": "directory",
+        "path": "{{USER_HOME}}/honeypot"
+      }
+    },
+    "omc": {
+      "source": {
+        "source": "directory",
+        "path": "{{USER_HOME}}/oh-my-claudecode"
+      }
+    },
+    "claude-patent-creator": {
+      "source": {
+        "source": "directory",
+        "path": "{{USER_HOME_BS}}\\Claude-Patent-Creator"
+      }
+    }
+  },
+  "effortLevel": "high",
+  "autoUpdatesChannel": "latest",
+  "skipDangerousModePermissionPrompt": true,
+  "theme": "light"
+}
