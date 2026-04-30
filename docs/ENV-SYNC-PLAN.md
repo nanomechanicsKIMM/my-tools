@@ -140,11 +140,15 @@ my-tools/
 - [x] `setup.sh`/`.ps1`에 `install_commands` + `apply_config` 단계 추가
 - [x] bash -n / PowerShell ParseFile syntax 검증 통과
 
-### Phase 4 — 누락 스킬 보강 (1~2시간)
+### Phase 4 — 누락 스킬 보강 (1~2시간) **✅ 완료 (2026-04-30)**
 
-- [ ] Phase 1 diff 결과 기반 일괄 복사
-- [ ] 의존성 통합
-- [ ] 플러그인 vs 루트 스킬 source of truth 정립
+- [x] `patent-strategy-report` → `skills/`로 추가 (Phase 1 식별 누락분 1건)
+- [x] 중복 제거: `skills/tor`, `skills/patent-strategy-pro` 삭제 (플러그인과 `diff -r` 결과 완전 동일 확인 후)
+- [x] Source of Truth 정책 README.md에 명시 (플러그인에 묶인 스킬은 플러그인 안에만)
+- [x] Phase 1 보류 의존성 검증:
+  - `google-genai`: visual-generator/slide-renderer가 사용 → `python-requirements.txt`에 활성화
+  - `defuddle`: my-tools 코드에 사용 흔적 없음 (vault-side 스킬) → 비활성 유지
+  - `uv`: 다수 스킬에서 사용 → 이미 포함
 
 ### Phase 5 — MCP 가이드 (30분)
 
@@ -181,3 +185,4 @@ my-tools/
 | 2026-04-30 | 1 ✅ | `snapshots/DESKTOP-L0USAAE-20260430.md` — 갭 측정, 외부 marketplace 3개 식별, 누락 스킬 1건 (`patent-strategy-report`) |
 | 2026-04-30 | 2 ✅ | `claude-config/` (settings/CLAUDE.md 템플릿 + Python apply-config), `commands/` 8개 백업, dry-run 검증 통과 |
 | 2026-04-30 | 3 ✅ | `bootstrap/` (install-prereqs, clone-marketplaces, python-requirements, npm-globals + READMEs), `setup.{sh,ps1}` 통합, bash/PowerShell syntax 검증 |
+| 2026-04-30 | 4 ✅ | `skills/patent-strategy-report` 추가, `skills/tor`·`patent-strategy-pro` 제거 (플러그인 단일 소스), `google-genai` 활성화, README에 Source of Truth 정책 명시 |

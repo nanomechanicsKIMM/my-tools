@@ -27,6 +27,10 @@ uvicorn>=0.44
 # Package manager (recommended for skill-local deps)
 uv>=0.4
 
+# Visual generator slide rendering (Phase 4 verified usage in
+# plugins/visual-generator/skills/slide-renderer/scripts/generate_slide_images.py)
+# Requires GEMINI_API_KEY env var at runtime.
+google-genai>=0.3
+
 # --- Optional: enable when the corresponding skill is in active use ---
-# google-genai>=0.3          # visual-generator slide rendering (requires GEMINI_API_KEY)
-# defuddle>=1.0              # web extraction (also has npm CLI variant)
+# defuddle>=1.0              # web extraction; vault-side skill, not directly used by my-tools

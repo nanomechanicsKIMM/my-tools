@@ -78,10 +78,22 @@ Claude Code / Codex용 스킬·플러그인을 한 레포에 모아 두고, **cl
 
 | 경로 | 설명 |
 |------|------|
-| `skills/` | 독립 스킬 (각 하위 폴더 = 스킬 하나) |
-| `plugins/` | Claude Code 플러그인 (각 하위 폴더 = 플러그인 하나) |
-| `docs/` | 구성 가이드 등 문서 |
-| `setup.ps1` / `setup.sh` | clone 후 한 번 실행해 스킬·플러그인을 배포 |
+| `bootstrap/` | OS 부트스트랩 — winget/brew/apt + npm globals + pip + 외부 marketplace clone |
+| `claude-config/` | `~/.claude/settings.json` · `CLAUDE.md` 템플릿 + Python apply-config |
+| `commands/` | 사용자 슬래시 명령 (`/abstract`, `/lit-search` 등) — 새 PC 재현용 백업 |
+| `skills/` | 독립 스킬 (어느 플러그인에도 속하지 않는 것만) |
+| `plugins/` | Claude Code 플러그인 (각 플러그인은 자체 `skills/` 보유 가능) |
+| `mcp/` | (예정) MCP 서버 등록 가이드 |
+| `scripts/` | (예정) 진단·점검 스크립트 |
+| `snapshots/` | PC별 환경 스냅샷 (`<hostname>-<YYYYMMDD>.md`) |
+| `docs/` | 가이드 문서 (`ENV-SYNC-PLAN.md`, `NEW-PC-BOOTSTRAP.md` 등) |
+| `setup.ps1` / `setup.sh` | 메인 설치 — skills + plugins + commands + apply-config |
+
+### Source of Truth 정책 (Phase 4)
+
+- **플러그인에 묶인 스킬은 플러그인 내부에만 보관** (예: `tor`는 `plugins/hwpx-tools/skills/tor/`에만, `patent-strategy-pro`는 `plugins/patent-tools/skills/patent-strategy-pro/`에만).
+- **루트 `skills/`는 어떤 플러그인에도 속하지 않는 독립 스킬만 보관**.
+- `setup.{sh,ps1}`은 루트 → 플러그인 순으로 복사하므로 플러그인 버전이 항상 이김. 중복은 drift 위험만 늘리므로 회피.
 
 ## 업데이트
 
