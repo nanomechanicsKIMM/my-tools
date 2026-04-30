@@ -6,7 +6,8 @@ $ErrorActionPreference = "Stop"
 $repos = @(
     @{ Url = "https://github.com/orientpine/honeypot";        Dir = "honeypot" },
     @{ Url = "https://github.com/yeachan-heo/oh-my-claudecode"; Dir = "oh-my-claudecode" },
-    @{ Url = "https://github.com/RobThePCGuy/Claude-Patent-Creator"; Dir = "Claude-Patent-Creator" }
+    @{ Url = "https://github.com/RobThePCGuy/Claude-Patent-Creator"; Dir = "Claude-Patent-Creator" },
+    @{ Url = "https://github.com/chrisryugj/korean-law-mcp.git"; Dir = "korean-law-mcp" }
 )
 
 Write-Host "=== clone-marketplaces ==="

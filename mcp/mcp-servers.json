@@ -1,0 +1,78 @@
+{
+  "$schema": "./mcp-servers.schema.json",
+  "version": 1,
+  "description": "Inventory of MCP servers used in this Claude Code environment. Snapshot from DESKTOP-L0USAAE 2026-04-30. NO secrets stored here -- see setup-mcp.md for auth steps.",
+  "tiers": {
+    "A": "Auto-installed via plugin / npm; no auth",
+    "B": "External repo clone + local install; no auth",
+    "C": "Interactive auth (OAuth / login CLI)",
+    "D": "API key in environment or config file"
+  },
+  "servers": {
+    "oh-my-claudecode-t": {
+      "tier": "A",
+      "source": "bundled in oh-my-claudecode plugin",
+      "register": "automatic when plugin enabled",
+      "command": "node ${CLAUDE_PLUGIN_ROOT}/bridge/mcp-server.cjs",
+      "auth": null
+    },
+    "playwright": {
+      "tier": "A",
+      "source": "anthropics/claude-plugins-official",
+      "register": "automatic when playwright plugin enabled",
+      "command": "npx @playwright/mcp@latest",
+      "auth": null
+    },
+    "bkit": {
+      "tier": "A",
+      "source": "popup-studio-ai/bkit-claude-code",
+      "register": "automatic when bkit plugin enabled",
+      "auth": null
+    },
+    "korean-law": {
+      "tier": "B",
+      "repo": "https://github.com/chrisryugj/korean-law-mcp.git",
+      "install_to": "{{USER_HOME}}/korean-law-mcp",
+      "post_install": ["npm install", "npm run build"],
+      "register_cmd": "claude mcp add korean-law -- node {{USER_HOME}}/korean-law-mcp/build/index.js",
+      "auth": null
+    },
+    "notebooklm": {
+      "tier": "C",
+      "binary": "nlm",
+      "binary_path_hint": "~/.local/bin/nlm",
+      "install_notes": "Install per upstream NotebookLM MCP project (Python pipx or release binary).",
+      "register_cmd": "claude mcp add notebooklm -- nlm mcp serve",
+      "auth": "Run: nlm login   (opens Google OAuth flow)"
+    },
+    "claude-ai-gmail": {
+      "tier": "C",
+      "source": "Claude Code built-in connector",
+      "register": "via Claude Code UI / settings",
+      "auth": "OAuth -- triggered on first tool call"
+    },
+    "claude-ai-calendar": {
+      "tier": "C",
+      "source": "Claude Code built-in connector",
+      "register": "via Claude Code UI / settings",
+      "auth": "OAuth -- triggered on first tool call"
+    },
+    "claude-ai-drive": {
+      "tier": "C",
+      "source": "Claude Code built-in connector",
+      "register": "via Claude Code UI / settings",
+      "auth": "OAuth -- triggered on first tool call"
+    },
+    "patent-trend-analyzer-kipris": {
+      "tier": "D",
+      "source": "honeypot/plugins/patent-trend-analyzer",
+      "register": "automatic when patent-trend-analyzer plugin enabled",
+      "auth": "KIPRIS API key -- see plugin's patent-mcp-setup skill for env var name and acquisition steps"
+    },
+    "gemini-genai": {
+      "tier": "D",
+      "consumer": "plugins/visual-generator/skills/slide-renderer",
+      "auth": "GEMINI_API_KEY env var -- obtain from https://aistudio.google.com/apikey"
+    }
+  }
+}

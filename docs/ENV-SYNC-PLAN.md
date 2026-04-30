@@ -150,10 +150,12 @@ my-tools/
   - `defuddle`: my-tools 코드에 사용 흔적 없음 (vault-side 스킬) → 비활성 유지
   - `uv`: 다수 스킬에서 사용 → 이미 포함
 
-### Phase 5 — MCP 가이드 (30분)
+### Phase 5 — MCP 가이드 (30분) **✅ 완료 (2026-04-30)**
 
-- [ ] 등록된 MCP 서버 목록 추출
-- [ ] 인증 절차 문서화
+- [x] 활성 MCP 서버 인벤토리 4계층 분류 (Tier A~D, 9개 서버 식별)
+- [x] `mcp/mcp-servers.json` (machine-readable 인벤토리, 비밀 미포함)
+- [x] `mcp/setup-mcp.md` (Tier별 인증 절차 + 트러블슈팅)
+- [x] `bootstrap/clone-marketplaces.{ps1,sh}`에 korean-law-mcp 추가 (Tier B 자동화)
 
 ### Phase 6 — 문서·검증 (1시간)
 
@@ -186,3 +188,4 @@ my-tools/
 | 2026-04-30 | 2 ✅ | `claude-config/` (settings/CLAUDE.md 템플릿 + Python apply-config), `commands/` 8개 백업, dry-run 검증 통과 |
 | 2026-04-30 | 3 ✅ | `bootstrap/` (install-prereqs, clone-marketplaces, python-requirements, npm-globals + READMEs), `setup.{sh,ps1}` 통합, bash/PowerShell syntax 검증 |
 | 2026-04-30 | 4 ✅ | `skills/patent-strategy-report` 추가, `skills/tor`·`patent-strategy-pro` 제거 (플러그인 단일 소스), `google-genai` 활성화, README에 Source of Truth 정책 명시 |
+| 2026-04-30 | 5 ✅ | `mcp/mcp-servers.json` (9개 서버 인벤토리), `mcp/setup-mcp.md` (Tier A~D 인증 가이드), korean-law-mcp clone 자동화 |

@@ -7,6 +7,7 @@ declare -a repos=(
     "https://github.com/orientpine/honeypot|honeypot"
     "https://github.com/yeachan-heo/oh-my-claudecode|oh-my-claudecode"
     "https://github.com/RobThePCGuy/Claude-Patent-Creator|Claude-Patent-Creator"
+    "https://github.com/chrisryugj/korean-law-mcp.git|korean-law-mcp"
 )
 
 USER_HOME="${USERPROFILE:-$HOME}"
