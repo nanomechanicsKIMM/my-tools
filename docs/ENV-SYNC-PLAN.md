@@ -129,12 +129,16 @@ my-tools/
 - [x] 슬래시 명령 8개 → `commands/` 복사
 - [x] `--dry-run` 모드로 검증: 모든 placeholder 정확 매핑, JSON validity 통과
 
-### Phase 3 — 부트스트랩 스크립트 (60분)
+### Phase 3 — 부트스트랩 스크립트 (60분) **✅ 완료 (2026-04-30)**
 
-- [ ] `install-prereqs.ps1` (winget 기반)
-- [ ] `clone-marketplaces.ps1`
-- [ ] `setup.ps1`/`.sh`에 `install_commands` + `apply_config` 단계 추가
-- [ ] idempotency 보장
+- [x] `bootstrap/install-prereqs.ps1` (winget: Git, Node LTS, Temurin 21, Miniconda3, Obsidian + npm globals + pip)
+- [x] `bootstrap/install-prereqs.sh` (macOS Homebrew / Linux apt+NodeSource 자동 분기)
+- [x] `bootstrap/clone-marketplaces.{ps1,sh}` (3개 외부 marketplace, idempotent pull/clone)
+- [x] `bootstrap/python-requirements.txt` (12개 핵심 패키지 + uv 추가)
+- [x] `bootstrap/npm-globals.txt` (4개)
+- [x] `bootstrap/README.md` (8단계 부트스트랩 순서)
+- [x] `setup.sh`/`.ps1`에 `install_commands` + `apply_config` 단계 추가
+- [x] bash -n / PowerShell ParseFile syntax 검증 통과
 
 ### Phase 4 — 누락 스킬 보강 (1~2시간)
 
@@ -176,3 +180,4 @@ my-tools/
 | 2026-04-30 | 0 | 본 plan 작성 + 커밋 |
 | 2026-04-30 | 1 ✅ | `snapshots/DESKTOP-L0USAAE-20260430.md` — 갭 측정, 외부 marketplace 3개 식별, 누락 스킬 1건 (`patent-strategy-report`) |
 | 2026-04-30 | 2 ✅ | `claude-config/` (settings/CLAUDE.md 템플릿 + Python apply-config), `commands/` 8개 백업, dry-run 검증 통과 |
+| 2026-04-30 | 3 ✅ | `bootstrap/` (install-prereqs, clone-marketplaces, python-requirements, npm-globals + READMEs), `setup.{sh,ps1}` 통합, bash/PowerShell syntax 검증 |

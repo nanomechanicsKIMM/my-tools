@@ -1,0 +1,6 @@
+# Global npm packages from DESKTOP-L0USAAE snapshot 2026-04-30.
+# Lines starting with # are ignored.
+@anthropic-ai/claude-code
+@tobilu/qmd
+dev-browser
+pnpm

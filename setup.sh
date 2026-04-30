@@ -241,10 +241,30 @@ MCPEOF
     update_plugin_registries "$marketplace" "$repo" "$plugin_name" "$version" "$install_path" "$sha"
 }
 
+# ─── Commands & Config (Phase 2/3) ────────────────────────────────────────────
+install_commands() {
+    local cmd_src="$REPO_ROOT/commands"
+    local cmd_dst="$HOME/.claude/commands"
+    [[ -d "$cmd_src" ]] || { echo "No commands/ folder; skip."; return; }
+    mkdir -p "$cmd_dst"
+    for f in "$cmd_src"/*.md; do
+        [[ -f "$f" ]] || continue
+        cp "$f" "$cmd_dst/"
+        echo "Command installed: $(basename "$f")"
+    done
+}
+
+apply_config() {
+    local script="$REPO_ROOT/claude-config/apply-config.py"
+    [[ -f "$script" ]] || { echo "No apply-config.py; skip."; return; }
+    "${PYTHON:-python}" "$script"
+}
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 echo "=== my-tools setup ==="
 install_claude_skills
 install_codex_skills
+install_commands
 mkdir -p "$PLUGINS_DIR/cache"
 install_bkit
 install_playwright
@@ -252,4 +272,5 @@ install_visual_generator
 install_hwpx_tools
 install_patent_tools
 install_docling_tools
+apply_config
 echo; echo "Done! Restart Claude Code to activate plugins."

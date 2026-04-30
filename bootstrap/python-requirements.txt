@@ -1,0 +1,32 @@
+# Python packages required by my-tools skills.
+# Versions use >= so newer minor releases are accepted.
+# Generated from DESKTOP-L0USAAE snapshot 2026-04-30.
+
+# PDF / document handling
+opendataloader-pdf>=2.2     # pdf-to-md skill
+python-hwpx>=2.1            # hwpx, tor, purchase-requisition
+lxml>=5.4                   # hwpx-xml, BeautifulSoup XML parsing
+pypdfium2>=5.6              # PDF rendering fallback
+
+# Data / numerical (patent-strategy-pro, patent-report)
+pandas>=3.0
+numpy>=2.4
+matplotlib>=3.10
+
+# Web / HTTP
+requests>=2.32
+requests-toolbelt>=1.0
+beautifulsoup4>=4.14
+
+# Image processing (visual-generator rendering)
+pillow>=12.1
+
+# Server (rare; used by some skills' helper scripts)
+uvicorn>=0.44
+
+# Package manager (recommended for skill-local deps)
+uv>=0.4
+
+# --- Optional: enable when the corresponding skill is in active use ---
+# google-genai>=0.3          # visual-generator slide rendering (requires GEMINI_API_KEY)
+# defuddle>=1.0              # web extraction (also has npm CLI variant)

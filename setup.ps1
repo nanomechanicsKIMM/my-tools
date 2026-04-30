@@ -216,10 +216,30 @@ function Install-PlaywrightPlugin {
         -GitCommitSha    $sha
 }
 
+# ─── Commands & Config (Phase 2/3) ────────────────────────────────────────────
+function Install-Commands {
+    $CmdSrc = Join-Path $RepoRoot "commands"
+    $CmdDst = Join-Path $env:USERPROFILE ".claude\commands"
+    if (-not (Test-Path $CmdSrc)) { Write-Host "No commands/ folder; skip."; return }
+    New-Item -ItemType Directory -Path $CmdDst -Force | Out-Null
+    Get-ChildItem -Path $CmdSrc -Filter *.md | ForEach-Object {
+        Copy-Item $_.FullName (Join-Path $CmdDst $_.Name) -Force
+        Write-Host "Command installed: $($_.Name)"
+    }
+}
+
+function Invoke-ApplyConfig {
+    $script = Join-Path $RepoRoot "claude-config\apply-config.py"
+    if (-not (Test-Path $script)) { Write-Host "No apply-config.py; skip."; return }
+    $python = if ($env:PYTHON) { $env:PYTHON } else { "python" }
+    & $python $script
+}
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 Write-Host "=== my-tools setup ===" -ForegroundColor Cyan
 Install-ClaudeSkills
 Install-CodexSkills
+Install-Commands
 New-Item -ItemType Directory -Path (Join-Path $env:USERPROFILE ".claude\plugins\cache") -Force | Out-Null
 Install-BkitPlugin
 Install-PlaywrightPlugin
@@ -227,4 +247,5 @@ Install-VisualGeneratorPlugin
 Install-HwpxToolsPlugin
 Install-PatentToolsPlugin
 Install-DoclingTools
+Invoke-ApplyConfig
 Write-Host "`nDone! Restart Claude Code to activate plugins." -ForegroundColor Green
