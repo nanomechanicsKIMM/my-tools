@@ -111,14 +111,14 @@ my-tools/
 
 ## 4. 단계별 실행 계획
 
-### Phase 1 — 갭 정밀 측정 (30분) **← 진행 중**
+### Phase 1 — 갭 정밀 측정 (30분) **✅ 완료 (2026-04-30)**
 
-- [ ] `~/.claude/skills/` vs `my-tools/skills/` 비교 → 누락 명단
-- [ ] `pip freeze` → `bootstrap/python-requirements.txt` 초안
-- [ ] `npm list -g --depth=0` → `bootstrap/npm-globals.txt`
-- [ ] `winget export` → `bootstrap/winget-packages.json`
-- [ ] 외부 marketplace 디렉토리 `git remote -v` 수집
-- [ ] 결과를 `snapshots/<hostname>-<YYYYMMDD>.md`에 저장
+- [x] `~/.claude/skills/` vs `my-tools/skills/` 비교 → 누락 명단 (단 1건: `patent-strategy-report`)
+- [x] `pip list` → 핵심 12개 패키지 식별 (opendataloader-pdf, lxml, python-hwpx 등)
+- [x] `npm list -g --depth=0` → 4개 (claude-code CLI, qmd, dev-browser, pnpm)
+- [ ] `winget export` → Phase 3에서 winget configure용 매니페스트 생성 시 수행
+- [x] 외부 marketplace 디렉토리 `git remote -v` 수집 (3개)
+- [x] 결과를 `snapshots/DESKTOP-L0USAAE-20260430.md`에 저장
 
 ### Phase 2 — 설정 템플릿화 (30분)
 
@@ -172,4 +172,4 @@ my-tools/
 | 일자 | Phase | 산출물 |
 |---|---|---|
 | 2026-04-30 | 0 | 본 plan 작성 + 커밋 |
-| 2026-04-30 | 1 (착수) | 갭 측정 |
+| 2026-04-30 | 1 ✅ | `snapshots/DESKTOP-L0USAAE-20260430.md` — 갭 측정, 외부 marketplace 3개 식별, 누락 스킬 1건 (`patent-strategy-report`) |
