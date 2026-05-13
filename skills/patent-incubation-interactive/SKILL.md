@@ -102,6 +102,7 @@ Phase 6: 발명내용설명서 초안 ────── opus 에이전트
   │  └─ Background: 도면 선행 생성
   │
 Phase 6b: 도면 생성 ─────────────── sonnet 에이전트 (Background 결과 활용)
+Phase 6c: 인용문헌 정합성 검증 ──── sonnet 에이전트 (KIPRIS + CrossRef + OpenAlex + Zettelkasten)
 Phase 7: HWPX 변환 ──────────────── sonnet 에이전트
   └─ Gate 7: 최종 확인 ──────────── 사용자 확인 [auto-skip 가능]
 ```
@@ -132,6 +133,7 @@ Phase 7: HWPX 변환 ──────────────── sonnet 에
     "phase5": {"status": "pending", "output": null},
     "phase6": {"status": "pending", "output": null},
     "phase6b": {"status": "pending", "output": null},
+    "phase6c": {"status": "pending", "output": null},
     "phase7": {"status": "pending", "output": null}
   },
   "gates": {},
@@ -162,6 +164,7 @@ Phase 7: HWPX 변환 ──────────────── sonnet 에
 | Gate 4 | **가능** (skip) | 정보 표시 성격 |
 | Gate 5 | **불가** | 선행특허 대응 전략은 등록 가능성에 직결 |
 | Gate 6 | **불가** | 발명내용설명서 내용 확인은 발명자 책임 |
+| (Phase 6c 요약) | **가능** (정보 표시) | Gate 아님 — 단, 불일치 비율 > 30% 시 1회 확인 |
 | Gate 7 | **가능** (skip) | 이전 Gate에서 이미 승인됨 |
 
 > auto-skip 시에도 Gate 결과는 화면에 표시한다 (응답을 기다리지 않을 뿐).
@@ -714,7 +717,7 @@ Agent(
 
 ---
 
-## Phase 6b + 7: 도면 생성 및 HWPX 변환
+## Phase 6b + 6c + 7: 도면 생성, 인용 검증, HWPX 변환
 
 Gate 6 승인 후 자동 진행.
 
@@ -738,6 +741,110 @@ Agent(
          Also update: the MD file §9 with diagram references
          Use matplotlib Korean font: plt.rcParams['font.family'] = 'Malgun Gothic'"
 )
+```
+
+### Phase 6c 에이전트 호출
+
+발명내용설명서 MD의 모든 인용문헌(학술 논문·KR/외국 특허·DOI·보고서)을 외부 DB(KIPRIS Plus, CrossRef, OpenAlex, Semantic Scholar, Google Patents)로 직접 조회하여 번호·제목·저자·출원인의 정합성을 검증하고, 부록 C 각 항목에 `(정합 확인!)` 마커를 삽입하며, 원문 PDF를 `{output_dir}/reference/` 에 저장한다.
+
+#### KIPRIS API 키 로드
+
+```bash
+if [ -f "C:/Users/JHKIM/Claude_Work/.env" ]; then
+  set -a
+  eval "$(cat 'C:/Users/JHKIM/Claude_Work/.env' | sed 's/^[[:space:]]*//' | grep -v '^#')"
+  set +a
+fi
+```
+
+#### 에이전트 호출
+
+```
+Agent(
+  subagent_type="general-purpose",
+  model="sonnet",
+  prompt="Read {SKILL_ROOT}/agents/phase6c-reference-verifier.md for instructions.
+         Read the Phase 6 output MD file (latest vN.md in {output_dir}, with Phase 6b diagrams inserted) for citation extraction.
+         Read {output_dir}/prior_art.json for Phase 5 patent metadata.
+         
+         KIPRIS .env file: {KIPRIS_ENV_FILE}
+         Patent PDF downloader: ~/.claude/skills/_shared/scripts/download_patent_pdf.py
+         Zettelkasten 로컬 캐시: D:/Zettelkasten/References/ (학술 논문 1차 조회 경로)
+         
+         Before calling download scripts, load env vars:
+         set -a && eval \"$(cat '{KIPRIS_ENV_FILE}' | sed 's/^[[:space:]]*//' | grep -v '^#')\" && set +a
+         
+         Input: {manifest.input}
+         Outputs:
+           (1) {output_dir}/reference/ (다운로드된 PDF 모음)
+           (2) {output_dir}/reference_verification.json
+           (3) 업데이트된 Phase 6 MD (vN 유지, (정합 확인!) 마커 + 부록 C.5 요약 추가)
+         
+         CRITICAL REQUIREMENTS:
+         1. KR 특허는 download_patent_pdf.py --kr --verify 로 출원번호-제목 자동 대조
+         2. 학술 논문은 CrossRef DOI 확인 → OpenAlex OA URL → Zettelkasten 캐시 순으로 PDF 확보
+         3. PDF 첫 페이지 제목 불일치 시 PDF 폐기, (정합 불일치) 마커 삽입
+         4. KIMM 내부 자문(구두)은 검증 대상 아님 — 스킵
+         5. 부록 C.5 섹션 새로 추가하여 검증 요약표 작성
+         6. §1~§9 본문은 수정하지 않음 (inline 인용 번호는 부록에서 검증된 것을 참조)"
+)
+```
+
+#### 검증 요약 표시 (Gate 없음, 정보 표시)
+
+Phase 6c 완료 직후, Phase 7 진입 전에 결과를 화면에 표시한다:
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📚 인용문헌 정합성 검증 결과
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+| 구분 | 건수 |
+|------|------|
+| 총 인용 | {total} |
+| ✅ 완전 확인 | {verified} |
+| ⚠️ 부분 확인 | {partial} |
+| ❌ 불일치 | {mismatch} |
+| 🔍 수동 검토 | {manual_review} |
+| 📄 PDF 확보 | {pdf_count} |
+
+> 수동 검토 필요 항목은 부록 C에 (정합 불일치 — 수동 확인 필요) 또는 (정합 부분 확인 — 수동 재검토 필요) 마커로 표시됨.
+> 원문 PDF: {output_dir}/reference/
+> 상세 로그: {output_dir}/reference_verification.json
+
+▶ Phase 7 (HWPX 변환)을 시작합니다...
+```
+
+> 이 표시는 Gate가 아니다 — 사용자 응답 없이 바로 Phase 7로 진행한다. 단, `(mismatch + manual_review) / total > 0.3` 이면 한 번 사용자 확인을 요청한다 (Phase 7 진행 vs 수동 보완 후 재개 선택).
+
+#### Graceful Degradation
+
+- KIPRIS API 실패: 해당 KR 특허는 `manual_review`, 다른 인용은 계속 처리
+- Google Patents 봇 차단: WebFetch 폴백 → 그래도 실패 시 `manual_review`
+- CrossRef/Semantic Scholar 실패: Zettelkasten 캐시만으로 PDF 확보 시도, 메타데이터는 `partial`
+- Zettelkasten 접근 불가: 메타데이터 검증만 진행, PDF는 skipped
+- MD 부록 C 미존재: Phase 6c 스킵, 사용자에게 "인용문헌 수동 검증 필요" 안내
+
+#### 출력 MD 업데이트 규칙
+
+부록 C의 각 항목 **뒤에** 마커를 삽입한다 (기존 텍스트는 수정하지 않음):
+
+- 완전 검증 + PDF 확보: `... (정합 확인!) — [PDF](reference/xxx.pdf)`
+- 완전 검증 + PDF 미확보: `... (정합 확인! — PDF 미확보)`
+- 부분 일치: `... (정합 부분 확인 — 수동 재검토 필요)`
+- 불일치: `... (정합 불일치 — 수동 확인 필요)`
+- KIMM 내부 자문(C.2): 마커 삽입하지 않음
+
+부록 C 하단에 새 하위 섹션 `### C.5 정합성 검증 요약` 을 추가한다 (`{SKILL_ROOT}/agents/phase6c-reference-verifier.md` 스펙 참조).
+
+manifest 업데이트:
+```json
+"phase6c": {
+  "status": "completed|degraded",
+  "output": "reference_verification.json",
+  "pdf_count": N,
+  "verified": K, "mismatch": M, "manual_review": R
+}
 ```
 
 ### Phase 7 에이전트 호출
@@ -787,10 +894,12 @@ validate.py 실패 시: MD 파일만 최종 출력 제공.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ### 출력 파일
-- {filename}.md — Obsidian 호환 마크다운 (9개 섹션 + 부록 3개)
+- {filename}.md — Obsidian 호환 마크다운 (9개 섹션 + 부록 3개, 부록 C에 (정합 확인!) 마커 포함)
 - {filename}.hwpx — KIMM 양식 한글 파일
 - 선행특허분석.md — KIPRIS 분석
 - diagrams/ — 기술 도면 {N}개
+- reference/ — 인용문헌 원문 PDF {K}건 (학술 논문 + 선행특허)
+- reference_verification.json — 인용문헌 정합성 검증 로그
 
 ### 워크플로우 히스토리
 
@@ -803,6 +912,7 @@ validate.py 실패 시: MD 파일만 최종 출력 제공.
 | Gate 4 | 평가 상위 3 | {gates.gate_4 요약} |
 | Gate 5 | 선행특허 {N}건 | {gates.gate_5 요약} |
 | Gate 6 | 초안 완성 | {gates.gate_6 요약} |
+| Phase 6c | 인용 검증 {verified}/{total} 정합 | (Gate 없음, 자동 진행) |
 
 ### TRIZ 분석 요약
 - 기술적 모순: {N}개 도출
@@ -874,5 +984,8 @@ validate.py 실패 시: MD 파일만 최종 출력 제공.
 | Phase 5 | KIPRIS API 실패 | graceful degradation, 수동 보완 안내 |
 | Phase 6 | 섹션/부록 누락 | 1회 재생성, 이후 부분 결과 제공 |
 | Phase 6b | matplotlib 실패 | Mermaid만 MD에 포함 |
+| Phase 6c | KIPRIS/CrossRef API 실패 | 해당 인용은 manual_review, 나머지 계속 진행 |
+| Phase 6c | PDF 첫 페이지 제목 불일치 | PDF 폐기 + (정합 불일치) 마커 삽입 |
+| Phase 6c | MD 부록 C 미존재 | Phase 6c 스킵 + 사용자에게 수동 검증 안내 |
 | Phase 7 | HWPX 변환/validate 실패 | MD fallback |
 | Background | prefetch 실패 | Phase 5에서 정상 검색 실행 (성능 저하만) |
