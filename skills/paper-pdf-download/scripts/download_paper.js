@@ -50,8 +50,12 @@ await settle();
 let r = await fetchInPage(job.pdfUrl);
 let method = "direct";
 
-// --- Method B: cross-origin CDN fallback ---
-if (!r.ok) {
+// --- Method B: cross-origin CDN / JS-challenge download fallback ---
+// A 200 that returns HTML (e.g. ScienceDirect cra_js_challenge, or a viewer
+// wrapper) is NOT a PDF — the real bytes come only from a browser-navigated
+// download. Treat HTML as a miss and fall through to the download-event path.
+const looksHtml = r.ok && /html|^text\//i.test(r.ct || "");
+if (!r.ok || looksHtml) {
   let finalUrl = null;
   try {
     const dlPromise = page.waitForEvent("download", { timeout: 45000 });
