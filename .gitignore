@@ -18,6 +18,12 @@ Thumbs.db
 .obsidian/
 .bkit/
 
+# oh-my-claudecode session state (machine-local)
+.omc/
+
+# Local CLAUDE.md (generated from claude-config/CLAUDE.md.template, machine-specific paths)
+/CLAUDE.md
+
 # Confidential
 .env
 .credential
