@@ -21,12 +21,18 @@ import time
 import requests
 import urllib3
 
-urllib3.disable_warnings()
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 session = requests.Session()
-session.verify = False
+# 기관 내부망의 SSL 인터셉션 때문에 기본은 검증 비활성화.
+# REQUESTS_CA_BUNDLE(또는 CURL_CA_BUNDLE)에 기관 CA 경로를 지정하면 검증 활성화.
+_ca_bundle = os.environ.get("REQUESTS_CA_BUNDLE") or os.environ.get("CURL_CA_BUNDLE")
+if _ca_bundle:
+    session.verify = _ca_bundle
+else:
+    session.verify = False
+    urllib3.disable_warnings()
 session.headers["User-Agent"] = UA
 
 
