@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DC형 퇴직연금 포트폴리오 백테스트 대시보드</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;background:linear-gradient(135deg,#1e3c72,#2a5298);color:#222;padding:24px}
+  .wrap{max-width:1140px;margin:0 auto}
+  h1{color:#fff;font-size:23px;margin-bottom:4px}
+  .sub{color:#cdd9f0;font-size:13px;margin-bottom:18px}
+  .card{background:#fff;border-radius:14px;padding:22px;margin-bottom:18px;box-shadow:0 6px 24px rgba(0,0,0,.18)}
+  .card h2{font-size:17px;margin-bottom:14px;color:#1e3c72;border-left:4px solid #2a5298;padding-left:10px}
+  select{padding:11px;font-size:15px;border:2px solid #2a5298;border-radius:9px;width:100%;font-weight:bold;color:#1e3c72}
+  textarea{width:100%;min-height:88px;margin-top:12px;padding:12px;border:1px solid #bbb;border-radius:9px;font-family:inherit;font-size:13px;line-height:1.6;resize:vertical;background:#f8fafd}
+  .amount-input{width:100%;padding:12px;font-size:18px;border:2px solid #2a5298;border-radius:10px;text-align:right}
+  .curr-input{width:100%;padding:5px;border:1px solid #ccc;border-radius:5px;text-align:right;font-size:12px}
+  .w-input{width:60px;padding:4px;border:1px solid #2a5298;border-radius:5px;text-align:right;font-size:12px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:9px 8px;text-align:right;border-bottom:1px solid #eee}
+  th{background:#f4f7fc;color:#1e3c72;font-size:12px}
+  td.name,th.name{text-align:left}
+  .buy{color:#0a7d2e;font-weight:bold}.sell{color:#c0392b;font-weight:bold}
+  .badge{display:inline-block;padding:2px 7px;border-radius:6px;font-size:11px;color:#fff}
+  .b-미국{background:#2980b9}.b-한국{background:#27ae60}.b-인도{background:#e67e22}.b-중국{background:#c0392b}.b-아세안{background:#16a085}.b-안전자산{background:#7f8c8d}
+  .btn{padding:12px 20px;background:#2a5298;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:bold;cursor:pointer}
+  .btn:hover{background:#1e3c72}.btn-save{background:#0a7d2e}.btn-save:hover{background:#095e23}.btn-sec{background:#7f8c8d}
+  .summary{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+  .stat{flex:1;min-width:110px;background:#f4f7fc;border-radius:10px;padding:11px;text-align:center}
+  .stat .v{font-size:19px;font-weight:bold;color:#1e3c72}.stat .l{font-size:11px;color:#666}
+  .stat.hi .v{color:#0a7d2e}
+  .note{font-size:11px;color:#888;margin-top:8px;line-height:1.5}
+  .total-row td{font-weight:bold;background:#eef3fb;border-top:2px solid #2a5298}
+  .legend{display:flex;gap:16px;margin-top:8px;font-size:12px;flex-wrap:wrap}
+  .legend span{display:flex;align-items:center;gap:5px}
+  .lg-box{width:14px;height:4px;border-radius:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📈 DC형 퇴직연금 포트폴리오 백테스트 대시보드</h1>
+  <div class="sub">과학기술인공제회 · 1971년생(만 55세) · 은퇴 2033년 · 공격투자형 · 데이터 2021-06~2026-06(월말, proxy 5년)</div>
+
+  <div class="card">
+    <h2>🧮 투자 알고리즘 선택</h2>
+    <select id="algoSelect" onchange="onAlgoChange()">
+      <option value="original">원본 추천 65/35 (고정비중)</option>
+      <option value="global">글로벌 분산 재구성 (미국↓+인도·중국)</option>
+      <option value="momentum">모멘텀 Top5 (동적·분기)</option>
+      <option value="invvol">역변동성 가중 (동적·분기)</option>
+      <option value="custom">사용자 정의 (비중 직접 입력)</option>
+    </select>
+    <textarea id="algoText" readonly></textarea>
+    <div id="customBox" style="display:none;margin-top:10px"></div>
+    <div style="margin-top:12px"><button class="btn" onclick="applyAlgo()">⚙️ 알고리즘 적용 → 추천 & 백테스트</button></div>
+  </div>
+
+  <div class="card">
+    <h2>① 총 투자금액</h2>
+    <input type="text" id="totalAmount" class="amount-input" placeholder="예: 300,000,000" value="300,000,000" oninput="formatAmount()">
+    <div class="summary" id="summaryStats"></div>
+  </div>
+
+  <div class="card">
+    <h2>② 백테스트 수익률 추이 (vs KOSPI200 · S&P500)</h2>
+    <canvas id="chart" width="1080" height="380" style="width:100%;max-width:1080px"></canvas>
+    <div class="legend" id="legend"></div>
+    <div class="summary" id="btMetrics"></div>
+    <div class="note">월말 데이터·분기 리밸런싱·예금 4.9% 가정. KOSPI200=삼성KOSPI200, S&P500=삼성S&P500 펀드 기준. 과거 성과는 미래를 보장하지 않습니다.</div>
+  </div>
+
+  <div class="card">
+    <h2>③ 추천 펀드 구성 · 배분금액 · 리밸런싱</h2>
+    <div class="note">알고리즘이 추천한 펀드와 비중입니다. 현재 보유 금액(원)을 입력하면 매수/매도 변동이 계산됩니다.</div>
+    <table style="margin-top:10px">
+      <thead><tr><th class="name">펀드</th><th>분류</th><th>비중</th><th>배분금액</th><th>현재보유(원)</th><th>변동(매수+/매도−)</th></tr></thead>
+      <tbody id="pfBody"></tbody>
+    </table>
+    <div style="margin-top:16px;display:flex;gap:12px;flex-wrap:wrap">
+      <button class="btn btn-save" onclick="saveLog()">💾 변동내역 로그 저장(.txt)</button>
+      <button class="btn btn-sec" onclick="saveLogCSV()">📑 CSV 저장</button>
+    </div>
+    <div id="saveMsg" class="note"></div>
+  </div>
+
+  <div class="note" style="color:#cdd9f0">⚠️ 정보 제공 목적이며 투자 권유가 아닙니다. 인도 편입 시 환헤지·분할매수(DCA) 권장(고평가·루피 약세).</div>
+</div>
+
+<script src="dashboard_data.js"></script>
+<script>
+const CLSMAP={sp500:"미국",nasdaq:"미국",sox:"미국",kospi:"한국",div:"한국",india:"인도",china:"중국",asean:"아세안",deposit:"안전자산"};
+const NAMEMAP={};Object.keys(DATA.funds).forEach(k=>NAMEMAP[k]=DATA.funds[k].name);NAMEMAP.deposit="과기공제회 예금(4.9%)";
+const ALGOS={
+  original:{name:"원본 추천 65/35",
+    text:"【원본 추천 65/35 — 고정비중】\n위험자산 65% + 예금 35%. 핵심-위성 구조.\n• 미국 S&P500 22%, 나스닥 13%, 반도체 8% (미국 43%)\n• 한국 KOSPI200 15%, 고배당 7% (한국 22%)\n• 예금 35%\n매 분기 리밸런싱. 다중경로 백테스트 88% 1위로 검증된 견고한 기본안.",
+    w:{sp500:22,nasdaq:13,sox:8,kospi:15,div:7,deposit:35}},
+  global:{name:"글로벌 분산 재구성",
+    text:"【글로벌 분산 — 미국 편중 완화】\n미국 43→33%로 축소, 인도·중국 신규 편입(저상관 분산).\n• 미국 33%(S&P500 18 + 나스닥 10 + 반도체 5)\n• 한국 16%(KOSPI200 13 + 고배당 3)\n• 인도 8% + 중국 5% (신흥국 분산)\n• 예금 35%\n다중경로 Sharpe·MDD 개선. 인도는 환헤지·DCA 권장.",
+    w:{sp500:18,nasdaq:10,sox:5,kospi:13,div:3,india:8,china:5,deposit:35}},
+  momentum:{name:"모멘텀 Top5",
+    text:"【모멘텀 Top5 — 동적·분기】\n매 분기, 과거 6개월 수익률 상위 5개 펀드를 각 13%씩 동일가중 + 예금 35%.\n추세추종 전략. 강세 펀드를 따라가나 회전율이 높고 단기 반전에 취약.\n※ 백테스트상 고정비중 추천보다 변동성·MDD 큼.",
+    fn:"momentum"},
+  invvol:{name:"역변동성 가중",
+    text:"【역변동성 가중 — 동적·분기】\n위험자산 65%를 각 펀드의 변동성 역수(1/σ)에 비례 배분 + 예금 35%.\n저변동 펀드를 우대해 위험을 분산. 매 분기 재계산.\n안정 지향이나 고수익 펀드 비중이 낮아질 수 있음.",
+    fn:"invvol"},
+  custom:{name:"사용자 정의",
+    text:"【사용자 정의】\n아래에서 각 펀드 비중(%)을 직접 입력하세요. 위험자산+예금 합계 100% 권장.\n입력 후 '알고리즘 적용'을 누르면 추천·백테스트가 갱신됩니다.",
+    w:{sp500:15,nasdaq:10,kospi:12,sox:5,div:3,india:8,china:5,asean:0,deposit:42}}
+};
+let currentAlgo='original', currentWeights=null;
+
+function navOf(k,t){return k==='deposit'?DATA.deposit[t]:DATA.funds[k].nav[t];}
+function getTotal(){return Number(document.getElementById('totalAmount').value.replace(/[^0-9]/g,''))||0;}
+const won=n=>Math.round(n).toLocaleString('ko-KR')+'원';
+
+function onAlgoChange(){
+  currentAlgo=document.getElementById('algoSelect').value;
+  const a=ALGOS[currentAlgo];
+  document.getElementById('algoText').value=a.text;
+  const cb=document.getElementById('customBox');
+  if(currentAlgo==='custom'){
+    cb.style.display='block';
+    cb.innerHTML='<table><thead><tr><th class="name">펀드</th><th>비중%</th></tr></thead><tbody>'+
+      Object.keys(NAMEMAP).map(k=>`<tr><td class="name">${NAMEMAP[k]}</td><td><input class="w-input" id="cw_${k}" type="number" value="${a.w[k]||0}" min="0" max="100"></td></tr>`).join('')+'</tbody></table>';
+  } else cb.style.display='none';
+}
+function getWeights(){
+  const a=ALGOS[currentAlgo];
+  if(currentAlgo==='custom'){const w={};Object.keys(NAMEMAP).forEach(k=>{const v=Number(document.getElementById('cw_'+k)?.value||0);if(v>0)w[k]=v;});return w;}
+  if(a.fn)return a.fn;        // 동적 전략명
+  return {...a.w};
+}
+function stratFn(name){return name==='momentum'?momentum:invvol;}
+function momentum(t){
+  if(t<6)return{deposit:100};
+  const r={};for(const k in DATA.funds)r[k]=DATA.funds[k].nav[t]/DATA.funds[k].nav[t-6]-1;
+  const top=Object.entries(r).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const w={};top.forEach(([k])=>w[k]=13);w.deposit=35;return w;
+}
+function invvol(t){
+  if(t<6)return{deposit:100};
+  const iv={};let s=0;
+  for(const k in DATA.funds){let rs=[];for(let i=t-5;i<=t;i++)rs.push(DATA.funds[k].nav[i]/DATA.funds[k].nav[i-1]-1);
+    const m=rs.reduce((a,b)=>a+b,0)/rs.length;const sd=Math.sqrt(rs.reduce((a,b)=>a+(b-m)**2,0)/rs.length)||0.01;iv[k]=1/sd;s+=iv[k];}
+  const w={};for(const k in iv)w[k]=65*iv[k]/s;w.deposit=35;return w;
+}
+function backtest(strat){
+  const n=DATA.dates.length,dyn=(typeof strat==='string');const sf=dyn?stratFn(strat):null;
+  let eq=1e8,shares=null,curve=[];
+  for(let t=0;t<n;t++){
+    if(shares){eq=0;for(const k in shares)eq+=shares[k]*navOf(k,t);}
+    if(t%3===0&&(!dyn||t>=6)){
+      const w=dyn?sf(t):strat;const tot=Object.values(w).reduce((a,b)=>a+b,0);
+      if(tot>0){shares={};for(const k in w)if(w[k]>0)shares[k]=(w[k]/tot)*eq/navOf(k,t);}
+    }
+    curve.push(eq);
+  }
+  return curve;
+}
+function metrics(c){
+  const n=c.length,yrs=n/12,tot=c[n-1]/c[0]-1,cagr=Math.pow(c[n-1]/c[0],1/yrs)-1;
+  let rs=[];for(let i=1;i<n;i++)rs.push(c[i]/c[i-1]-1);
+  const m=rs.reduce((a,b)=>a+b,0)/rs.length,sd=Math.sqrt(rs.reduce((a,b)=>a+(b-m)**2,0)/rs.length);
+  const vol=sd*Math.sqrt(12),sharpe=vol>0?cagr/vol:0;
+  let peak=c[0],mdd=0;c.forEach(v=>{peak=Math.max(peak,v);mdd=Math.min(mdd,v/peak-1);});
+  return{cagr:cagr*100,vol:vol*100,sharpe,mdd:mdd*100,tot:tot*100};
+}
+function applyAlgo(){
+  const w=getWeights();
+  // 추천 비중(동적이면 최종시점)
+  let dispW;
+  if(typeof w==='string'){dispW=stratFn(w)(DATA.dates.length-1);}else dispW=w;
+  const tot=Object.values(dispW).reduce((a,b)=>a+b,0);
+  currentWeights={};for(const k in dispW)currentWeights[k]=dispW[k]/tot*100;
+  // 백테스트
+  const port=backtest(w),kospi=backtest({kospi:100}),sp=backtest({sp500:100});
+  drawChart([['추천 포트폴리오',port,'#d62728'],['KOSPI200',kospi,'#2ca02c'],['S&P500',sp,'#2980b9']]);
+  const mp=metrics(port);
+  document.getElementById('btMetrics').innerHTML=
+    `<div class="stat hi"><div class="v">${mp.cagr.toFixed(1)}%</div><div class="l">CAGR(연수익)</div></div>
+     <div class="stat"><div class="v">${mp.vol.toFixed(1)}%</div><div class="l">변동성</div></div>
+     <div class="stat hi"><div class="v">${mp.sharpe.toFixed(2)}</div><div class="l">Sharpe</div></div>
+     <div class="stat"><div class="v">${mp.mdd.toFixed(1)}%</div><div class="l">최대낙폭(MDD)</div></div>
+     <div class="stat"><div class="v">${mp.tot.toFixed(1)}%</div><div class="l">총수익(5년)</div></div>`;
+  renderTable();
+}
+function drawChart(series){
+  const cv=document.getElementById('chart'),ctx=cv.getContext('2d'),W=cv.width,H=cv.height,pad=46;
+  ctx.clearRect(0,0,W,H);
+  const norm=c=>c.map(v=>(v/c[0]-1)*100);
+  const ns=series.map(s=>[s[0],norm(s[1]),s[2]]);
+  let lo=0,hi=0;ns.forEach(s=>s[1].forEach(v=>{lo=Math.min(lo,v);hi=Math.max(hi,v);}));
+  lo=Math.floor(lo/20)*20;hi=Math.ceil(hi/20)*20;
+  const n=DATA.dates.length,X=i=>pad+i/(n-1)*(W-pad-20),Y=v=>H-pad-(v-lo)/(hi-lo)*(H-pad-20);
+  // grid+y labels
+  ctx.strokeStyle='#eee';ctx.fillStyle='#999';ctx.font='11px sans-serif';ctx.textAlign='right';
+  for(let v=lo;v<=hi;v+=20){ctx.beginPath();ctx.moveTo(pad,Y(v));ctx.lineTo(W-20,Y(v));ctx.stroke();ctx.fillText(v+'%',pad-5,Y(v)+4);}
+  // x labels (연도)
+  ctx.textAlign='center';
+  DATA.dates.forEach((d,i)=>{if(d.endsWith('-01')||i===0){ctx.fillText(d.slice(0,4),X(i),H-pad+16);}});
+  ctx.beginPath();ctx.strokeStyle='#333';ctx.moveTo(pad,Y(0));ctx.lineTo(W-20,Y(0));ctx.stroke();
+  // lines
+  ns.forEach(s=>{ctx.beginPath();ctx.strokeStyle=s[2];ctx.lineWidth=s[0]==='추천 포트폴리오'?3:1.6;
+    s[1].forEach((v,i)=>{i?ctx.lineTo(X(i),Y(v)):ctx.moveTo(X(i),Y(v));});ctx.stroke();});
+  document.getElementById('legend').innerHTML=ns.map(s=>`<span><span class="lg-box" style="background:${s[2]}"></span>${s[0]} (${s[1][s[1].length-1].toFixed(0)}%)</span>`).join('');
+}
+function renderTable(){
+  const total=getTotal();
+  const keys=Object.keys(currentWeights).filter(k=>currentWeights[k]>0.05);
+  let body='',wsum=0;
+  keys.forEach((k,i)=>{
+    const w=currentWeights[k],amt=total*w/100,cls=CLSMAP[k];wsum+=w;
+    body+=`<tr><td class="name">${NAMEMAP[k]}</td><td><span class="badge b-${cls}">${cls}</span></td>
+      <td>${w.toFixed(1)}%</td><td>${total?won(amt):'-'}</td>
+      <td><input class="curr-input" id="cur_${k}" type="text" value="0" oninput="calcDiff()" onfocus="this.select()"></td>
+      <td id="diff_${k}">-</td></tr>`;
+  });
+  body+=`<tr class="total-row"><td class="name">합계</td><td></td><td>${wsum.toFixed(0)}%</td><td>${total?won(total):'-'}</td><td></td><td></td></tr>`;
+  document.getElementById('pfBody').innerHTML=body;
+  calcDiff();updateSummary();
+}
+function calcDiff(){
+  const total=getTotal();
+  Object.keys(currentWeights).filter(k=>currentWeights[k]>0.05).forEach(k=>{
+    const cur=Number((document.getElementById('cur_'+k)?.value||'0').replace(/[^0-9]/g,''))||0;
+    const rec=total*currentWeights[k]/100,diff=rec-cur,el=document.getElementById('diff_'+k);
+    if(el)el.innerHTML=!total?'-':(diff>=0?`<span class="buy">+${won(diff)} 매수</span>`:`<span class="sell">${won(diff)} 매도</span>`);
+  });
+}
+function updateSummary(){
+  const risk=Object.keys(currentWeights).filter(k=>k!=='deposit').reduce((s,k)=>s+currentWeights[k],0);
+  document.getElementById('summaryStats').innerHTML=
+    `<div class="stat"><div class="v">${ALGOS[currentAlgo].name}</div><div class="l">선택 알고리즘</div></div>
+     <div class="stat"><div class="v">${risk.toFixed(0)}%</div><div class="l">위험자산</div></div>
+     <div class="stat"><div class="v">${(100-risk).toFixed(0)}%</div><div class="l">안전자산</div></div>
+     <div class="stat"><div class="v">${Object.keys(currentWeights).filter(k=>currentWeights[k]>0.05).length}</div><div class="l">구성 종목</div></div>`;
+}
+function formatAmount(){const el=document.getElementById('totalAmount');let v=el.value.replace(/[^0-9]/g,'');el.value=v?Number(v).toLocaleString('ko-KR'):'';if(currentWeights)renderTable();}
+function logData(){
+  const total=getTotal();
+  const rows=Object.keys(currentWeights).filter(k=>currentWeights[k]>0.05).map(k=>{
+    const cur=Number((document.getElementById('cur_'+k)?.value||'0').replace(/[^0-9]/g,''))||0;
+    const rec=total*currentWeights[k]/100;return{name:NAMEMAP[k],w:currentWeights[k],cur,rec,diff:rec-cur};});
+  return{ts:new Date().toLocaleString('ko-KR'),algo:ALGOS[currentAlgo].name,total,rows};
+}
+function saveLog(){
+  const d=logData();let t=`=== DC형 퇴직연금 리밸런싱 로그 ===\n일시: ${d.ts}\n알고리즘: ${d.algo}\n총 투자금액: ${won(d.total)}\n\n`;
+  t+='펀드'.padEnd(26)+'비중'.padStart(7)+'현재보유'.padStart(16)+'추천금액'.padStart(16)+'변동'.padStart(18)+'\n'+''.padEnd(83,'-')+'\n';
+  d.rows.forEach(r=>{const act=r.diff>=0?`+${won(r.diff)} 매수`:`${won(r.diff)} 매도`;
+    t+=r.name.slice(0,24).padEnd(26)+(r.w.toFixed(1)+'%').padStart(7)+won(r.cur).padStart(16)+won(r.rec).padStart(16)+act.padStart(18)+'\n';});
+  const tb=d.rows.filter(r=>r.diff>0).reduce((s,r)=>s+r.diff,0),ts=d.rows.filter(r=>r.diff<0).reduce((s,r)=>s+r.diff,0);
+  t+=''.padEnd(83,'-')+`\n총 매수: ${won(tb)} / 총 매도: ${won(-ts)}\n\n※ 정보 제공 목적, 투자 권유 아님.\n`;
+  download(t,`rebalance_${stamp()}.txt`,'text/plain');
+  const h=JSON.parse(localStorage.getItem('pf_hist')||'[]');h.push({ts:d.ts,algo:d.algo,total:d.total});localStorage.setItem('pf_hist',JSON.stringify(h));
+  document.getElementById('saveMsg').textContent=`저장 완료 (이력 ${h.length}건).`;
+}
+function saveLogCSV(){const d=logData();let t='﻿펀드,비중%,현재보유,추천금액,변동\n';d.rows.forEach(r=>t+=`"${r.name}",${r.w.toFixed(1)},${r.cur},${Math.round(r.rec)},${Math.round(r.diff)}\n`);download(t,`rebalance_${stamp()}.csv`,'text/csv');document.getElementById('saveMsg').textContent='CSV 저장 완료.';}
+function download(c,fn,ty){const b=new Blob([c],{type:ty+';charset=utf-8'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=fn;a.click();URL.revokeObjectURL(u);}
+function stamp(){const d=new Date();return`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;}
+// init
+onAlgoChange();applyAlgo();
+</script>
+</body>
+</html>
