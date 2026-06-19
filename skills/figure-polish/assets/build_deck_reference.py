@@ -13,7 +13,7 @@ Slide plan:
 import os
 from pptx.util import Mm
 import pptx_figkit as K
-import fig1_slide, fig4_slide, fig5_slide, fig6_slide, fig7_slide, fig10_slide, fig12_slide
+import fig1_slide, fig4_slide, fig5_slide, fig6_slide, fig10_slide, fig12_slide
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 IMG = os.path.join(HERE, "figures_v2")
@@ -71,7 +71,7 @@ def main():
     fig4_slide.add_slide(prs, IMG)           # 4
     fig5_slide.add_slide(prs, IMG)           # 5
     fig6_slide.add_slide(prs, IMG)           # 6
-    fig7_slide.add_slide(prs, IMG)           # 7
+    image_slide(prs, "figure7_transfer_mechanics")  # 7 (curve panel = complex -> image)
     image_slide(prs, "figure8_sizeeffect")   # 8
     image_slide(prs, "figure9_red_comparison")  # 9
     fig10_slide.add_slide(prs, IMG)          # 10

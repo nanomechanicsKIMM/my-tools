@@ -292,27 +292,34 @@ class Ax:
         return shp
 
     def text(self, x, y, lines, fs, color, ha="center", va="center", bold=False,
-             italic=False, w_local=None, h_local=None, line_spacing=None):
-        # box size in data units; default generous, centered on (x,y) per anchor
-        wl = w_local if w_local is not None else (self.x1 - self.x0) * 0.30
-        hl = h_local if h_local is not None else (self.y1 - self.y0) * 0.10
-        if ha == "center":
-            lx = x - wl / 2
-        elif ha == "right":
-            lx = x - wl
+             italic=False, w_local=None, h_local=None, line_spacing=None,
+             wmm=None, hmm=None, rot=None):
+        # Box is positioned in mm (anchored at the (x,y) data point per ha/va),
+        # so this works on linear AND log axes. Use wmm/hmm for an explicit mm box
+        # (required on log axes, where a data-unit width is not constant); w_local
+        # gives a data-unit width on linear axes. rot rotates the box (e.g. 270 for
+        # a vertical y-axis title).
+        if wmm is not None:
+            w_mm = wmm
+        elif w_local is not None:
+            w_mm = self.wx(w_local)
         else:
-            lx = x
-        if va == "center":
-            ty = y + hl / 2
-        elif va == "bottom":
-            ty = y + hl
-        else:                       # top
-            ty = y
-        l, t = self.xy(lx, ty)
-        tb = self.s.slide.shapes.add_textbox(Mm(l), Mm(t), Mm(self.wx(wl)), Mm(self.hy(hl)))
+            w_mm = 30.0 if self.xlog else self.wx((self.x1 - self.x0) * 0.30)
+        if hmm is not None:
+            h_mm = hmm
+        elif h_local is not None:
+            h_mm = self.hy(h_local)
+        else:
+            h_mm = 6.0 if self.ylog else self.hy((self.y1 - self.y0) * 0.10)
+        ax_mm, ay_mm = self.xy(x, y)            # anchor point, mm top-origin
+        left = ax_mm - (w_mm / 2 if ha == "center" else w_mm if ha == "right" else 0)
+        top = ay_mm - (h_mm / 2 if va == "center" else h_mm if va == "bottom" else 0)
+        tb = self.s.slide.shapes.add_textbox(Mm(left), Mm(top), Mm(w_mm), Mm(h_mm))
         anchor = {"top": MSO_ANCHOR.TOP, "center": MSO_ANCHOR.MIDDLE,
                   "bottom": MSO_ANCHOR.BOTTOM}[va]
         _fill_tf(tb.text_frame, lines, self.s.pt(fs), color, bold, italic,
                  _ALIGN[ha], anchor, line_spacing)
-        tb.text_frame.word_wrap = (w_local is not None)
+        tb.text_frame.word_wrap = (w_local is not None or wmm is not None)
+        if rot is not None:
+            tb.rotation = rot
         return tb
