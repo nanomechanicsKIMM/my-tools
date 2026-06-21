@@ -1,0 +1,32 @@
+{
+  "name": "example_parameter_sweep",
+  "description": "예시 — 한 솔버를 파라미터 그리드로 스윕해 관심량 곡선을 얻는다 (필드를 자신의 문제로 치환).",
+  "solver_script": "my_solver.py",
+  "python": "AUTO_DETECT_DOLFINX_PYTHON",
+  "background": true,
+  "sleep_guard": "optional",
+  "mpi_per_case": 1,
+  "max_concurrent_cases": 4,
+  "parameter_grid": {
+    "param_a": [1.0, 2.0, 4.0, 8.0],
+    "param_b": [0.1, 1.0]
+  },
+  "fixed_params": {
+    "mesh_resolution": "medium"
+  },
+  "output": {
+    "results_dir": "results/example_sweep",
+    "case_json": "case_{param_a}_{param_b}.json",
+    "collect_keys": ["quantity_of_interest", "newton_iters", "converged"],
+    "plot": {
+      "x": "param_a",
+      "y": ["quantity_of_interest"],
+      "overlay_analytic": null,
+      "out_png": "results/example_sweep/sweep_curves.png"
+    }
+  },
+  "verify": {
+    "limit_checks": ["param_a->0 => quantity_of_interest-><known limit>"],
+    "monotonic": ["quantity_of_interest monotonic in param_a"]
+  }
+}

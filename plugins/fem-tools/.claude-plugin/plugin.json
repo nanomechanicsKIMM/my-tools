@@ -1,0 +1,9 @@
+{
+  "name": "fem-tools",
+  "version": "1.0.0",
+  "description": "FEniCSx/dolfinx 유한요소해석 범용 도구 모음 — FEM 도메인 특화 에이전트(formulator/implementer/verifier)와 스킬(verify/report/sweep/cheatsheet). 임의의 FEM 문제에 적용, 비-FEM 범용 사용은 거부.",
+  "author": {
+    "name": "nanomechanicsKIMM"
+  },
+  "license": "MIT"
+}

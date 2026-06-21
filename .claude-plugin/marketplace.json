@@ -38,6 +38,19 @@
         "./agents/renderer-agent.md"
       ],
       "skills": ["./skills"]
+    },
+    {
+      "name": "fem-tools",
+      "source": "./plugins/fem-tools",
+      "description": "FEniCSx/dolfinx 유한요소해석 범용 도구 모음 (FEM 도메인 특화 에이전트 formulator/implementer/verifier + 스킬 verify/report/sweep/cheatsheet). 임의 FEM 문제 적용, 비-FEM 사용 거부.",
+      "version": "1.0.0",
+      "strict": true,
+      "agents": [
+        "./agents/fem-formulator.md",
+        "./agents/fem-implementer.md",
+        "./agents/fem-verifier.md"
+      ],
+      "skills": ["./skills"]
     }
   ]
 }
