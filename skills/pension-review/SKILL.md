@@ -3,10 +3,12 @@ name: pension-review
 description: >-
   DC형 퇴직연금(과학기술인공제회 등) 펀드 분석·추천·백테스트·글로벌 분산 전 과정을 자동화하는
   워크플로우 스킬. 사용자가 "퇴직연금 포트폴리오", "연금 펀드 추천", "DC형 자산배분",
-  "펀드 백테스트", "포트폴리오 검증", "연금 글로벌 분산", "실적배당형 상품 분석" 등을 언급하거나
+  "펀드 백테스트", "포트폴리오 검증", "연금 글로벌 분산", "실적배당형 상품 분석",
+  "섹터 로테이션", "퀀트 알고리즘 도출·검증" 등을 언급하거나
   과기공제회 펀드 엑셀(펀드+필터+검색-YYYYMMDD.xlsx)을 다루며 추천·검증을 요청하면 이 스킬을 사용한다.
   KOFIA 일별 NAV 수집→분배락 보정→슬롯 기반 추천→forward-pricing 백테스트(DC제약)→
-  부트스트랩 다중경로 강건성→상관/신흥국 글로벌 분산→HTML 대시보드까지 8단계로 처리한다.
+  부트스트랩 다중경로 강건성→상관/신흥국 글로벌 분산→HTML 대시보드까지 8단계로 처리하며,
+  퀀트 알고리즘 도출(3-에이전트·페어 부트스트랩 심판·과적합 가드)·섹터 로테이션 분석도 지원한다.
 ---
 
 # pension-review — DC형 퇴직연금 포트폴리오 워크플로우
@@ -60,11 +62,17 @@ DC형 퇴직연금 펀드를 **수집→가공→검증→추천→백테스트�
 - `constraints.py`: DC 제약(위험70/단일40), `dc_constrained()` 래퍼
 - `backtest_portfolio.py`: 추천 포트폴리오 단일경로(2.5y 정확/5y proxy)·글라이드패스
 - `mc_backtest.py`: 구간벡터화 경량엔진 + Stationary Block Bootstrap **다중경로**(강세장 편향 제거). `fast_run`은 NaN 안전(0×NaN 차단).
+- **`fetch_index_history.py` — FDR 장기 실지수 백테스트(직교 강건성)**: 5년 펀드 패널·부트스트랩이 못 보는 *실제 약세장*(2008·2011·2015·2018·2020·2022)에서 정책 아키타입을 검증. FinanceDataReader로 US500(1979~)·IXIC(1979~)·KS200(2010~)·USD/KRW(2003~) 수집→**월간 KRW 언헤지·TR근사** 패널(`index_panel.csv`). 가드: SOX미제공→반도체는 IXIC흡수, 나스닥은 IXIC(종합)대용, US+KR 일별혼합 금지(ME 리샘플), 가격지수+배당수익률 가산(TR근사), 월간 전용 `sim`(ppy=12, forward). 산출: ①아키타입 vs 벤치마크(다자산 2010~/US-only 2003~) ②**위기별 MDD 표**(GFC 추천 −15.0% vs 주식100% −23.3%, 전위기 방어 +2.5~8.3%p) ③**장기 walk-forward(fold 12·18개)**로 WF 통계력 보강 — 위험슬리브 4종 선택이 OOS에서 고정 추천에 동률/패배(FAIL) 재확인. 실행: 작업폴더에서 `python <skill>/scripts/fetch_index_history.py [--refresh]`. **레이블 주의: '추천 펀드'가 아니라 '정책 아키타입의 실약세장 스트레스' — 펀드단위 결론과 구분.**
 
-## Phase 5 — 알고리즘 비교
+## Phase 5 — 알고리즘 비교 + 엄밀 평가
 - `algos.py`(10종: 모멘텀/듀얼/트렌드/역변동성/리스크패리티/최소분산/최대샤프/HRP/HERC/Mean-CVaR)
-- `algos_new.py`(커스텀: 모멘텀가속/단기반전/섹터로테이션, 분기·월간 15일 리밸)
-- `backtest_algos.py`·`mc_hybrid.py`: 추천 vs 알고리즘 비교. **단순 고정비중 > 복잡 최적화** 일관 확인.
+- `algos_new.py`(커스텀): 모멘텀가속·단기반전·섹터로테이션 + **TradingAgents 수집 3종**(`regime_gate` 200SMA레짐·`vol_target` 변동성타게팅·`ensemble_vote` MACD+SMA+RSI 앙상블) + `diversified_riskbudget`(분산 inverse-vol 리스크버짓).
+- `backtest_algos.py`·`backtest_tradingagents.py`·`mc_hybrid.py`: 추천 vs 알고리즘 단일+다중경로 비교.
+- **`algo_eval.py` — 페어 부트스트랩 심판**: 동일 경로에서 추천vs후보 페어 비교 + 게이트(CAGR≥1.10× AND |MDD|≤0.90×) 자동판정. 신규 알고리즘 평가의 단일 객관 기준.
+- **`walkforward_oos.py` — Walk-Forward 표본외(OOS) 검증**: 부트스트랩이 못 보는 *알고리즘 선택의 과적합*을 시간순 전진으로 측정. anchored 학습 `[0,t)`→OOS 테스트 `[t,t+126)`를 126일씩 전진하며, 매 fold마다 후보 10종을 학습 Sharpe로 선택→테스트 적용. WF-Select(메타)·추천65/35·개별algo고정·동일가중을 동일 fold로 stitch 비교, 전환 fold엔 전환비용 차감. 게이트는 `algo_eval`과 동일. 검증된 `fast_run` 엔진 재사용(skfolio 미사용 — DC제약·예금쿠션·forward-pricing 수치체계 일관성). 실행: 작업폴더에서 `PYTHONPATH=<skill>/scripts python <skill>/scripts/walkforward_oos.py [TEST] [STEP] [FREQ]` → `wf_oos_results.json`. **실증(5y·6fold): WF-Select FAIL**(OOS Sharpe 1.81 vs 추천 2.45, MDD −12.2% vs −6.7%, fold승률 3/6) — *선택은 과적합, 고정 추천65/35가 표본외 우위* 재확인. ⚠ 5년 일별→fold 적음(통계력 낮음). FDR 장기 실지수 백테스트 병행 권장.
+- **3-에이전트 엄밀평가 프로토콜**(도출→백테스트→비평): GitHub 퀀트레포(Riskfolio-Lib·PyPortfolioOpt·HRP·TradingAgents) 조사→구현→**독립 critic 감사**(룩어헤드·DC·과적합·아티팩트). 과적합 가드(주의사항) 필수.
+- **결론(검증됨)**: **단순 고정비중(추천65/35) > 복잡 최적화·타이밍** 일관. 부트스트랩이 추세형 타이밍에 불리. 분산은 **MDD/Sharpe만 견고 개선, 수익(CAGR) 우위는 사후편향**으로 표본외 불가.
+- **섹터 로테이션(보조 분석)** `sector_rotation.py`: 분기별 최고수익 섹터 변천 bar chart(섹터=region+테마 반도체/바이오의료/국방우주/에너지이차전지/금, MIN_N=2 단일펀드·브라질 제외) → 시장 국면 진단·정성 보조.
 
 ## Phase 6 — 글로벌 분산
 - `screen_global.py`:
@@ -92,4 +100,6 @@ DC형 퇴직연금 펀드를 **수집→가공→검증→추천→백테스트�
 - 모든 보고서는 **투자 권유 아님** 면책 포함. 과거 성과는 미래 보장 안 함.
 - 분배락 탐지는 휴리스틱(1000±1.5 밴드) — 1년+ 누적수익에 ±수%p 오차 가능, 백테스트(일일수익률)엔 영향 제한적.
 - 신흥국 분산효과는 일별 백테스트가 과대평가 가능 → 정성 리서치로 보정.
+- **알고리즘 도출 과적합 가드(필수)**: ①**사후편향** — 풀을 실현수익 기준으로 큐레이션 금지(부트스트랩이 실현수익을 baked-in). 승자 상위2종 제거 + ex-ante(수익무관 AUM/카테고리) 풀로 재검증해 CAGR 우위 진위 확인. ②**비동기 NAV** — 아시아펀드 對미국 일별상관 과소측정 → 분산/MDD 개선 과대평가(0.5~1%p 차감). ③**데이터 스누핑** — 다변형·다시드 반복은 거짓양성. **음성 결론 후 추가 탐색 금지**. ④홀드아웃 다중시드 교차검증 의무.
+- **추천65/35는 표본외 효율적 벤치마크** — 적대적 탐색에도 수익 우위 안 깨짐. 개선 여지는 "수익↑"이 아니라 "분산으로 MDD↓"(이마저 비동기NAV 과제 잔존). walk-forward OOS(`walkforward_oos.py`)로도 *알고리즘 선택*이 표본외에서 추천에 패배 확인(과적합) — 단 5y·소수 fold라 통계력 낮음, FDR 장기 실지수 백테스트로 보강 필요.
 - 방법론 상세: `references/methodology.md` 참조.
