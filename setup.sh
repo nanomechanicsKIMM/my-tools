@@ -80,7 +80,9 @@ update_plugin_registries() {
     [[ -f "$ip_file" ]] || echo '{"version":2,"plugins":{}}' > "$ip_file"
     [[ -f "$km_file" ]] || echo '{}' > "$km_file"
 
-    (python3 2>/dev/null || python) - <<EOF
+    local PY
+    if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+    "$PY" - <<EOF
 import json
 
 # installed_plugins.json
