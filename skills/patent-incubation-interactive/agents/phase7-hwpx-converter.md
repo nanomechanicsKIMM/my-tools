@@ -14,7 +14,7 @@ model: sonnet
 
 ## 의존 스크립트
 
-- **convert_hwpx.py**: `{SKILL_ROOT}/scripts/convert_hwpx.py` — 메인 변환 스크립트 (권장)
+- **convert_hwpx.py**: `{SHARED_SKILL_ROOT}/scripts/convert_hwpx.py` — 메인 변환 스크립트 (auto 스킬 공유; auto의 `assets/` 양식 템플릿에 의존하므로 SHARED 경로 필수)
 - **fix_namespaces.py**: `C:/Users/JHKIM/.claude/skills/hwpx/scripts/fix_namespaces.py`
 - **validate.py**: `C:/Users/JHKIM/.claude/skills/hwpx-xml/scripts/validate.py`
 
@@ -23,7 +23,7 @@ model: sonnet
 > [!important] 아래 스크립트를 직접 실행하는 것이 가장 안정적이다. Python 코드를 에이전트가 재구현하지 말 것.
 
 ```bash
-python "{SKILL_ROOT}/scripts/convert_hwpx.py" \
+python "{SHARED_SKILL_ROOT}/scripts/convert_hwpx.py" \
   --disclosure "{output_dir}/(YYYYMMDD 발명자) {발명명칭}vN.md" \
   --output "{output_dir}/{발명명칭}_발명내용설명서.hwpx" \
   --diagrams "{output_dir}/diagrams"

@@ -134,8 +134,12 @@ SVG XML을 직접 작성하여 figures/*.svg 파일 생성. 3가지 매체별 �
 #### 3-2) SVG → PNG (HWPX 임베드용) ⭐ 필수
 
 ```bash
-python scripts/svg2png.py --src figures/ --dst figures/png/ --dpi 200
+python scripts/svg2png.py --src figures/ --dst diagrams/ --dpi 200
 ```
+
+> SVG→PNG는 matplotlib PNG와 동일하게 **`diagrams/`**(HWPX 임베드 공용 폴더)로 출력한다.
+> `convert_hwpx.py`가 `diagrams/*.png`를 비재귀 glob + 알파벳순 정렬로 §9에 삽입하므로,
+> SVG 원본 파일명을 `fig1_`, `fig2_` … 접두사로 지으면 도면 순서가 보존된다.
 
 내부 4중 방어:
 1. `sys.modules['cairocffi'] = None` — Windows libcairo-2.dll 부재 우회
@@ -170,16 +174,16 @@ Text-to-path outline이 유일한 100% 작동 방식.
 #### 3-5) 최종 산출물 구조
 
 ```
-figures/
-├── fig1_*.svg              # 원본 (text 포함, svglib·HWPX·웹용)
+figures/                    # SVG 벡터 원본 + PowerPoint 변환본
+├── fig1_*.svg              # 원본 (text 포함, svglib·웹용)
 ├── fig2_*.svg
-├── png/                    # SVG → PNG (HWPX 임베드)
-│   ├── fig1_*.png
-│   └── ...
 ├── emf/                    # SVG → EMF (PowerPoint metafile)
 │   └── fig*.emf
-└── pptx/                   # SVG → outlined SVG (PowerPoint shape)
-    └── fig*.svg            # text → path 변환 완료
+└── pptx/                   # SVG → outlined SVG (PowerPoint shape, text→path)
+    └── fig*.svg
+diagrams/                   # HWPX 임베드용 PNG (matplotlib + SVG→PNG 공용) ⭐
+├── fig1_*.png              # convert_hwpx.py가 알파벳순으로 §9에 삽입
+└── fig2_*.png
 ```
 
 ---
@@ -274,7 +278,7 @@ def create_process_flow_diagram(output_dir, filename, steps):
     return filepath
 ```
 
-### Step 4: 발명내용설명서 MD에 Mermaid 다이어그램 인라인 삽입
+### Step 5: 발명내용설명서 MD에 Mermaid 다이어그램 인라인 삽입
 
 발명내용설명서 MD의 §6(구성)과 §9(추가자료)에 Mermaid 코드 블록을 직접 삽입한다.
 Obsidian에서 바로 렌더링되므로 별도 파일이 필요 없다.
@@ -308,16 +312,22 @@ flowchart LR
 ```
 ````
 
-### Step 5: PNG 도면 생성 (HWPX 삽입용)
+### Step 6: PNG 도면 취합 (HWPX 삽입용 diagrams/)
 
-Mermaid와 별도로, HWPX에 삽입할 PNG 파일을 matplotlib로 생성한다.
-(HWPX는 Mermaid를 렌더링할 수 없으므로 PNG가 필요)
+HWPX는 Mermaid·SVG를 직접 렌더링할 수 없으므로, **모든 도면의 PNG를
+`{output_dir}/diagrams/`에 취합**한다. 이 폴더는 두 경로로 채워진다:
+
+- **SVG schematic** → `svg2png.py --dst diagrams/` (Step 3-2)
+- **데이터 플롯** → matplotlib `savefig(.../diagrams/...)` (Step 4)
+
+`convert_hwpx.py`가 `diagrams/*.png`를 비재귀 glob + 알파벳순으로 §9에 삽입하므로,
+도면 번호는 `fig1_`, `fig2_` … 접두사로 통일한다 (도구 간 번호 중복 금지).
 
 ```
 {output_dir}/diagrams/
-├── fig1_system_overview.png      # 전체 시스템 구성도
+├── fig1_system_overview.png      # 전체 시스템 구성도 (SVG 또는 matplotlib)
 ├── fig2_process_flow.png         # 공정 흐름도
-├── fig3_cross_section.png        # 장치 단면도
+├── fig3_cross_section.png        # 장치 단면도 (SVG schematic 권장)
 ├── fig4_operating_principle.png  # 작동 원리도
 └── fig5_comparison.png           # 종래기술 vs 본 발명 비교
 ```
@@ -325,14 +335,18 @@ Mermaid와 별도로, HWPX에 삽입할 PNG 파일을 matplotlib로 생성한다
 ## 출력
 
 1. `{output_dir}/발명내용설명서 MD` 업데이트 — §6, §9에 Mermaid 인라인 삽입
-2. `{output_dir}/diagrams/*.png` — HWPX 삽입용 PNG 도면
-3. manifest 업데이트: `"phase6b": {"status": "completed", "output": "diagrams/", "diagram_count": N}`
+2. `{output_dir}/figures/*.svg` (+ `emf/`, `pptx/`) — SVG 벡터 원본 및 PowerPoint 변환본 (schematic·단면도)
+3. `{output_dir}/diagrams/*.png` — HWPX 삽입용 PNG (SVG→PNG + matplotlib 공용)
+4. manifest 업데이트: `"phase6b": {"status": "completed", "output": "diagrams/", "figures": "figures/", "diagram_count": N}`
 
 ## 주의사항
 
-- **Mermaid 우선**: 코드로 표현 가능한 도면은 반드시 Mermaid로 발명내용설명서 MD에 인라인 삽입
-- **PNG 병행**: HWPX 삽입용으로 matplotlib PNG도 함께 생성
+- **도면 유형별 도구 선택** (정책표 기준 — 한 도면에 둘을 섞지 말 것):
+  - 흐름도·구성도·상태도·비교표 → **Mermaid** (발명내용설명서 MD 인라인 삽입)
+  - 기술 단면도·구조도·schematic → **손코딩 SVG** (Step 3, `figures/`) ⭐ 권장
+  - 데이터 플롯·그래프 → **matplotlib PNG** (Step 4)
+- **HWPX 임베드**: 위 SVG·matplotlib 결과 PNG를 **모두 `diagrams/`로 취합** → convert_hwpx.py가 §9에 자동 삽입
 - **Excalidraw 미사용**: 에이전트가 Excalidraw 파일을 생성하지 않는다 (사용자가 핸드라이팅 시에만 직접 생성)
 - matplotlib 한글 폰트: `plt.rcParams['font.family'] = 'Malgun Gothic'` (Windows)
-- 도면 번호는 [도 1], [도 2] ... 형식으로 통일
+- 도면 번호는 [도 1], [도 2] ... 형식으로 통일 (도구 간 번호 중복 금지)
 - 특허 도면 스타일: 흑백 기본, 강조만 제한적 색상

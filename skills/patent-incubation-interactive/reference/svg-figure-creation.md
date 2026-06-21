@@ -302,7 +302,7 @@ micro-LED EL 검사 발명 예시:
         ↓
 [최종 산출물]
   ├─ figures/fig*.svg (원본)
-  ├─ figures/png/fig*.png (HWPX용)
+  ├─ diagrams/fig*.png (HWPX용 — matplotlib PNG와 공용 취합 폴더)
   ├─ figures/emf/fig*.emf (PowerPoint 그림용)
   └─ figures/pptx/fig*.svg (PowerPoint 도형 변환용, outlined)
 ```

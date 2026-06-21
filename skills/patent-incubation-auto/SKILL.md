@@ -42,8 +42,9 @@ KIPRIS_ENV_FILE = C:/Users/JHKIM/Claude_Work/.env
 | 유형 | 도구 | 용도 |
 |------|------|------|
 | 코드화 가능한 도면 | **Mermaid** | 흐름도, 시스템 구성도, 상태 변화도, 비교표, 시퀀스 다이어그램 등 |
+| 기술 단면도·구조도·schematic | **손코딩 SVG** ⭐ | figures/*.svg → svg2png.py로 PNG 변환, EMF/outlined로 PowerPoint (Phase 6b Step 3) |
 | 자유 형식 스케치 | **Excalidraw** | 아이디어 핸드라이팅, 개념 스케치 등 사용자가 직접 그리는 경우만 |
-| HWPX 삽입용 | **PNG (matplotlib)** | convert_hwpx.py가 §9에 자동 삽입하는 이미지 |
+| HWPX 삽입용 | **PNG (matplotlib + SVG→PNG)** | diagrams/*.png를 convert_hwpx.py가 §9에 자동 삽입 |
 
 ### Mermaid 다이어그램 규칙
 
@@ -69,10 +70,12 @@ Phase 6 에이전트가 §1~§9 작성 시, TRIZ 분석 결과를 일반적인 �
 
 ### PNG 도면 규칙 (HWPX 삽입용)
 
-- Mermaid와 별도로 **matplotlib로 PNG 파일도 생성** (HWPX에는 Mermaid 삽입 불가)
-- `{output_dir}/diagrams/*.png` 에 저장
-- convert_hwpx.py의 `--diagrams` 옵션으로 §9에 자동 삽입
-- 해상도: 150 dpi, 흰색 배경, 한글 폰트(Malgun Gothic)
+- Mermaid·SVG는 HWPX에 직접 삽입 불가 → **PNG로 변환하여 `{output_dir}/diagrams/`에 취합**
+  - 기술 단면도·schematic: 손코딩 SVG → `scripts/svg2png.py --src figures/ --dst diagrams/` (Phase 6b Step 3)
+  - 데이터 플롯: matplotlib `savefig` → `diagrams/` (Phase 6b Step 4)
+- convert_hwpx.py의 `--diagrams` 옵션으로 `diagrams/*.png`를 알파벳순으로 §9에 자동 삽입
+- 파일명은 `fig1_`, `fig2_` … 접두사로 도면 순서 보존 (도구 간 번호 중복 금지)
+- 해상도: 150 dpi(matplotlib) / 200 dpi(SVG), 흰색 배경, 한글 폰트(Malgun Gothic)
 
 ---
 
@@ -512,7 +515,7 @@ Agent(
          Read {output_dir}/evaluation.json for top IFRs.
 
          Input: {manifest.input}
-         Output directory: {output_dir}/diagrams/
+         Output directories: {output_dir}/diagrams/ (HWPX 임베드용 PNG 취합), {output_dir}/figures/ (SVG 벡터 원본 + emf/pptx)
          Also update: the Phase 6 output MD file (latest vN.md in {output_dir}) §9 with diagram references
 
          Generate at minimum:
@@ -520,14 +523,20 @@ Agent(
          2. 공정 흐름도
          3. 종래기술 vs 본 발명 비교도
 
-         Use matplotlib for technical drawings, Mermaid for flowcharts.
+         도면 유형별 도구 (phase6b 정책표 — 한 도면에 혼용 금지):
+         - 흐름도·구성도·상태도·비교표 → Mermaid (발명내용설명서 MD 인라인 삽입)
+         - 기술 단면도·구조도·schematic → 손코딩 SVG(figures/*.svg) 후
+           'python {SKILL_ROOT}/scripts/svg2png.py --src {output_dir}/figures/ --dst {output_dir}/diagrams/ --dpi 200'
+         - 데이터 플롯 → matplotlib savefig → {output_dir}/diagrams/
+         모든 PNG는 diagrams/로 취합되어 convert_hwpx.py가 알파벳순으로 §9에 삽입한다.
+         파일명은 fig1_, fig2_ … 접두사로 통일.
          Korean font: plt.rcParams['font.family'] = 'Malgun Gothic'"
 )
 ```
 
 manifest 업데이트:
 ```json
-"phase6b": {"status": "completed", "output": "diagrams/", "diagram_count": N}
+"phase6b": {"status": "completed", "output": "diagrams/", "figures": "figures/", "diagram_count": N}
 ```
 
 ---

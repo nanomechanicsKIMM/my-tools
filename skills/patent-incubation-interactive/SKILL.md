@@ -23,9 +23,15 @@ KIPRIS_ENV_FILE = C:/Users/JHKIM/Claude_Work/.env
 ```
 reference/   → {SHARED_SKILL_ROOT}/reference/
 templates/   → {SHARED_SKILL_ROOT}/templates/
-scripts/     → {SHARED_SKILL_ROOT}/scripts/
+scripts/     → {SHARED_SKILL_ROOT}/scripts/   (convert_hwpx.py·search_patents_kipris.py — auto의 assets/ 의존)
 assets/      → {SHARED_SKILL_ROOT}/assets/
 ```
+
+> [!note] SVG 도면 변환 스크립트 예외
+> `svg2png.py`·`svg2emf.py`·`outline_svg_text.py`는 assets 의존이 없는 독립 변환기로
+> **interactive/scripts/에 로컬 번들**되어 `{SKILL_ROOT}/scripts/`로 참조한다.
+> 반면 `convert_hwpx.py`는 auto의 `assets/` 양식 템플릿(`TEMPLATE_PATH=SKILL_ROOT/assets/...`)에
+> 의존하므로 반드시 `{SHARED_SKILL_ROOT}/scripts/`(=auto)에서 실행한다.
 
 ---
 
@@ -44,7 +50,8 @@ assets/      → {SHARED_SKILL_ROOT}/assets/
 | 유형 | 도구 | 용도 |
 |------|------|------|
 | 코드화 가능한 도면 | **Mermaid** | 흐름도, 시스템 구성도, 상태 변화도, 비교표 |
-| HWPX 삽입용 | **PNG (matplotlib)** | convert_hwpx.py가 §9에 자동 삽입하는 이미지 |
+| 기술 단면도·구조도·schematic | **손코딩 SVG** ⭐ | figures/*.svg → svg2png.py로 PNG 변환, EMF/outlined로 PowerPoint (Phase 6b Step 3) |
+| HWPX 삽입용 | **PNG (matplotlib + SVG→PNG)** | diagrams/*.png를 convert_hwpx.py가 §9에 자동 삽입 |
 
 ### TRIZ 용어 사용 규칙
 
@@ -737,8 +744,15 @@ Agent(
          Pre-generated diagrams (if available): {output_dir}/diagrams/
          Skip regeneration for diagrams that already exist and don't depend on §6 changes.
          
-         Output directory: {output_dir}/diagrams/
+         Output directories: {output_dir}/diagrams/ (HWPX 임베드용 PNG 취합), {output_dir}/figures/ (SVG 벡터 원본 + emf/pptx)
          Also update: the MD file §9 with diagram references
+
+         도면 유형별 도구 (phase6b 정책표 — 한 도면에 혼용 금지):
+         - 흐름도·구성도·상태도·비교표 → Mermaid (MD 인라인 삽입)
+         - 기술 단면도·구조도·schematic → 손코딩 SVG(figures/*.svg) 후
+           'python {SKILL_ROOT}/scripts/svg2png.py --src {output_dir}/figures/ --dst {output_dir}/diagrams/ --dpi 200'
+         - 데이터 플롯 → matplotlib savefig → {output_dir}/diagrams/
+         모든 PNG는 diagrams/로 취합되어 convert_hwpx.py가 알파벳순으로 §9에 삽입한다. 파일명은 fig1_, fig2_ … 접두사.
          Use matplotlib Korean font: plt.rcParams['font.family'] = 'Malgun Gothic'"
 )
 ```
