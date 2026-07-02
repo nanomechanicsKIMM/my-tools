@@ -51,7 +51,12 @@ assets/      → {SHARED_SKILL_ROOT}/assets/
 |------|------|------|
 | 코드화 가능한 도면 | **Mermaid** | 흐름도, 시스템 구성도, 상태 변화도, 비교표 |
 | 기술 단면도·구조도·schematic | **손코딩 SVG** ⭐ | figures/*.svg → svg2png.py로 PNG 변환, EMF/outlined로 PowerPoint (Phase 6b Step 3) |
-| HWPX 삽입용 | **PNG (matplotlib + SVG→PNG)** | diagrams/*.png를 convert_hwpx.py가 §9에 자동 삽입 |
+| HWPX 삽입용 | **PNG (SVG→PNG 우선, matplotlib는 데이터 플롯)** | diagrams/*.png를 convert_hwpx.py가 §9에 자동 삽입 |
+
+> [!important] Phase 6b 도면 필수 규칙 (상세: agents/phase6b-diagram-generator.md)
+> - **규칙 A (원본 재활용)**: 사용자 제공 자료(제안서 HWPX BinData·선행 등록공보 PDF 도면·기획서)의 그림을 먼저 추출·Read하여 근거로 삼고, 신규 발명에 맞게 깨끗한 SVG로 재작도한다. 원본 부호 체계 유지.
+> - **규칙 B (텍스트 절대 비겹침)**: 모든 텍스트는 도형과 절대위치로 겹치지 않는다. 제목=상단 밴드, 설명=예약 legend 박스(부호열·설명열 분리), 부호=여백+leader line(부품 위 직접표기 금지). 생성 후 Read로 육안 검증 필수.
+> - **규칙 C (도면 ↔ 설명 동기화, 2026-07 신설)**: 도면이 신규·교체·업데이트되면(특히 사용자 제공 원도 pptx/이미지를 삽입할 때) 각 도면의 실제 내용(라벨·구성요소·신호 흐름·좌표축)을 Read 또는 텍스트 추출(python-pptx 등)로 파악하여, §9 "도면의 간단한 설명"(도 1~도 N)을 그 내용에 맞게 **상세히 다시 작성**한다. 도면 개수·순서·주제가 바뀌면 설명 항목 수·순서도 일치시키고 관련 청구항 링크를 갱신한다. 사용자 원도 삽입 시 600 dpi PNG 변환(PowerPoint COM: 슬라이드 in×600 픽셀) 후 `diagrams/`에 배치하면 convert_hwpx.py가 §9에 삽입한다.
 
 ### TRIZ 용어 사용 규칙
 
@@ -68,18 +73,27 @@ assets/      → {SHARED_SKILL_ROOT}/assets/
 - **상세 설명 동반**: 짧게 자르지 말고 한 문장 안에 조건·수치·재료·메커니즘·인과를 충분히 담는다. "상세한 설명이 추가된 개조식"이 핵심.
 - **§6 계층적 글머리기호 필수**: `6.1 / 6.2 / 6.1.1` 숫자 하위섹션 **금지**. markdown `- ` + 공백 2칸 = 1 레벨(최대 3레벨) 사용. convert_hwpx.py가 HWPX 변환 시 ●/○/▪/- 계층 bullet + 내어쓰기(hanging indent)로 자동 렌더링.
 
-### 참고문헌 정합 검증 규칙 (필수)
+### 참고문헌 정합 검증 규칙 (필수, 2026-07 개정 — 클린 리스트 원칙)
 
-§9.4 참고문헌 및 본문 인용의 모든 외부 문헌(논문·특허)은:
+> [!important] 클린 리스트 원칙 (NON-NEGOTIABLE)
+> 발명신고서 §9 참고문헌 리스트에는 **검증된 실제 문헌의 서지 정보만** 기재한다.
+> `(정합 확인!)`·`[정정:...]`·`(삭제)`·`(정합 불일치)` 등 마커·편집문구를 리스트에
+> **절대 넣지 않는다.** 무엇을 정정·삭제했는지의 검증 이력은 `reference_verification.json`
+> (audit trail)에만 남긴다. 리스트는 순수 서지만 남는다.
+
+§9 참고문헌 및 본문 인용의 모든 외부 문헌(논문·특허)은:
 
 1. **DOI 링크 기재** (논문): `https://doi.org/10.XXXX/...` 형식
-2. **KIPRIS 링크 기재** (한국 특허): `https://doi.org/10.8080/10YYYYNNNNNNN` 형식
-3. **Google Scholar 또는 KIPRIS API로 내용 검증 후** 문헌 설명 끝에 **"(정합 확인!)"** 부착
-4. 검증 불가(내부 메모 등)는 `외부 공개 DOI 없음 — 정합 확인 대상 아님` 표기
+2. **KIPRIS 링크 또는 특허번호 기재** (한국 특허): `https://doi.org/10.8080/10YYYYNNNNNNN` 또는 `KR 10-XXXXXXX`
+3. **CrossRef/KIPRIS API로 번호·제목·저자·연도 실제 검증**(Phase 6c). 결과는 reference_verification.json에 status(verified/corrected/removed)로 기록.
+4. **검증 실패·실재 불명 문헌은 리스트에서 제거**하고, 본문 inline 인용을 gap 없이 `[1]~[N]` 순차로 **재번호**한다. 제거·정정 이력은 json에만 기록.
+5. 최종 리스트에는 마커·주석·정정표기가 없어야 한다.
+
+**강제 게이트**: `{SKILL_ROOT}/scripts/verify_citations.py` 가 (1) 리스트에 편집문구가 없는지, (2) 각 참고문헌이 json 검증 항목과 DOI/특허번호로 매칭되는지, (3) removed 문헌이 재등장하지 않는지 검사. exit!=0 이면 Phase 7 차단.
 
 **KIPRIS API 키**: `{KIPRIS_ENV_FILE}`의 `KIPRIS_REST_AccessKey` 사용.
 
-**잘못된 인용 탐지 패턴**: 저자·제목·저널·연도 조합이 실제 논문과 다르거나, 같은 PII가 서로 다른 참고문헌에 중복 사용되면 **환각 의심** → 재검증 필수.
+**잘못된 인용 탐지 패턴**: 저자·제목·저널·연도 조합이 실제 논문과 다르거나, 같은 PII가 서로 다른 참고문헌에 중복 사용되면 **환각 의심** → 재검증 또는 제거.
 
 ---
 
@@ -648,18 +662,20 @@ Agent(
          4. Written in Korean
          5. If prior_art is degraded, mark §3/§4/§8 with [선행특허 수동 보완 필요]
          6. After writing, update user-philosophy.md §4 with new patterns
-         7. 참고문헌에 (정합 확인!) 마커를 절대 스스로 부착하지 말 것 — 정합 마커는
-            Phase 6c만 실제 검증 후 삽입한다. 작성 단계 인용은 마커 없이 서지만 기재.
-         8. 참고문헌은 '- [N] 저자, "제목", 저널, 연도. DOI/KIPRIS' 형식의 리스트로
-            기재하여 Phase 6c 파서(verify_citations.py)가 위치와 무관하게 인식 가능하게 한다."
+         7. 참고문헌 리스트에는 (정합 확인!)·[정정]·(삭제) 등 마커/편집문구를 절대 넣지
+            말 것. 검증되지 않은 문헌은 애초에 넣지 않는다(추정 인용 금지). 검증·정정·제거는
+            Phase 6c가 수행하고 이력은 reference_verification.json에만 기록한다.
+         8. 참고문헌은 '- [N] 저자, \"제목\", 저널, 연도. DOI/KIPRIS' 형식의 순수 서지 리스트로
+            기재(마커 없음). Phase 6c 파서(verify_citations.py)가 DOI/특허번호로 검증 매칭한다."
 )
 ```
 
-> [!warning] 마커 위조 방지 (2026-07 신설)
+> [!warning] 클린 리스트 / 마커 위조 방지 (2026-07)
 > 실제 run에서 Phase 6c가 누락됐는데 작성 에이전트가 참고문헌 20건 전부에
 > (정합 확인!)을 임의 부착 → CrossRef 재검증 시 학술 DOI 6건이 404/무관논문/제목오류로
-> 판명된 사고가 있었다. 위 요구사항 7·8과 Phase 6c의 강제 게이트(verify_citations.py)로
-> 재발을 차단한다.
+> 판명된 사고가 있었다. 대책: (a) 리스트에는 검증된 서지만, 마커·편집문구 금지, (b) Phase 6c가
+> 검증·정정·제거·재번호를 수행하고 이력은 reference_verification.json에만 기록, (c) 강제 게이트
+> verify_citations.py로 재발 차단.
 
 ### Gate 6: 섹션별 검토 [필수]
 
@@ -823,7 +839,7 @@ Agent(
 
 ### Phase 6c 에이전트 호출
 
-발명내용설명서 MD의 모든 인용문헌(학술 논문·KR/외국 특허·DOI·보고서)을 외부 DB(KIPRIS Plus, CrossRef, OpenAlex, Semantic Scholar, Google Patents)로 직접 조회하여 번호·제목·저자·출원인의 정합성을 검증하고, 부록 C 각 항목에 `(정합 확인!)` 마커를 삽입하며, 원문 PDF를 `{output_dir}/reference/` 에 저장한다.
+발명내용설명서 MD의 모든 인용문헌(학술 논문·KR/외국 특허·DOI·보고서)을 외부 DB(KIPRIS Plus, CrossRef, OpenAlex, Semantic Scholar, Google Patents)로 직접 조회하여 번호·제목·저자·출원인의 정합성을 검증하고, **참고문헌 리스트를 검증된 실제 문헌의 순수 서지만 남도록 정리(미검증·실재 불명 문헌 제거 + 본문 inline 인용을 gap 없이 재번호)** 하며, 검증 이력은 `reference_verification.json`에 기록하고, 원문 PDF를 `{output_dir}/reference/` 에 저장한다. **리스트에는 (정합 확인!)·[정정]·(삭제) 등 마커·편집문구를 넣지 않는다.**
 
 #### KIPRIS API 키 로드
 
@@ -855,22 +871,21 @@ Agent(
          Input: {manifest.input}
          Outputs:
            (1) {output_dir}/reference/ (다운로드된 PDF 모음)
-           (2) {output_dir}/reference_verification.json
-           (3) 업데이트된 Phase 6 MD (vN 유지, (정합 확인!) 마커 + 부록 C.5 요약 추가)
+           (2) {output_dir}/reference_verification.json (검증 audit: status verified/corrected/removed + renumber_map)
+           (3) 정리된 Phase 6 MD (vN 유지): 참고문헌=검증 서지만, 마커 없음, 미검증 제거 후 gap 없이 재번호
          
          CRITICAL REQUIREMENTS:
          1. KR 특허는 download_patent_pdf.py --kr --verify 로 출원번호-제목 자동 대조
          2. 학술 논문은 CrossRef DOI 확인 → OpenAlex OA URL → Zettelkasten 캐시 순으로 PDF 확보
-         3. PDF 첫 페이지 제목 불일치 시 PDF 폐기, (정합 불일치) 마커 삽입
-         4. KIMM 내부 자문(구두)은 검증 대상 아님 — 스킵
-         5. 부록 C.5 섹션 새로 추가하여 검증 요약표 작성
-         6. §1~§9 본문은 수정하지 않음 (inline 인용 번호는 부록에서 검증된 것을 참조)
-         7. 참고문헌이 부록 C가 아닌 §9 등 다른 위치에 있어도 반드시 찾아 검증한다
-            (인용 위치 비의존). reference_verification.json에 citations[].id 를 MD의 [N]과
-            일치시켜 기록한다.
-         8. 모든 검증 완료 후 반드시 강제 게이트를 실행하여 마커-레코드 정합을 확인한다:
+         3. 참고문헌 위치 비의존: §9 또는 부록 어디에 있든 '- [N] ...' 리스트를 모두 찾아 검증
+         4. KIMM 내부 자문(구두)은 검증 대상 아님 — 스킵(리스트에 넣지 않음)
+         5. 검증 실패·실재 불명·중복 문헌은 리스트에서 제거하고, 본문 inline [N] 인용을 gap 없이 재번호.
+            제거·정정 이력은 reference_verification.json(citations[].status, renumber_map)에만 기록
+         6. 최종 리스트에는 마커·편집문구((정합 확인!)/[정정]/(삭제)/(불일치)) 금지 — 순수 서지만
+         7. 재번호로 바뀐 inline 인용을 §3~§8·표·부록 전체에서 일관 갱신(단, 참고문헌 리스트 자체 제외)
+         8. 모든 정리 완료 후 반드시 강제 게이트를 실행한다:
             python {SKILL_ROOT}/scripts/verify_citations.py --md <MD> --verification <reference_verification.json>
-            exit!=0 이면 Phase 7로 진행 금지 (마커 위조/누락/6c 미실행 차단)."
+            exit!=0 이면 Phase 7로 진행 금지 (편집문구 잔존/미검증 문헌/6c 미실행 차단)."
 )
 ```
 
@@ -886,12 +901,12 @@ PYTHONUTF8=1 python {SKILL_ROOT}/scripts/verify_citations.py \
 
 | exit | 의미 | 조치 |
 |------|------|------|
-| 0 | 모든 (정합 확인!) 마커가 검증 레코드로 뒷받침됨 | Phase 7 진행 |
-| 1 | 마커-레코드 불일치(위조/과소표기) | 해당 인용 재검증 또는 마커 강등 후 재실행 |
+| 0 | 리스트 클린(편집문구 없음) + 모든 참고문헌이 검증 문헌과 DOI/특허번호 매칭 | Phase 7 진행 |
+| 1 | 편집문구 잔존 / 미검증 문헌 존재 / removed 문헌 재등장 | 리스트 정리(제거·재번호) 후 재실행 |
 | 2 | reference_verification.json 부재 또는 참고문헌 미검출 | Phase 6c 재실행 (미실행 상태) |
 
-> 이 게이트는 "마커=검증"의 신뢰를 결정적으로 보증한다. 스킬 자기검증 테스트는
-> `{SKILL_ROOT}/scripts/` 에서 정상/위조/미실행 fixture로 exit 0/1/2 를 확인했다.
+> 이 게이트는 "리스트=검증된 순수 서지"를 결정적으로 보증한다. 스킬 자기검증 테스트는
+> `{SKILL_ROOT}/scripts/` 에서 클린/편집문구/미검증/미실행 fixture로 exit 0/1/1/2 를 확인했다.
 
 #### 검증 요약 표시 (Gate 없음, 정보 표시)
 
@@ -904,21 +919,21 @@ Phase 6c 완료 직후, Phase 7 진입 전에 결과를 화면에 표시한다:
 
 | 구분 | 건수 |
 |------|------|
-| 총 인용 | {total} |
-| ✅ 완전 확인 | {verified} |
-| ⚠️ 부분 확인 | {partial} |
-| ❌ 불일치 | {mismatch} |
-| 🔍 수동 검토 | {manual_review} |
+| 원 인용 | {total} |
+| ✅ 검증(verified/corrected) | {verified} |
+| ✂️ 제거(removed·미검증·실재불명) | {removed} |
+| 🔢 최종 리스트(재번호) | {final_count} |
 | 📄 PDF 확보 | {pdf_count} |
 
-> 수동 검토 필요 항목은 부록 C에 (정합 불일치 — 수동 확인 필요) 또는 (정합 부분 확인 — 수동 재검토 필요) 마커로 표시됨.
+> 제거·정정 이력은 reference_verification.json에 기록됨(리스트에는 마커·편집문구 없음).
+> 미검증으로 제거된 문헌은 본문 inline 인용도 함께 정리·재번호됨.
 > 원문 PDF: {output_dir}/reference/
 > 상세 로그: {output_dir}/reference_verification.json
 
 ▶ Phase 7 (HWPX 변환)을 시작합니다...
 ```
 
-> 이 표시는 Gate가 아니다 — 사용자 응답 없이 바로 Phase 7로 진행한다. 단, `(mismatch + manual_review) / total > 0.3` 이면 한 번 사용자 확인을 요청한다 (Phase 7 진행 vs 수동 보완 후 재개 선택).
+> 이 표시는 Gate가 아니다 — 바로 Phase 7로 진행한다. 단, `removed / total > 0.3` 이면 한 번 사용자 확인을 요청한다(다수 인용이 미검증으로 제거되면 재조사 필요).
 
 #### Graceful Degradation
 
@@ -928,17 +943,15 @@ Phase 6c 완료 직후, Phase 7 진입 전에 결과를 화면에 표시한다:
 - Zettelkasten 접근 불가: 메타데이터 검증만 진행, PDF는 skipped
 - MD 부록 C 미존재: Phase 6c 스킵, 사용자에게 "인용문헌 수동 검증 필요" 안내
 
-#### 출력 MD 업데이트 규칙
+#### 출력 MD 업데이트 규칙 (클린 리스트)
 
-부록 C의 각 항목 **뒤에** 마커를 삽입한다 (기존 텍스트는 수정하지 않음):
+참고문헌 리스트를 다음 원칙으로 **재작성**한다 (마커 삽입 금지):
 
-- 완전 검증 + PDF 확보: `... (정합 확인!) — [PDF](reference/xxx.pdf)`
-- 완전 검증 + PDF 미확보: `... (정합 확인! — PDF 미확보)`
-- 부분 일치: `... (정합 부분 확인 — 수동 재검토 필요)`
-- 불일치: `... (정합 불일치 — 수동 확인 필요)`
-- KIMM 내부 자문(C.2): 마커 삽입하지 않음
-
-부록 C 하단에 새 하위 섹션 `### C.5 정합성 검증 요약` 을 추가한다 (`{SKILL_ROOT}/agents/phase6c-reference-verifier.md` 스펙 참조).
+- 검증(verified/corrected) 문헌만 남긴다. 정정된 서지는 정정된 값으로 교체(정정 표기 없이).
+- 미검증·실재 불명·중복 문헌은 삭제하고, 본문 inline `[N]` 인용을 gap 없이 재번호.
+- 리스트 형식: `- [N] 저자, "제목", 저널 권(호), 페이지 (연도). DOI/KIPRIS` 순수 서지.
+- KIMM 내부 자문(구두)은 리스트에 넣지 않는다.
+- 검증/정정/제거 이력과 renumber_map 은 reference_verification.json에만 기록(별도 검증요약 섹션 불필요).
 
 manifest 업데이트:
 ```json
@@ -946,7 +959,7 @@ manifest 업데이트:
   "status": "completed|degraded",
   "output": "reference_verification.json",
   "pdf_count": N,
-  "verified": K, "mismatch": M, "manual_review": R
+  "verified": K, "removed": M, "final_reference_count": F
 }
 ```
 
@@ -1006,7 +1019,7 @@ validate.py 실패 시: MD 파일만 최종 출력 제공.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ### 출력 파일
-- {filename}.md — Obsidian 호환 마크다운 (9개 섹션 + 부록 3개, 부록 C에 (정합 확인!) 마커 포함)
+- {filename}.md — Obsidian 호환 마크다운 (9개 섹션 + 부록 3개, 참고문헌은 검증된 순수 서지만)
 - {filename}.hwpx — KIMM 양식 한글 파일
 - 선행특허분석.md — KIPRIS 분석
 - diagrams/ — 기술 도면 {N}개
@@ -1097,7 +1110,7 @@ validate.py 실패 시: MD 파일만 최종 출력 제공.
 | Phase 6 | 섹션/부록 누락 | 1회 재생성, 이후 부분 결과 제공 |
 | Phase 6b | matplotlib 실패 | Mermaid만 MD에 포함 |
 | Phase 6c | KIPRIS/CrossRef API 실패 | 해당 인용은 manual_review, 나머지 계속 진행 |
-| Phase 6c | PDF 첫 페이지 제목 불일치 | PDF 폐기 + (정합 불일치) 마커 삽입 |
+| Phase 6c | 검증 실패/PDF 제목 불일치 | 해당 문헌 리스트에서 제거 + 본문 재번호 + json에 removed 기록 |
 | Phase 6c | MD 부록 C 미존재 | Phase 6c 스킵 + 사용자에게 수동 검증 안내 |
 | Phase 7 | HWPX 변환/validate 실패 | MD fallback |
 | Background | prefetch 실패 | Phase 5에서 정상 검색 실행 (성능 저하만) |
