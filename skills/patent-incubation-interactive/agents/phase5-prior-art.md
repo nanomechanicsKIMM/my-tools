@@ -125,9 +125,24 @@ KIPRIS API 실패 시:
     ],
     "summary": "전체 회피설계 전략 요약"
   },
+  "rejection_combinations": [
+    {
+      "target_independent_claim": "독립항 2",
+      "main_reference": "10-XXXX-XXXXXXX",
+      "secondary_references": ["문헌B", "문헌C"],
+      "combination_motivation": "없음|약함|있음",
+      "defense": "teaching away / 결합 곤란 / 상승효과 요지",
+      "amendment_fallback": "거절 시 끌어올 한정 요소"
+    }
+  ],
   "analysis_summary": "선행특허 전체 분석 요약"
 }
 ```
+
+> [!important] rejection_combinations 필수 (2026-07 신설)
+> 각 독립항마다 최소 1개의 **가상 조합 거절 시나리오**(주인용 + 부인용 1~2건)와 방어
+> 논거를 반드시 채운다. 단일 문헌 유사도 점수만으로 "위험 없음" 결론을 내리지 않는다.
+> 심사관은 조합으로 진보성을 공격하므로, 조합 거절을 선제적으로 시뮬레이션한다.
 
 `{발명명칭}_선행특허분석.md` 파일도 별도 생성 (Obsidian 호환).
 
@@ -136,3 +151,12 @@ KIPRIS API 실패 시:
 - KIPRIS 무료 등급 월 1,000건 제한
 - 한국어/영문 키워드 병행
 - Background Prefetch 결과(kipris_prefetch.json, kipris_refined.json)가 있으면 활용하여 중복 검색 회피
+
+## 국제 선행 검색 (S5, PCT 의도 시 필수)
+
+manifest.input 또는 사용자가 **PCT/해외 출원 의도**를 밝히면 KIPRIS 국내 검색에 더해
+국제 검색을 반드시 수행한다. KIPRIS 단독은 국내 편중이라 국제 진보성 판단에 공백이 생긴다.
+
+- **Google Patents / Espacenet / USPTO**: 주요 경쟁사(삼성·BOE·AUO·Fuzhou 등) 및 핵심 학술 저자의 특허 패밀리 조회.
+- **핵심 학술 문헌의 특허 패밀리**: 기능적 최근접 논문의 저자·소속이 출원한 특허(중국/PCT/US)를 반드시 확인 (예: Nature 급 논문은 대응 특허가 있을 가능성 높음).
+- 국제 검색 결과는 prior_art.json `patents[]`에 `jurisdiction` 필드로 구분 기록하고, 미수행 시 `analysis_summary`에 "국제 검색 미수행 — 국내 한정 결론"을 명시한다(무언의 전수 검색으로 오인 금지).

@@ -108,9 +108,13 @@ Phase 6: 발명내용설명서 초안 ────── opus 에이전트
   ├─ Gate 6: 섹션별 검토 ────────── 사용자 판단 [필수]
   │  └─ Background: 도면 선행 생성
   │
+Phase 6.5: 청구항 하드닝 ────────── (112b·트리·권리범위·거절대응 점검)
+  ├─ Gate 6.5: 청구항 확정 ──────── 사용자 판단 [필수]
+  │
 Phase 6b: 도면 생성 ─────────────── sonnet 에이전트 (Background 결과 활용)
 Phase 6c: 인용문헌 정합성 검증 ──── sonnet 에이전트 (KIPRIS + CrossRef + OpenAlex + Zettelkasten)
-Phase 7: HWPX 변환 ──────────────── sonnet 에이전트
+  └─ 강제 게이트: verify_citations.py (exit!=0 → Phase 7 차단)
+Phase 7: HWPX 변환 ──────────────── sonnet 에이전트 (정합 반복 최대 3회)
   └─ Gate 7: 최종 확인 ──────────── 사용자 확인 [auto-skip 가능]
 ```
 
@@ -171,7 +175,8 @@ Phase 7: HWPX 변환 ──────────────── sonnet 에
 | Gate 4 | **가능** (skip) | 정보 표시 성격 |
 | Gate 5 | **불가** | 선행특허 대응 전략은 등록 가능성에 직결 |
 | Gate 6 | **불가** | 발명내용설명서 내용 확인은 발명자 책임 |
-| (Phase 6c 요약) | **가능** (정보 표시) | Gate 아님 — 단, 불일치 비율 > 30% 시 1회 확인 |
+| Gate 6.5 | **조건부** (issue 0건 시 skip) | 청구항은 핵심 자산 — issue 1건 이상이면 확인 필수 |
+| (Phase 6c 강제 게이트) | **불가** | verify_citations.py exit!=0 이면 Phase 7 차단 (기계적 게이트, auto-skip 불가) |
 | Gate 7 | **가능** (skip) | 이전 Gate에서 이미 승인됨 |
 
 > auto-skip 시에도 Gate 결과는 화면에 표시한다 (응답을 기다리지 않을 뿐).
@@ -579,6 +584,15 @@ PYTHONUTF8=1 C:/Users/JHKIM/miniconda3/python \
   - 본 발명과 겹치는 부분: {similarity_points}
   - 차별화 가능 포인트: {difference_points}
 
+### 예상 거절 조합 (필수, 단일 유사도만으로 판단 금지)
+
+> 단일 선행문헌 유사도가 낮아도 심사관은 2~3건 조합으로 진보성을 공격한다.
+> 각 독립항마다 최소 1개의 가상 조합 거절 시나리오와 방어 논거를 제시한다.
+
+| 독립항 | 예상 조합 (주인용 + 부인용) | 결합 동기 유무 | 방어 논거(요지) |
+|--------|--------------------------|--------------|----------------|
+| 독립항 N | {main_ref} + {secondary_ref} | 없음/약함/있음 | teaching away / 결합 곤란 / 상승효과 |
+
 ### IFR별 선행특허 커버리지
 
 | IFR | 개시 여부 | 차별화 요소 | 권장 조치 |
@@ -633,9 +647,19 @@ Agent(
          3. section_summary in YAML frontmatter must be populated
          4. Written in Korean
          5. If prior_art is degraded, mark §3/§4/§8 with [선행특허 수동 보완 필요]
-         6. After writing, update user-philosophy.md §4 with new patterns"
+         6. After writing, update user-philosophy.md §4 with new patterns
+         7. 참고문헌에 (정합 확인!) 마커를 절대 스스로 부착하지 말 것 — 정합 마커는
+            Phase 6c만 실제 검증 후 삽입한다. 작성 단계 인용은 마커 없이 서지만 기재.
+         8. 참고문헌은 '- [N] 저자, "제목", 저널, 연도. DOI/KIPRIS' 형식의 리스트로
+            기재하여 Phase 6c 파서(verify_citations.py)가 위치와 무관하게 인식 가능하게 한다."
 )
 ```
+
+> [!warning] 마커 위조 방지 (2026-07 신설)
+> 실제 run에서 Phase 6c가 누락됐는데 작성 에이전트가 참고문헌 20건 전부에
+> (정합 확인!)을 임의 부착 → CrossRef 재검증 시 학술 DOI 6건이 404/무관논문/제목오류로
+> 판명된 사고가 있었다. 위 요구사항 7·8과 Phase 6c의 강제 게이트(verify_citations.py)로
+> 재발을 차단한다.
 
 ### Gate 6: 섹션별 검토 [필수]
 
@@ -724,9 +748,49 @@ Agent(
 
 ---
 
+## Phase 6.5: 청구항 하드닝 + Gate 6.5 [필수]
+
+Gate 6 승인 직후, 도면·HWPX 변환 이전에 청구항 자체를 법적 관점에서 점검한다.
+발명의 최고가치 산출물은 청구항이므로 서식(HWPX)보다 먼저 확정한다.
+
+### 점검 항목 (§8 대상)
+
+1. **112(b) antecedent basis**: 각 종속항의 구성요소가 인용 독립항에 선행 기재됐는지. "상기 ~"의 선행어 존재 확인.
+2. **청구항 트리 정합**: 독립항-종속항 인용 관계, 카테고리 일치(장치 종속항이 방법 독립항을 인용하지 않는지).
+3. **권리범위 계층**: 독립항이 불필요하게 좁지 않은지(광역 유지), 종속항이 fallback 방어선을 단계적으로 형성하는지.
+4. **선행특허 회피 반영**: Gate 5의 예상 거절 조합에 대응하는 한정 요소가 최소 하나의 종속항으로 준비됐는지.
+5. **수치 한정 위치**: 독립항은 수치 무한정(광역), 수치 한정은 종속항으로 이동됐는지(변리사 메모 반영).
+
+### Gate 6.5 표시
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+청구항 하드닝 점검 결과
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+| 점검 | 결과 | 조치 필요 |
+|------|------|----------|
+| antecedent basis | {pass/issue N건} | ... |
+| 청구항 트리 정합 | ... | ... |
+| 권리범위 계층 | ... | ... |
+| 거절 조합 대응 | ... | ... |
+
+선택:
+1. 청구항 확정 → 도면·HWPX 변환 진행
+2. 특정 청구항 수정 → 번호 + 의견
+3. 선행특허 재검토 (Gate 5)
+```
+
+> 참고: 기존 `patent-draft-review` / `review-claims` 스킬을 이 단계에서 호출 가능.
+> auto-proceed 지시가 있어도 issue가 1건 이상이면 1회 사용자 확인을 요청한다.
+
+manifest 업데이트: `phase6_5: {status, issues_found, resolved}`
+
+---
+
 ## Phase 6b + 6c + 7: 도면 생성, 인용 검증, HWPX 변환
 
-Gate 6 승인 후 자동 진행.
+Gate 6.5 승인 후 자동 진행.
 
 ### Phase 6b 에이전트 호출
 
@@ -800,9 +864,34 @@ Agent(
          3. PDF 첫 페이지 제목 불일치 시 PDF 폐기, (정합 불일치) 마커 삽입
          4. KIMM 내부 자문(구두)은 검증 대상 아님 — 스킵
          5. 부록 C.5 섹션 새로 추가하여 검증 요약표 작성
-         6. §1~§9 본문은 수정하지 않음 (inline 인용 번호는 부록에서 검증된 것을 참조)"
+         6. §1~§9 본문은 수정하지 않음 (inline 인용 번호는 부록에서 검증된 것을 참조)
+         7. 참고문헌이 부록 C가 아닌 §9 등 다른 위치에 있어도 반드시 찾아 검증한다
+            (인용 위치 비의존). reference_verification.json에 citations[].id 를 MD의 [N]과
+            일치시켜 기록한다.
+         8. 모든 검증 완료 후 반드시 강제 게이트를 실행하여 마커-레코드 정합을 확인한다:
+            python {SKILL_ROOT}/scripts/verify_citations.py --md <MD> --verification <reference_verification.json>
+            exit!=0 이면 Phase 7로 진행 금지 (마커 위조/누락/6c 미실행 차단)."
 )
 ```
+
+#### 강제 게이트: verify_citations.py [필수, auto-skip 불가]
+
+Phase 6c 에이전트 종료 후, 오케스트레이터가 직접 게이트를 실행한다:
+
+```bash
+PYTHONUTF8=1 python {SKILL_ROOT}/scripts/verify_citations.py \
+  --md "{output_dir}/{발명명칭}vN.md" \
+  --verification "{output_dir}/reference_verification.json"
+```
+
+| exit | 의미 | 조치 |
+|------|------|------|
+| 0 | 모든 (정합 확인!) 마커가 검증 레코드로 뒷받침됨 | Phase 7 진행 |
+| 1 | 마커-레코드 불일치(위조/과소표기) | 해당 인용 재검증 또는 마커 강등 후 재실행 |
+| 2 | reference_verification.json 부재 또는 참고문헌 미검출 | Phase 6c 재실행 (미실행 상태) |
+
+> 이 게이트는 "마커=검증"의 신뢰를 결정적으로 보증한다. 스킬 자기검증 테스트는
+> `{SKILL_ROOT}/scripts/` 에서 정상/위조/미실행 fixture로 exit 0/1/2 를 확인했다.
 
 #### 검증 요약 표시 (Gate 없음, 정보 표시)
 
@@ -897,6 +986,15 @@ Agent(
 ### Fallback
 
 validate.py 실패 시: MD 파일만 최종 출력 제공.
+
+### HWPX 정합 반복 상한 (S2, 2026-07 신설)
+
+> MD가 source of truth, HWPX는 best-effort 산출물이다. 서식 정합에 세션을 소진하지 않는다.
+
+- HWPX 렌더링 정합(bullet/내어쓰기/paraPr) 재시도는 **최대 3회**로 제한한다.
+- 3회 내 validate.py 통과 실패 또는 사용자 육안 불일치가 남으면, 현재 최선본 HWPX + MD를 최종 제공하고 남은 정합은 사용자 한/글 후처리로 넘긴다.
+- 사용자 한/글 편집본이 있으면 v11_user diff 분석처럼 **일반화 가능한 규칙 1~2건만** convert_hwpx.py에 반영하고, 미적 선택(§6 heading 평탄화 등)은 규칙화하지 않는다.
+- 내용(§1~§9, 청구항) 변경은 HWPX가 아니라 반드시 MD에서 수행 후 재변환한다.
 
 ---
 
