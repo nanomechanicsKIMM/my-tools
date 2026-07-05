@@ -45,10 +45,14 @@ def load_env_key(varname: str) -> str:
     env_path = Path.home() / "Claude_work" / ".env"
     if not env_path.exists():
         raise SystemExit(f"missing env file: {env_path}")
+    # Accept both the canonical name and the ALL_CAPS underscore variant seen
+    # in some .env files (e.g. KIPRIS_REST_AccessKey vs KIPRIS_REST_ACCESS_KEY).
+    candidates = {varname, re.sub(r"(?<=[a-z])(?=[A-Z])", "_", varname).upper()}
     for line in env_path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
-        if line.startswith(f"{varname}=") or line.startswith(f"  {varname}="):
-            return line.split("=", 1)[1].strip()
+        for cand in candidates:
+            if line.startswith(f"{cand}="):
+                return line.split("=", 1)[1].strip()
     raise SystemExit(f"{varname} not found in {env_path}")
 
 

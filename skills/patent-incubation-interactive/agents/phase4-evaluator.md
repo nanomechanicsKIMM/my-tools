@@ -47,6 +47,9 @@ model: sonnet
 
 **특허성 (P)**: 9-10: 전혀 다른 접근법 / 7-8: 비자명한 조합 / 5-6: 부분 유사 / 3-4: 단순 변형 / 1-2: 공지 반복
 
+> [!note] 특허성 점수의 성격
+> Phase 4 시점은 선행특허 DB 조사 전이므로 이 점수는 **선행조사 이전 잠정 점수**(provisional)다. evaluation.json에 `patentability_provisional: true`로 표시하며, 실제 재채점은 Phase 5 완료 직후 **Phase 5.5**에서 오케스트레이터가 별도 수행(ifr_coverage 반영). Phase 4는 IFR 집합에 대한 잠정 평가만 담당한다.
+
 **산업적 가치 (V)**: 9-10: 즉시 적용 가능 / 7-8: 특정 시장 적용 / 5-6: 잠재력 있음 / 3-4: 시장 제한 / 1-2: 활용 어려움
 
 ## 출력
@@ -55,11 +58,12 @@ model: sonnet
 
 ```json
 {
+  "patentability_provisional": true,
   "evaluation_criteria": {
     "feasibility": {"weight": 0.25, "description": "실현 가능성"},
     "cost": {"weight": 0.15, "description": "비용 효율"},
     "effect": {"weight": 0.25, "description": "기술적 효과"},
-    "patentability": {"weight": 0.20, "description": "특허성"},
+    "patentability": {"weight": 0.20, "description": "특허성 (선행조사 이전 잠정 점수 — Phase 5.5에서 재채점)"},
     "industrial_value": {"weight": 0.15, "description": "산업적 가치"}
   },
   "evaluations": [
@@ -104,5 +108,5 @@ model: sonnet
 ## 주의사항
 
 - 평가는 사용자가 Gate 2B에서 선별한 IFR 목록을 기준으로 수행 (selected=true인 IFR만)
-- 특허성(P) 평가는 Phase 4 시점의 기술 수준 기준 (Phase 5에서 재조정)
+- 특허성(P) 평가는 Phase 4 시점의 기술 수준 기준의 **잠정 점수**(`patentability_provisional: true`)이며, **Phase 5.5**(오케스트레이터 수행)에서 ifr_coverage 반영해 재채점됨 — Phase 4는 재채점을 수행하지 않는다
 - 특허성이 높은 IFR(P>=7)은 순위가 낮더라도 별도 표시

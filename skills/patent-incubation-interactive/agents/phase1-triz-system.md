@@ -35,6 +35,41 @@ model: sonnet
 - 상위 시스템(Super-system)과 하위 시스템(Sub-system)을 식별한다
 - 유해 기능(Harmful Function)과 불충분 기능(Insufficient Function)을 식별한다
 
+### 심화 도구 (TRIZ 정통 분석)
+
+5요소 분석에 더해 아래 4개 도구를 순서대로 수행한다. 이 도구들은 표면 증상이 아닌 **근본 모순**에 도달하기 위한 것이다.
+
+#### 1. 인과사슬분석 (CECA, Cause-Effect Chain Analysis) — 전치 필수
+
+표면 문제에서 근본 원인까지 "왜?-왜?"를 체계적으로 추적한다. 표면 증상 → 중간 원인 → 근본 원인(모순이 발생하는 지점) 순으로 계층(level)을 매긴다.
+
+- level 0 = 사용자가 서술한 표면 문제, level이 커질수록 근본 원인
+- 각 단계는 "왜 이 현상이 발생하는가?"에 대한 답이어야 한다
+- **모순은 반드시 근본원인(최상위 level) 수준에서 정의한다** — 표면 증상 수준의 모순은 파생특허밖에 만들지 못한다
+- 이후 도출하는 개선/악화 파라미터는 이 근본 원인에 대응해야 한다
+
+#### 2. 기능분석 (Function Analysis)
+
+구성요소 간 상호작용을 유용/유해/과잉/부족 기능으로 분류한다. 유해·부족 기능이 모순 후보의 체계적 원천이다.
+
+- 각 항목: 주체 구성요소 → 대상 구성요소, 기능 내용, 유형(useful/harmful/excessive/insufficient)
+
+#### 3. 자원분석 (Resource Analysis)
+
+시스템 내부·주변의 **미활용 자원**을 물질·에너지·공간·시간·정보 5범주로 목록화한다. 버려지는 에너지·공간을 재활용하는 이상적 해결의 원천이 된다.
+
+- 각 항목: 자원 유형(substance/energy/space/time/information), 자원 설명, 활용 아이디어(선택)
+
+#### 4. 트리밍 (Trimming)
+
+구성요소를 제거하고 그 기능을 다른 요소·자원에 재배치하는 시나리오를 제시한다. 부품 수 감소는 그 자체로 비용·신뢰성을 개선하는 강한 IFR 후보다.
+
+- 각 항목: 제거 대상 구성요소, 재배치 방식(어느 요소/자원이 기능을 대신하는가), 기대 효과
+
+### 39 파라미터 매핑 검증
+
+개선/악화 파라미터를 선택할 때, 각 파라미터가 **실제 문제 서술(그리고 CECA 근본 원인)과 어떻게 대응하는지 근거 문장을 의무적으로** 기재한다. 자유서술에서 이탈한 파라미터 선택은 매트릭스 오조회를 유발하므로 금지한다.
+
 ## 출력
 
 `triz_system.json` 파일로 저장:
@@ -51,12 +86,30 @@ model: sonnet
     "information": "정보 분석 결과",
     "context": "상황 분석 결과"
   },
+  "root_cause_chain": [
+    {"level": 0, "cause": "표면 문제 (사용자 서술)"},
+    {"level": 1, "cause": "중간 원인 (왜? 1차)"},
+    {"level": 2, "cause": "근본 원인 — 모순이 발생하는 지점"}
+  ],
+  "function_analysis": [
+    {"from": "구성요소 A", "to": "구성요소 B", "function": "기능 내용", "type": "useful|harmful|excessive|insufficient"}
+  ],
+  "resource_analysis": [
+    {"type": "substance|energy|space|time|information", "resource": "미활용 자원 설명", "utilization_idea": "활용 아이디어(선택)"}
+  ],
+  "trimming_candidates": [
+    {"remove": "제거 대상 구성요소", "reassign_to": "기능을 대신할 요소/자원", "expected_effect": "기대 효과"}
+  ],
   "harmful_functions": ["유해 기능 1", "유해 기능 2"],
   "insufficient_functions": ["불충분 기능 1"],
   "improving_parameters": ["개선이 필요한 TRIZ 파라미터 번호와 이름"],
   "worsening_parameters": ["악화가 우려되는 TRIZ 파라미터 번호와 이름"],
+  "parameter_mapping_rationale": [
+    {"parameter": "선택한 파라미터 번호와 이름", "role": "improving|worsening", "rationale": "이 파라미터가 문제 서술·근본 원인과 대응하는 근거 1문장"}
+  ],
   "gate_summary": {
     "main_function_display": "사용자에게 표시할 주 기능 설명 (1-2문장, 비전문가 이해 가능)",
+    "root_cause_display": "표면 문제 → 근본 원인까지 왜-왜 경로를 화살표로 이은 1줄 요약 (예: 수율 저하 → 오염물 잔류 → 대기 접촉 → 근본원인)",
     "five_element_table": [
       {"element": "물질", "result": "분석 결과 요약", "relevance": "발명과의 관련성"},
       {"element": "시간", "result": "분석 결과 요약", "relevance": "발명과의 관련성"},
@@ -78,6 +131,7 @@ model: sonnet
 ### gate_summary 작성 규칙
 
 - `main_function_display`: TRIZ 전문용어 없이, 발명자가 바로 이해할 수 있는 표현
+- `root_cause_display`: `root_cause_chain`을 발명자가 한눈에 볼 수 있도록 화살표로 이은 1줄. Gate 1에서 근본 원인 수준의 문제 정의를 사용자가 확인·수정할 수 있게 한다
 - `five_element_table`: 각 요소별 분석 결과를 1-2문장으로 요약하고, 발명과의 관련성을 추가
 - `problem_diagnosis`: 유해/불충분 기능을 일반적 기술 언어로 번역
 - `parameter_candidates`: 개선/악화 파라미터를 TRIZ 번호와 함께 일반 언어로 설명하고, 상충 메커니즘을 1문장으로 추가

@@ -42,9 +42,8 @@ KIPRIS_ENV_FILE = C:/Users/JHKIM/Claude_Work/.env
 | 유형 | 도구 | 용도 |
 |------|------|------|
 | 코드화 가능한 도면 | **Mermaid** | 흐름도, 시스템 구성도, 상태 변화도, 비교표, 시퀀스 다이어그램 등 |
-| 기술 단면도·구조도·schematic | **손코딩 SVG** ⭐ | figures/*.svg → svg2png.py로 PNG 변환, EMF/outlined로 PowerPoint (Phase 6b Step 3) |
 | 자유 형식 스케치 | **Excalidraw** | 아이디어 핸드라이팅, 개념 스케치 등 사용자가 직접 그리는 경우만 |
-| HWPX 삽입용 | **PNG (matplotlib + SVG→PNG)** | diagrams/*.png를 convert_hwpx.py가 §9에 자동 삽입 |
+| HWPX 삽입용 | **PNG (matplotlib)** | convert_hwpx.py가 §9에 자동 삽입하는 이미지 |
 
 ### Mermaid 다이어그램 규칙
 
@@ -52,6 +51,10 @@ KIPRIS_ENV_FILE = C:/Users/JHKIM/Claude_Work/.env
 - 지원 유형: `graph`, `flowchart`, `stateDiagram-v2`, `sequenceDiagram`, `pie`, `xychart-beta`, `quadrantChart`
 - 한글 텍스트 사용 가능 (노드 라벨, 설명 등)
 - Phase 6b에서 발명 구성에 맞는 Mermaid 다이어그램을 자동 생성하여 발명내용설명서 MD §6, §9에 삽입
+
+### 도면 ↔ 설명 동기화 규칙 (규칙 C, 2026-07 신설)
+
+도면이 신규 생성·교체·업데이트되면(특히 사용자 제공 원도 pptx/이미지를 삽입할 때) 각 도면의 실제 내용(라벨·구성요소·신호 흐름·좌표축)을 Read 또는 텍스트 추출(python-pptx 등)로 파악하여, §9 "도면의 간단한 설명"(도 1~도 N)을 그 내용에 맞게 **상세히 다시 작성**한다. 도면 개수·순서·주제가 바뀌면 설명 항목 수·순서도 일치시키고 관련 청구항 링크를 갱신한다. 사용자 원도 삽입 시 600 dpi PNG 변환(PowerPoint COM: 슬라이드 in×600 픽셀) 후 `diagrams/`에 배치하면 convert_hwpx.py가 §9에 삽입한다. Phase 6b(도면)와 Phase 6c(인용) 사이 산출물이 확정될 때 auto는 이 동기화를 자동 수행한다.
 
 ### TRIZ 용어 사용 규칙
 
@@ -70,12 +73,10 @@ Phase 6 에이전트가 §1~§9 작성 시, TRIZ 분석 결과를 일반적인 �
 
 ### PNG 도면 규칙 (HWPX 삽입용)
 
-- Mermaid·SVG는 HWPX에 직접 삽입 불가 → **PNG로 변환하여 `{output_dir}/diagrams/`에 취합**
-  - 기술 단면도·schematic: 손코딩 SVG → `scripts/svg2png.py --src figures/ --dst diagrams/` (Phase 6b Step 3)
-  - 데이터 플롯: matplotlib `savefig` → `diagrams/` (Phase 6b Step 4)
-- convert_hwpx.py의 `--diagrams` 옵션으로 `diagrams/*.png`를 알파벳순으로 §9에 자동 삽입
-- 파일명은 `fig1_`, `fig2_` … 접두사로 도면 순서 보존 (도구 간 번호 중복 금지)
-- 해상도: 150 dpi(matplotlib) / 200 dpi(SVG), 흰색 배경, 한글 폰트(Malgun Gothic)
+- Mermaid와 별도로 **matplotlib로 PNG 파일도 생성** (HWPX에는 Mermaid 삽입 불가)
+- `{output_dir}/diagrams/*.png` 에 저장
+- convert_hwpx.py의 `--diagrams` 옵션으로 §9에 자동 삽입
+- 해상도: 150 dpi, 흰색 배경, 한글 폰트(Malgun Gothic)
 
 ---
 
@@ -87,11 +88,13 @@ Step 1: TRIZ 시스템 분석 (Phase 1) ─── sonnet 에이전트
 Step 2: 모순 + IFR 생성 (Phase 2) ──── opus 에이전트
 Step 3: 사용자 검토 게이트 ──────────── 사용자 상호작용 (결과 표시 + 선택)
 Step 4: 정량 평가 (Phase 4) ─────────── sonnet 에이전트
-Step 5: 선행특허 조사 (Phase 5) ─────── sonnet 에이전트
+Step 5: 선행특허 조사 (Phase 5) ─────── sonnet 에이전트 (자기공지 조사 포함)
+Step 5.5: 특허성 재채점 ────────────── sonnet 에이전트 (Phase 5 반영 + 반대심문)
 Step 5b: 중간 진행 보고 ────────────── 사용자에게 진행 상황 표시
 Step 6: 발명내용설명서 작성 (Phase 6) ── opus 에이전트
+Step 6.5: 청구항 하드닝 (자동 점검+수정) ─ 오케스트레이터 자동 처리
 Step 6b: 도면 생성 (Phase 6b) ───────── sonnet 에이전트
-Step 6c: 인용문헌 정합성 검증 & PDF (Phase 6c) ── sonnet 에이전트
+Step 6c: 인용문헌 정합성 검증 & PDF (Phase 6c) ── sonnet 에이전트 + 강제 게이트
 Step 7: HWPX 변환 (Phase 7) ─────────── sonnet 에이전트
 Step 8: 최종 출력 및 안내 ──────────── 사용자에게 결과 안내
 ```
@@ -349,9 +352,20 @@ Agent(
 
          Input: {manifest.input}
          Output: {output_dir}/prior_art.json
-         Also output: {output_dir}/{발명명칭}_선행특허분석.md"
+         Also output: {output_dir}/{발명명칭}_선행특허분석.md
+
+         ADDITIONAL (자기공지·NPL 조사 — 연구기관 최다 무효사유 차단):
+         - 발명자 본인·KIMM 소속 저자의 논문·학회 발표·보도자료를 CrossRef/OpenAlex 저자
+           검색으로 조회하여 특허 출원 전 자기 선행공개 여부를 확인한다.
+         - source_files로 입력된 발명자 자신의 논문은 자동으로 자기공지 후보로 검사한다.
+         - 자기공개 발견 시 prior_art.json에 self_disclosure[]{title, date, venue, grace_deadline}
+           를 기록한다. grace_deadline = 공개일 + 12개월(공지예외주장·신규성 의제 기한).
+         - §2(논문발표 여부)에 반영할 실질 조사 결과로 활용한다."
 )
 ```
+
+> [!important] 자기공지(발명자 선공개) 경고
+> KIMM은 연구기관으로, 발명자가 논문·학회 발표를 출원보다 먼저 공개하여 자기 공지로 신규성·진보성을 상실하는 것이 최다 무효 사유다. Phase 5가 자기공개를 발견하면 `prior_art.json`의 `self_disclosure[]`에 공개일과 공지예외주장 12개월 기한(`grace_deadline`)을 기록하고, Step 8 최종 안내에서 기한 경고를 표시한다.
 
 ### Graceful Degradation
 
@@ -378,6 +392,48 @@ PYTHONUTF8=1 C:/Users/JHKIM/miniconda3/python \
 manifest 업데이트:
 ```json
 "phase5": {"status": "completed|degraded", "output": "prior_art.json"}
+```
+
+---
+
+## Step 5.5: 특허성 재채점 (Phase 5 반영)
+
+**Model**: sonnet
+**목적**: Phase 4가 특허성(0.20)을 선행특허 조사(Phase 5) **이전에** 채점했으므로, 조사 결과(신규성/진보성 실측)를 반영해 특허성 축을 재채점한다. 단일 평가자 + LLM 낙관 편향으로 인한 점수 인플레이션을 반대심문(devil's advocate) 레인으로 교정한다.
+
+> [!note] degraded 시 스킵
+> `prior_art.json`이 `status: degraded`이면 재채점 근거(ifr_coverage·rejection_combinations)가 없으므로 이 단계를 건너뛰고 Step 5b로 진행한다. manifest에 `"phase5_5": {"status": "skipped", "reason": "prior_art degraded"}` 기록.
+
+### 에이전트 호출
+
+```
+Agent(
+  subagent_type="general-purpose",
+  model="sonnet",
+  prompt="특허성 재채점 및 반대심문을 수행한다.
+         Read {output_dir}/evaluation.json for current patentability scores.
+         Read {output_dir}/prior_art.json for ifr_coverage(novel/partial/disclosed) and rejection_combinations.
+
+         TASK:
+         1. evaluation.json의 각 IFR patentability 점수를 prior_art.json의 ifr_coverage와
+            rejection_combinations에 근거해 재조정한다.
+            - novel → 8~10, partial → 4~7, disclosed → 1~3 범위로 정합.
+            - 대응 종속항/방어논거가 없는 rejection_combination이 있으면 감점.
+         2. 상위 3개 IFR에 대해 '이 IFR이 특허성이 없는 이유를 논증하라'는 반대심문
+            (devil's advocate)을 수행한다 — 자명한 공지기술 조합 여부, 결합 동기 존재,
+            teaching away 부재 등을 적극적으로 반박 논거로 제시.
+         3. 결과를 evaluation.json에 다음 필드로 기록한다:
+            - patentability_recheck: IFR별 {before, after, reason}
+            - patentability_devil_advocate: 상위 3개 IFR의 반론 요지
+         재조정으로 상위 순위가 바뀌면 ranking도 갱신한다.
+
+         Output: 업데이트된 {output_dir}/evaluation.json"
+)
+```
+
+manifest 업데이트:
+```json
+"phase5_5": {"status": "completed|skipped", "recheck_count": N}
 ```
 
 ---
@@ -500,6 +556,58 @@ manifest 업데이트:
 
 ---
 
+## Step 6.5: 청구항 하드닝 (자동 점검 + 자동 수정)
+
+발명의 최고가치 산출물은 청구항이므로, 도면·HWPX 변환 이전에 §8 청구항을 법적 관점에서 점검한다. auto는 **사용자 게이트 없이** 자동 점검하고, 발견된 issue는 phase6 MD를 직접 보정한 뒤 최종 보고(Step 8)에 표시한다.
+
+### 점검 항목 (§8 대상)
+
+**필수 5항목**:
+
+1. **112(b) antecedent basis**: 각 종속항 구성요소가 인용 독립항에 선행 기재됐는지. "상기 ~"의 선행어 존재 확인.
+2. **청구항 트리 정합**: 독립항-종속항 인용 관계, 카테고리 일치(장치 종속항이 방법 독립항을 인용하지 않는지).
+3. **권리범위 계층**: 독립항이 불필요하게 좁지 않은지(광역 유지), 종속항이 단계적 fallback 방어선을 형성하는지.
+4. **거절조합 대응**: Phase 5 `rejection_combinations`의 각 예상 조합에 대응하는 한정 요소가 최소 하나의 종속항으로 준비됐는지.
+5. **수치 한정 위치**: 독립항은 수치 무한정(광역), 수치 한정은 종속항으로 이동됐는지.
+
+**SMART 자가진단 5항목** (Phase 6.5 통합):
+
+6. **독립항 글자수 경고 신호**: 과도한 길이면 플래그(규칙이 아닌 **경고 신호** — SMART는 독립항이 길수록 감점하는 기계적 경향이 있음). 길이는 신규성 지탱 결합의 크기가 결정하는 것이지 점수 최적화 대상 아님.
+7. **카테고리 병행**: 물건+방법 청구항이 병행되는지(최소), 장치/시스템 추가 검토.
+8. **종속항 계층 균형**: 독립항당 종속항 4~6개.
+9. **활용성 서술 존재**: §7에 "본 발명은 [산업]에 적용되어 [분야]에 활용" 패턴이 존재하는지.
+10. **실시예·도면 수 하한**: 실시예 ≥3, 도면 ≥5.
+
+### 자동 처리 방식
+
+- 각 항목을 점검하여 issue 목록을 수집한다.
+- 자동 수정 가능한 issue(선행어 누락, 수치한정 위치, 활용성 서술 누락 등)는 **phase6 MD를 직접 보정**한다(버전 번호 유지).
+- 자동 수정이 어려운 issue(카테고리 재설계 등)는 수정하지 않고 Step 8 보고에 명시한다.
+- 참고: `patent-draft-review` / `review-claims` 스킬을 이 단계에서 호출 가능.
+
+### 에이전트 호출
+
+```
+Agent(
+  subagent_type="general-purpose",
+  model="sonnet",
+  prompt="§8 청구항을 자동 점검하고 phase6 MD를 직접 보정한다.
+         Read the latest vN.md in {output_dir} for §8 청구범위 and §6/§7.
+         Read {output_dir}/prior_art.json for rejection_combinations.
+
+         점검 항목(필수 5 + SMART 5): 위 SKILL 정의 참조.
+         자동 수정 가능한 issue는 MD를 직접 보정(버전 유지), 불가한 issue는 목록으로 반환.
+         Output: 보정된 phase6 MD + issues[]{item, severity, action(fixed/reported), detail}"
+)
+```
+
+manifest 업데이트:
+```json
+"phase6_5": {"status": "completed", "issues_found": N, "auto_fixed": K, "reported": R}
+```
+
+---
+
 ## Step 6b: 도면 생성 (Phase 6b)
 
 **Agent**: `agents/phase6b-diagram-generator.md`
@@ -515,7 +623,7 @@ Agent(
          Read {output_dir}/evaluation.json for top IFRs.
 
          Input: {manifest.input}
-         Output directories: {output_dir}/diagrams/ (HWPX 임베드용 PNG 취합), {output_dir}/figures/ (SVG 벡터 원본 + emf/pptx)
+         Output directory: {output_dir}/diagrams/
          Also update: the Phase 6 output MD file (latest vN.md in {output_dir}) §9 with diagram references
 
          Generate at minimum:
@@ -523,20 +631,14 @@ Agent(
          2. 공정 흐름도
          3. 종래기술 vs 본 발명 비교도
 
-         도면 유형별 도구 (phase6b 정책표 — 한 도면에 혼용 금지):
-         - 흐름도·구성도·상태도·비교표 → Mermaid (발명내용설명서 MD 인라인 삽입)
-         - 기술 단면도·구조도·schematic → 손코딩 SVG(figures/*.svg) 후
-           'python {SKILL_ROOT}/scripts/svg2png.py --src {output_dir}/figures/ --dst {output_dir}/diagrams/ --dpi 200'
-         - 데이터 플롯 → matplotlib savefig → {output_dir}/diagrams/
-         모든 PNG는 diagrams/로 취합되어 convert_hwpx.py가 알파벳순으로 §9에 삽입한다.
-         파일명은 fig1_, fig2_ … 접두사로 통일.
+         Use matplotlib for technical drawings, Mermaid for flowcharts.
          Korean font: plt.rcParams['font.family'] = 'Malgun Gothic'"
 )
 ```
 
 manifest 업데이트:
 ```json
-"phase6b": {"status": "completed", "output": "diagrams/", "figures": "figures/", "diagram_count": N}
+"phase6b": {"status": "completed", "output": "diagrams/", "diagram_count": N}
 ```
 
 ---
@@ -546,7 +648,12 @@ manifest 업데이트:
 **Agent**: `agents/phase6c-reference-verifier.md`
 **Model**: sonnet
 
-발명내용설명서 MD에 기재된 모든 인용문헌(학술 논문·KR/외국 특허·DOI·보고서)에 대해 외부 DB(KIPRIS Plus, CrossRef, OpenAlex, Semantic Scholar, Google Patents)로 직접 접속하여 번호·제목·저자·출원인의 정합성을 확인한다. 검증된 인용에는 `(정합 확인!)` 마커를, 불일치 인용에는 `(정합 불일치 — 수동 확인 필요)` 마커를 부록 C에 삽입하고, 확보 가능한 원문 PDF를 `{output_dir}/reference/` 에 저장한다.
+발명내용설명서 MD에 기재된 모든 인용문헌(학술 논문·KR/외국 특허·DOI·보고서)을 외부 DB(KIPRIS Plus, CrossRef, OpenAlex, Semantic Scholar, Google Patents)로 직접 조회하여 번호·제목·저자·출원인의 정합성을 검증하고, **참고문헌 리스트를 검증된 실제 문헌의 순수 서지만 남도록 정리**(미검증·실재 불명 문헌 제거 + 본문 inline 인용을 gap 없이 재번호)하며, 검증 이력은 `reference_verification.json`에 기록하고, 원문 PDF를 `{output_dir}/reference/`에 저장한다.
+
+> [!important] 클린 리스트 원칙 (NON-NEGOTIABLE, 2026-07)
+> 참고문헌 리스트에는 **검증된 실제 문헌의 서지 정보만** 기재한다. `(정합 확인!)`·`[정정:...]`·`(삭제)`·`(정합 불일치)` 등 마커·편집문구를 리스트에 **절대 넣지 않는다.** 검증·정정·제거 이력은 `reference_verification.json`(audit trail)에만 남긴다.
+>
+> 배경: 실전 run에서 Phase 6c가 누락됐는데 작성 에이전트가 참고문헌 20건 전부에 `(정합 확인!)`을 임의 부착 → CrossRef 재검증 시 학술 DOI 6건이 404/무관논문/제목오류로 판명된 환각 사고가 있었다. 자동 모드일수록 사용자 검토가 없어 기계 게이트(verify_citations.py)가 더 절실하다.
 
 ### KIPRIS API 키 로드
 
@@ -578,18 +685,41 @@ Agent(
          Input: {manifest.input}
          Outputs:
            (1) {output_dir}/reference/ (다운로드된 PDF 모음)
-           (2) {output_dir}/reference_verification.json
-           (3) 업데이트된 Phase 6 MD (버전 번호 유지, (정합 확인!) 마커 및 C.5 요약 추가)
+           (2) {output_dir}/reference_verification.json (검증 audit: status verified/corrected/removed + renumber_map)
+           (3) 정리된 Phase 6 MD (vN 유지): 참고문헌=검증 서지만, 마커 없음, 미검증 제거 후 gap 없이 재번호
 
          CRITICAL REQUIREMENTS:
          1. KR 특허는 download_patent_pdf.py --kr --verify 로 출원번호-제목 자동 대조
          2. 학술 논문은 CrossRef DOI 확인 → OpenAlex OA URL → Zettelkasten 캐시 순으로 PDF 확보
-         3. 불일치 시 PDF 폐기하고 (정합 불일치) 마커
-         4. KIMM 내부 자문(구두)은 검증 대상 아님 — 스킵
-         5. 부록 C.5 섹션 새로 추가하여 검증 요약표 작성
-         6. §1~§9 본문은 수정하지 않음 (inline 인용 번호는 부록에서 검증된 것을 참조)"
+         3. 참고문헌 위치 비의존: §9 또는 부록 어디에 있든 '- [N] ...' 리스트를 모두 찾아 검증
+         4. KIMM 내부 자문(구두)은 검증 대상 아님 — 스킵(리스트에 넣지 않음)
+         5. 검증 실패·실재 불명·중복 문헌은 리스트에서 제거하고, 본문 inline [N] 인용을 gap 없이 재번호.
+            제거·정정 이력은 reference_verification.json(citations[].status, renumber_map)에만 기록
+         6. 최종 리스트에는 마커·편집문구((정합 확인!)/[정정]/(삭제)/(불일치)) 금지 — 순수 서지만
+         7. 재번호로 바뀐 inline 인용을 §3~§8·표·부록 전체에서 일관 갱신(참고문헌 리스트 자체 제외)
+         8. 모든 정리 완료 후 반드시 강제 게이트를 실행한다:
+            PYTHONUTF8=1 python {SKILL_ROOT}/scripts/verify_citations.py --md <MD> --verification <reference_verification.json>
+            exit!=0 이면 Phase 7로 진행 금지(편집문구 잔존/미검증 문헌/6c 미실행 차단)."
 )
 ```
+
+### 강제 게이트: verify_citations.py [기계 게이트, auto-skip 불가]
+
+Phase 6c 에이전트 종료 후, 오케스트레이터가 직접 게이트를 실행한다. 이것은 기계 게이트이므로 auto 모드에서도 **자동 스킵 불가** — exit!=0이면 Phase 7(HWPX 변환)로 진행하지 않는다.
+
+```bash
+PYTHONUTF8=1 python {SKILL_ROOT}/scripts/verify_citations.py \
+  --md "{output_dir}/(YYYYMMDD 발명자) {발명명칭}vN.md" \
+  --verification "{output_dir}/reference_verification.json"
+```
+
+| exit | 의미 | 조치 |
+|------|------|------|
+| 0 | 리스트 클린(편집문구 없음) + 모든 참고문헌이 검증 문헌과 DOI/특허번호 매칭 | Phase 7 진행 |
+| 1 | 편집문구 잔존 / 미검증 문헌 존재 / removed 문헌 재등장 | 리스트 정리(제거·재번호) 후 재실행 |
+| 2 | reference_verification.json 부재 또는 참고문헌 미검출 | Phase 6c 재실행 (미실행 상태) |
+
+> 이 게이트는 "리스트=검증된 순수 서지"를 결정적으로 보증한다. 단, 개수·매칭 검사는 **위조된 DOI**를 잡지 못한다 — 서지의 의미적 정확성(원문 대조)은 phase6c 에이전트의 책임이며, 기계 게이트가 환각을 완전 봉쇄하지는 않는다.
 
 ### Graceful Degradation
 
@@ -598,17 +728,38 @@ Agent(
 - CrossRef/Semantic Scholar 실패 시: Zettelkasten 캐시만으로 PDF 확보 시도, 메타데이터는 `partial`
 - Zettelkasten 접근 불가 시: 메타데이터 검증만 진행, PDF는 skipped
 
-### 출력 MD 업데이트 규칙
+### 출력 MD 업데이트 규칙 (클린 리스트)
 
-부록 C의 각 항목 **뒤에** 마커를 삽입한다 (기존 텍스트는 수정하지 않음):
+참고문헌 리스트를 다음 원칙으로 **재작성**한다 (마커 삽입 금지):
 
-- 완전 검증: `... 2017. (10 μm 수준 micro-LED EQE 저하 분석) (정합 확인!) — [PDF](reference/xxx.pdf)`
-- PDF 미확보: `... (정합 확인! — PDF 미확보)`
-- 부분 일치: `... (정합 부분 확인 — 수동 재검토 필요)`
-- 불일치: `... (정합 불일치 — 수동 확인 필요)`
-- KIMM 내부 자문(C.2): 마커 삽입하지 않음
+- 검증(verified/corrected) 문헌만 남긴다. 정정된 서지는 정정된 값으로 교체(정정 표기 없이).
+- 미검증·실재 불명·중복 문헌은 삭제하고, 본문 inline `[N]` 인용을 gap 없이 재번호.
+- 리스트 형식: `- [N] 저자, "제목", 저널 권(호), 페이지 (연도). DOI/KIPRIS` 순수 서지.
+- KIMM 내부 자문(구두)은 리스트에 넣지 않는다.
+- 검증/정정/제거 이력과 renumber_map은 reference_verification.json에만 기록(별도 검증요약 섹션 불필요).
 
-부록 C 하단에 새 하위 섹션 `### C.5 정합성 검증 요약` 을 추가한다 (phase6c-reference-verifier.md 스펙 참조).
+### 검증 요약 표시 (자동 진행, 정보 표시)
+
+강제 게이트 통과 후 Phase 7 진입 전에 결과를 화면에 표시한다:
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📚 인용문헌 정합성 검증 결과
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+| 구분 | 건수 |
+|------|------|
+| 원 인용 | {total} |
+| ✅ 검증(verified/corrected) | {verified} |
+| ✂️ 제거(removed·미검증·실재불명) | {removed} |
+| 🔢 최종 리스트(재번호) | {final_count} |
+| 📄 PDF 확보 | {pdf_count} |
+
+> 제거·정정 이력은 reference_verification.json에 기록됨(리스트에는 마커·편집문구 없음).
+▶ Phase 7 (HWPX 변환)을 시작합니다...
+```
+
+> `removed / total > 0.3`이면(다수 인용이 미검증으로 제거) Step 8 보고에 재조사 권고를 표시한다.
 
 manifest 업데이트:
 ```json
@@ -616,7 +767,7 @@ manifest 업데이트:
   "status": "completed|degraded",
   "output": "reference_verification.json",
   "pdf_count": N,
-  "verified": K, "mismatch": M, "manual_review": R
+  "verified": K, "removed": M, "final_reference_count": F
 }
 ```
 
@@ -693,12 +844,12 @@ manifest 최종 업데이트:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ### 출력 파일
-- 📄 `{output_dir}/(YYYYMMDD 발명자) {발명명칭}vN.md` — Obsidian 호환 마크다운 (9개 섹션 + 부록 3개, 부록 C에 (정합 확인!) 마커 포함)
+- 📄 `{output_dir}/(YYYYMMDD 발명자) {발명명칭}vN.md` — Obsidian 호환 마크다운 (9개 섹션 + 부록 3개, 참고문헌은 검증된 순수 서지만)
 - 📋 `{output_dir}/(YYYYMMDD 발명자) {발명명칭}vN.hwpx` — KIMM 양식 한글 파일
 - 🔍 `{output_dir}/{발명명칭}_선행특허분석.md` — KIPRIS 선행특허 분석
 - 🎨 `{output_dir}/diagrams/` — 기술 도면 {N}개
 - 📚 `{output_dir}/reference/` — 인용문헌 원문 PDF {K}건 (학술 논문 + 선행특허)
-- 🧾 `{output_dir}/reference_verification.json` — 인용문헌 정합성 검증 로그
+- 🧾 `{output_dir}/reference_verification.json` — 인용문헌 정합성 검증 로그 (audit trail)
 
 > [!important] 파일명 규칙
 > - MD와 HWPX 파일은 `(YYYYMMDD 발명자) 발명명칭vN` 형식으로 명명
@@ -714,6 +865,19 @@ manifest 최종 업데이트:
 ### 선행특허 차별성
 - 분석 특허: {N}건
 - 본 발명 미개시 요소: {핵심 차별 요소 요약}
+
+### 특허성 재채점 (Phase 5.5)
+- 재채점 IFR: {recheck_count}건 (선행특허 조사 결과 반영)
+- 반대심문 상위 3개 IFR 반론 요지: {patentability_devil_advocate 요약}
+- (degraded로 스킵된 경우: "선행특허 degraded로 재채점 미수행")
+
+### 청구항 하드닝 결과 (Phase 6.5)
+- 점검 issue: 발견 {issues_found}건 → 자동 수정 {auto_fixed}건, 수동 확인 필요 {reported}건
+- 수동 확인 항목: {reported issues 목록 — 카테고리 재설계 등}
+
+> [!warning] 자기공지 경고 (해당 시)
+> 발명자 선공개 발견: {self_disclosure 목록 — 공개일·매체}
+> **공지예외주장(신규성 의제) 기한: {grace_deadline} (공개일로부터 12개월)** — 이 기한 내 출원해야 자기공지에 의한 신규성·진보성 상실을 회피할 수 있음.
 
 ### 다음 단계
 1. HWPX 파일을 한/글에서 열어 서식과 내용 확인
@@ -732,8 +896,11 @@ manifest 최종 업데이트:
 | Phase 5 | KIPRIS API 실패 | graceful degradation, 수동 보완 안내 |
 | Phase 6 | 섹션/부록 누락 | 1회 재생성, 이후 부분 결과 제공 |
 | Phase 6b | matplotlib 실패 | Mermaid만 발명내용설명서 MD에 포함 |
+| Phase 5.5 | prior_art degraded | 재채점 스킵, Step 5b로 진행 |
+| Phase 6.5 | 자동 수정 불가 issue | 수정하지 않고 Step 8 보고에 명시 |
 | Phase 6c | KIPRIS/CrossRef API 실패 | 해당 인용은 manual_review, 나머지 계속 진행 |
-| Phase 6c | PDF 첫 페이지 제목 불일치 | PDF 폐기 + (정합 불일치) 마커 삽입 |
+| Phase 6c | 검증 실패/PDF 제목 불일치 | 해당 문헌 리스트에서 제거 + 본문 재번호 + json에 removed 기록 |
+| Phase 6c | verify_citations.py exit!=0 | Phase 7 차단 — 리스트 정리 후 재실행(exit1) 또는 Phase 6c 재실행(exit2) |
 | Phase 7 | HWPX 변환 실패 | MD fallback |
 | Phase 7 | validate.py 실패 | MD fallback + 에러 로그 |
 
@@ -749,9 +916,11 @@ manifest 최종 업데이트:
 ### 사용자 응답 없이 자동 진행하는 시점
 
 1. Phase 1 → Phase 2 전환
-2. Phase 4 → Phase 5 전환
+2. Phase 4 → Phase 5 → Phase 5.5 전환
 3. Step 5b 중간 진행 보고 (표시만)
-4. Phase 6 → Phase 6b → Phase 6c → Phase 7 전환
+4. Phase 6 → Phase 6.5(자동 점검·자동 수정) → Phase 6b → Phase 6c → Phase 7 전환
+
+> [!important] 단, Phase 6c 후 강제 게이트(verify_citations.py)는 **기계 게이트**로 auto-skip 불가하다. exit!=0이면 Phase 7로 진행하지 않고 리스트 정리·재실행한다(자동 진행 모드에서도 예외).
 
 ### 자동 진행 모드 활성화 조건
 
