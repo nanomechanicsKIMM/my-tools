@@ -34,21 +34,28 @@ model: sonnet
 
 ## 작업
 
-### Step 1: 도면 목록 결정
+### Step 1: 도면 목록 결정 (2026-07-06 확장 — 풍성한 세트)
 
 `발명내용설명서 MD`의 §9(추가자료)에서 도면 목록을 추출한다.
 도면 목록이 없으면 §6 내용을 분석하여 필요 도면을 자동 결정한다.
 
-**기본 도면 세트** (특허 유형별):
+**기본 도면 세트** (특허 유형별, **최소 5매** — 필수 3종은 유형 무관 항상 포함):
 
-| 도면 유형 | 방법 특허 | 장비 특허 | 소자 특허 |
-|-----------|----------|----------|----------|
-| 전체 시스템 구성도 | O | O | - |
-| 공정 흐름도 (flowchart) | O | - | - |
-| 장치 단면도/구조도 | - | O | - |
-| 작동 원리도 (상태 변화) | O | O | - |
-| 종래기술 vs 본 발명 비교도 | O | O | O |
-| 소자 구조 단면도 | - | - | O |
+| 도면 유형 | 방법 특허 | 장비 특허 | 소자 특허 | 비고 |
+|-----------|----------|----------|----------|------|
+| **특허 배경 그림** (문제 상황·종래 한계 시각화) | O | O | O | **필수** — §3/§4 근거 |
+| **종래기술 vs 본 발명 비교도** | O | O | O | **필수** — 차별 요소 시각 대비 |
+| **활용 가능성·파급효과 그림** (적용 제품·시장·응용 시나리오) | O | O | O | **필수** — §7/§9 사업화 근거 |
+| 전체 시스템 구성도 | O | O | - | |
+| 공정 흐름도 (flowchart) | O | - | - | |
+| 장치 단면도/구조도 | - | O | - | |
+| 작동 원리도 (상태 변화) | O | O | - | |
+| 소자 구조 단면도 | - | - | O | |
+
+**컬러 사용 원칙 (2026-07-06)**: 발명내용설명서(내부 신고 문서)의 도면은 **컬러를 적극
+사용**한다 — 구성요소 구분, 광선/신호/힘 경로, 종래기술(적색 계열) vs 본 발명(청색 계열)
+대비, 강조 표시에 색을 활용해 심의위원 이해도를 높인다. 단, 출원용 정식 도면은 흑백 선도
+관행이므로 §9에 "출원 도면화 시 흑백 선도 변환 필요"를 부기한다.
 
 ### Step 2: Mermaid 다이어그램 생성
 
@@ -131,23 +138,43 @@ SVG XML을 직접 작성하여 figures/*.svg 파일 생성. 3가지 매체별 �
 5. 모든 <text>에 font-family + font-size 명시 (PowerPoint 호환성)
 ```
 
-#### 3-2) SVG → PNG (HWPX 임베드용) ⭐ 필수
+#### 3-2) SVG → PPTX 덱 → 600 dpi PNG (HWPX 임베드용) ⭐ 필수 (2026-07-06 개편)
 
-```bash
-python scripts/svg2png.py --src figures/ --dst diagrams/ --dpi 200
+**SVG를 PPTX 슬라이드 덱으로 먼저 모으고, 각 슬라이드를 600 dpi PNG로 export하여 HWPX에
+반영**한다. 벡터 원본(SVG)·발표/검토/공유용(PPTX)·인쇄 품질 삽입본(PNG 600dpi)을 한 번에 얻는다.
+
+```
+figures/figN_*.svg (컬러 벡터, 1차 산출물)
+   ▼
+figures_deck.pptx — 슬라이드 N = [도 N] 1:1 대응 (표지 슬라이드 없음)
+   ▼
+슬라이드별 600 dpi PNG export (PowerPoint COM: 슬라이드 인치 × 600 픽셀)
+   ▼
+diagrams/figN_*.png → convert_hwpx.py가 §9에 삽입
 ```
 
-> SVG→PNG는 matplotlib PNG와 동일하게 **`diagrams/`**(HWPX 임베드 공용 폴더)로 출력한다.
-> `convert_hwpx.py`가 `diagrams/*.png`를 비재귀 glob + 알파벳순 정렬로 §9에 삽입하므로,
-> SVG 원본 파일명을 `fig1_`, `fig2_` … 접두사로 지으면 도면 순서가 보존된다.
+**(a) PPTX 덱 조립** (`{output_dir}/figures_deck.pptx`):
+- python-pptx로 16:9 슬라이드 생성. **슬라이드 번호 = 도면 번호 1:1 일치**(슬라이드 1=[도 1],
+  슬라이드 2=[도 2], …) — 표지 슬라이드를 만들지 않는다(프레젠테이션 제목·파일명으로 식별).
+- 각 슬라이드: 상단에 `[도 N] 캡션` 텍스트 + 도면 이미지(SVG를 300 dpi 이상 임시 PNG로
+  변환해 삽입, 또는 outlined SVG/EMF 삽입) + 하단에 부호 주석(필요 시).
+- 이 덱 자체가 산출물 — 발명심의 발표·검토·공유용.
 
-내부 4중 방어:
+**(b) 슬라이드 → 600 dpi PNG export**:
+- **우선**: PowerPoint COM 자동화(Windows) — 각 슬라이드를 `슬라이드 인치 × 600` 픽셀로
+  export (예: 13.33 in × 600 = 8000 px 폭). 캡션 포함 여부는 §9 삽입 요건에 맞춰 선택
+  (캡션 제외가 필요하면 도면 영역만 SVG 직접 래스터).
+- **폴백**(COM 불가): `python scripts/svg2png.py --src figures/ --dst diagrams/ --dpi 600`
+- 출력: `diagrams/figN_*.png` — `convert_hwpx.py`가 비재귀 glob + 알파벳순 정렬로 §9에
+  삽입하므로 파일명 `fig1_`, `fig2_` … 접두사로 도면 순서를 보존한다.
+- 600 dpi 원본이 과대(장당 > 3 MB)하면 HWPX 삽입본만 장변 4000 px로 리샘플하고
+  PPTX·SVG 원본은 유지.
+
+svg2png.py 내부 4중 방어(폴백 경로):
 1. `sys.modules['cairocffi'] = None` — Windows libcairo-2.dll 부재 우회
 2. Malgun Gothic + Arial Unicode MS 폰트 등록
 3. SVG 사전 치환 (`↳→→`, `−→-`)
 4. svg2rlg() 트리 walk + String.fontName 강제 override
-
-→ `convert_hwpx.py`가 이 PNG를 §9 셀에 삽입.
 
 #### 3-3) SVG → EMF (PowerPoint metafile용)
 
@@ -242,7 +269,7 @@ def create_cross_section_diagram(output_dir, filename):
     ax.set_title('발명 장치 단면도', fontsize=14, fontweight='bold')
 
     filepath = os.path.join(output_dir, filename)
-    fig.savefig(filepath, dpi=150, bbox_inches='tight',
+    fig.savefig(filepath, dpi=600, bbox_inches='tight',
                 facecolor='white', edgecolor='none')
     plt.close(fig)
     return filepath
@@ -272,7 +299,7 @@ def create_process_flow_diagram(output_dir, filename, steps):
     ax.set_title('전사 공정 흐름도', fontsize=14, fontweight='bold')
 
     filepath = os.path.join(output_dir, filename)
-    fig.savefig(filepath, dpi=150, bbox_inches='tight',
+    fig.savefig(filepath, dpi=600, bbox_inches='tight',
                 facecolor='white', edgecolor='none')
     plt.close(fig)
     return filepath
@@ -335,9 +362,10 @@ HWPX는 Mermaid·SVG를 직접 렌더링할 수 없으므로, **모든 도면의
 ## 출력
 
 1. `{output_dir}/발명내용설명서 MD` 업데이트 — §6, §9에 Mermaid 인라인 삽입
-2. `{output_dir}/figures/*.svg` (+ `emf/`, `pptx/`) — SVG 벡터 원본 및 PowerPoint 변환본 (schematic·단면도)
-3. `{output_dir}/diagrams/*.png` — HWPX 삽입용 PNG (SVG→PNG + matplotlib 공용)
-4. manifest 업데이트: `"phase6b": {"status": "completed", "output": "diagrams/", "figures": "figures/", "diagram_count": N}`
+2. `{output_dir}/figures/*.svg` (+ `emf/`, `pptx/`) — 컬러 SVG 벡터 원본 및 PowerPoint 변환본 (1차 산출물)
+3. `{output_dir}/figures_deck.pptx` — 도면 슬라이드 덱 (슬라이드 N = [도 N] 1:1, 발표·검토·공유용)
+4. `{output_dir}/diagrams/*.png` — 600 dpi HWPX 삽입용 PNG (PPTX export 우선, svg2png/matplotlib 폴백)
+5. manifest 업데이트: `"phase6b": {"status": "completed", "output": "diagrams/", "figures": "figures/", "pptx_deck": "figures_deck.pptx", "png_dpi": 600, "diagram_count": N}`
 
 ## 주의사항
 
@@ -348,5 +376,8 @@ HWPX는 Mermaid·SVG를 직접 렌더링할 수 없으므로, **모든 도면의
 - **HWPX 임베드**: 위 SVG·matplotlib 결과 PNG를 **모두 `diagrams/`로 취합** → convert_hwpx.py가 §9에 자동 삽입
 - **Excalidraw 미사용**: 에이전트가 Excalidraw 파일을 생성하지 않는다 (사용자가 핸드라이팅 시에만 직접 생성)
 - matplotlib 한글 폰트: `plt.rcParams['font.family'] = 'Malgun Gothic'` (Windows)
-- 도면 번호는 [도 1], [도 2] ... 형식으로 통일 (도구 간 번호 중복 금지)
-- 특허 도면 스타일: 흑백 기본, 강조만 제한적 색상
+- 도면 번호는 [도 1], [도 2] ... 형식으로 통일 (도구 간 번호 중복 금지). **figures_deck.pptx
+  슬라이드 번호 = 도면 번호 1:1 일치**(표지 슬라이드 금지).
+- **필수 3종(배경·비교·활용/파급효과) 누락 금지** — §9 도면 목록에 반드시 포함.
+- **컬러 스타일(발명내용설명서)**: 컬러 적극 사용(구성 구분·종래 적색 vs 본 발명 청색 대비·경로 강조).
+  출원용 정식 도면은 흑백 선도 관행 — §9에 변환 필요 부기.

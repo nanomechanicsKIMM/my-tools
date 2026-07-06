@@ -71,12 +71,13 @@ Phase 6 에이전트가 §1~§9 작성 시, TRIZ 분석 결과를 일반적인 �
 - "IFR 3 적용" → "복합재료 챔버 구조를 도입하여"
 - "원리 35(속성 변환)" → "형상기억합금의 온도 응답 특성을 활용하여"
 
-### PNG 도면 규칙 (HWPX 삽입용)
+### 도면 파이프라인 규칙 (HWPX 삽입용, 2026-07-06 개편)
 
-- Mermaid와 별도로 **matplotlib로 PNG 파일도 생성** (HWPX에는 Mermaid 삽입 불가)
-- `{output_dir}/diagrams/*.png` 에 저장
-- convert_hwpx.py의 `--diagrams` 옵션으로 §9에 자동 삽입
-- 해상도: 150 dpi, 흰색 배경, 한글 폰트(Malgun Gothic)
+- **SVG(컬러 벡터) 1차 생성 → figures_deck.pptx(슬라이드 N=[도 N] 1:1) → 600 dpi PNG → HWPX** 순서를 표준으로 한다(상세: agents/phase6b-diagram-generator.md Step 3-2).
+- 600 dpi PNG는 PowerPoint COM export(슬라이드 인치×600 픽셀) 우선, `svg2png.py --dpi 600` 폴백. 그래프형 도면의 matplotlib 폴백도 `dpi=600`.
+- `{output_dir}/diagrams/*.png` 에 저장 → convert_hwpx.py의 `--diagrams` 옵션으로 §9에 자동 삽입
+- **컬러 적극 사용**(내부 신고 문서 기준. 출원 도면화 시 흑백 변환 §9 부기), 흰색 배경, 한글 폰트(Malgun Gothic)
+- 필수 3종 도면(특허 배경·종래기술 비교·활용/파급효과) 포함 최소 5매
 
 ---
 
@@ -88,13 +89,14 @@ Step 1: TRIZ 시스템 분석 (Phase 1) ─── sonnet 에이전트
 Step 2: 모순 + IFR 생성 (Phase 2) ──── opus 에이전트
 Step 3: 사용자 검토 게이트 ──────────── 사용자 상호작용 (결과 표시 + 선택)
 Step 4: 정량 평가 (Phase 4) ─────────── sonnet 에이전트
-Step 5: 선행특허 조사 (Phase 5) ─────── sonnet 에이전트 (자기공지 조사 포함)
+Step 5: 선행특허 조사 (Phase 5) ─────── sonnet 에이전트 (자기공지 논문 + 자기선행 특허 조사 포함)
 Step 5.5: 특허성 재채점 ────────────── sonnet 에이전트 (Phase 5 반영 + 반대심문)
 Step 5b: 중간 진행 보고 ────────────── 사용자에게 진행 상황 표시
 Step 6: 발명내용설명서 작성 (Phase 6) ── opus 에이전트
 Step 6.5: 청구항 하드닝 (자동 점검+수정) ─ 오케스트레이터 자동 처리
-Step 6b: 도면 생성 (Phase 6b) ───────── sonnet 에이전트
+Step 6b: 도면 생성 (Phase 6b) ───────── sonnet 에이전트 (컬러 SVG → PPTX 덱 → 600dpi PNG)
 Step 6c: 인용문헌 정합성 검증 & PDF (Phase 6c) ── sonnet 에이전트 + 강제 게이트
+Step 6d: Critic 검증 게이트 ─────────── opus 에이전트 (출처·모순/IFR·청구항 특허성, PASS/FIX/BLOCK)
 Step 7: HWPX 변환 (Phase 7) ─────────── sonnet 에이전트
 Step 8: 최종 출력 및 안내 ──────────── 사용자에게 결과 안내
 ```
@@ -115,9 +117,12 @@ Step 8: 최종 출력 및 안내 ──────────── 사용자�
 3. **핵심 아이디어**: 문제를 해결하는 핵심 기술적 아이디어 (예: "가변 피치 레이저를 이용한 COC 직접 전사")
 
 옵션:
-- **발명자명** (기본: 미입력)
+- **발명자명** (기본: 미입력) — 공동발명자가 있으면 쉼표로 함께 입력(첫 항목=주발명자, `inventors[]`로 저장)
+- **소속기관** (기본: 미입력, KIMM 발명이면 "한국기계연구원" 제안) — 자기선행 특허 조사(Phase 5 Step 0-B)의 출원인 검색에 사용
 - **출력 디렉토리** (기본: 현재 작업 디렉토리의 output/)
 - **참조 문서** (기본: 현재 디렉토리의 .md 파일 자동 탐색)
+
+> 발명자 리스트·소속기관 정보가 없으면 자기선행 조사는 **사용자(주발명자) 1인 위주**로 수행한다.
 ```
 
 > [!important] AskUserQuestion 도구를 사용하여 입력을 받아야 한다. 입력을 요청한 후 사용자 응답을 기다린다.
@@ -153,7 +158,9 @@ Step 8: 최종 출력 및 안내 ──────────── 사용자�
     "field": "사용자가 입력한 기술분야",
     "problem": "사용자가 입력한 해결 과제",
     "idea": "사용자가 입력한 핵심 아이디어",
-    "inventor": "발명자명 (선택)",
+    "inventor": "주발명자명 (하위호환 키 = inventors[0])",
+    "inventors": ["주발명자", "공동발명자1", "..."],
+    "affiliation": "소속기관(출원인 예정, 선택) — Phase 5 Step 0-B 자기선행 특허 조사에 사용",
     "date": "YYYY-MM-DD",
     "references": ["참조 문서 경로 목록"],
     "source_files": ["원본 MD 파일 경로 목록"]
@@ -353,6 +360,20 @@ Agent(
          Input: {manifest.input}
          Output: {output_dir}/prior_art.json
          Also output: {output_dir}/{발명명칭}_선행특허분석.md
+
+         MANDATORY (다국가 국제 검색 — 2026-07-06 필수 격상):
+         - KIPRIS 국내 검색에 더해, 독립항 신규성 앵커 개념을 영문 키워드로 변환하여
+           Google Patents WebFetch 3~5쿼리로 KR/US/JP/EP/WO 를 검색한다(agent 문서 S5 참조).
+         - 국내 한정 조사로 novel 판정 금지. 국제 검색 불가 시 analysis_summary 에
+           "국제 검색 미수행 — 국내 한정 결론" + ifr_coverage kr_only_caveat 명시.
+         - 검출 문헌의 방식(투사형/직시형 등)은 원문 WebFetch 로 직접 확인(2차 요약 신뢰 금지).
+
+         MANDATORY (자기선행 특허 조사 — 2026-07-06 신설, agent 문서 Step 0-B):
+         - manifest input.inventors[](공동발명자)·input.affiliation(소속기관)으로
+           KIPRIS 국내 중심 발명자·출원인 검색을 수행한다(정보 없으면 주발명자 1인 위주).
+         - 검출 자기선행의 청구범위 + **배경기술·명세서 개시 요소**를 파싱하고 공지예외
+           12개월 기한을 산정하여 prior_art.json self_prior_art[]에 기록한다.
+         - disclosed_elements 는 Phase 6 독립항 설계의 금지 영역 + Step 6d critic 공격 재료.
 
          ADDITIONAL (자기공지·NPL 조사 — 연구기관 최다 무효사유 차단):
          - 발명자 본인·KIMM 소속 저자의 논문·학회 발표·보도자료를 CrossRef/OpenAlex 저자
@@ -570,13 +591,16 @@ manifest 업데이트:
 4. **거절조합 대응**: Phase 5 `rejection_combinations`의 각 예상 조합에 대응하는 한정 요소가 최소 하나의 종속항으로 준비됐는지.
 5. **수치 한정 위치**: 독립항은 수치 무한정(광역), 수치 한정은 종속항으로 이동됐는지.
 
-**SMART 자가진단 5항목** (Phase 6.5 통합):
+**SMART 자가진단 8항목** (Phase 6.5 통합, 2026-07-06 SMART5/KPAS 활용성·시장성 레버 3항목 확장):
 
 6. **독립항 글자수 경고 신호**: 과도한 길이면 플래그(규칙이 아닌 **경고 신호** — SMART는 독립항이 길수록 감점하는 기계적 경향이 있음). 길이는 신규성 지탱 결합의 크기가 결정하는 것이지 점수 최적화 대상 아님.
-7. **카테고리 병행**: 물건+방법 청구항이 병행되는지(최소), 장치/시스템 추가 검토.
+7. **카테고리 병행**: 물건+방법 청구항이 병행되는지(최소), 소자·**시스템**(센서/제어 요소 있을 때) 추가 검토 — 최대 4축.
 8. **종속항 계층 균형**: 독립항당 종속항 4~6개.
 9. **활용성 서술 존재**: §7에 "본 발명은 [산업]에 적용되어 [분야]에 활용" 패턴이 존재하는지.
 10. **실시예·도면 수 하한**: 실시예 ≥3, 도면 ≥5.
+11. **도면부호 동기화**: §9에 도면부호 목록 테이블이 존재하고, §6 본문·§8 청구항의 부호 병기와 일치하는지.
+12. **파급/사업화 블록 존재**: §9에 적용 시장·후속출원(분할/연속) 구조·PCT/삼극 패밀리 플랜이 실질 내용으로 서술됐는지 (KPAS 시장성·SMART5 활용성 레버).
+13. **안티게이밍 검사**: 11·12가 지표용 빈 문구가 아닌지 — 시장·패밀리 서술이 발명 내용과 무관하거나 근거 없는 과장이면 플래그. 자동점수 ≠ 실제 권리강도, 신규성·품질 우선.
 
 ### 자동 처리 방식
 
@@ -595,7 +619,7 @@ Agent(
          Read the latest vN.md in {output_dir} for §8 청구범위 and §6/§7.
          Read {output_dir}/prior_art.json for rejection_combinations.
 
-         점검 항목(필수 5 + SMART 5): 위 SKILL 정의 참조.
+         점검 항목(필수 5 + SMART 8): 위 SKILL 정의 참조.
          자동 수정 가능한 issue는 MD를 직접 보정(버전 유지), 불가한 issue는 목록으로 반환.
          Output: 보정된 phase6 MD + issues[]{item, severity, action(fixed/reported), detail}"
 )
@@ -623,16 +647,21 @@ Agent(
          Read {output_dir}/evaluation.json for top IFRs.
 
          Input: {manifest.input}
-         Output directory: {output_dir}/diagrams/
+         Output directories: {output_dir}/figures/ (컬러 SVG 원본), {output_dir}/diagrams/ (600dpi PNG)
+         Also output: {output_dir}/figures_deck.pptx (슬라이드 N = [도 N] 1:1, 표지 없음)
          Also update: the Phase 6 output MD file (latest vN.md in {output_dir}) §9 with diagram references
 
-         Generate at minimum:
-         1. 전체 시스템 구성도
-         2. 공정 흐름도
-         3. 종래기술 vs 본 발명 비교도
+         Generate at minimum (필수 3종 포함 최소 5매, 컬러):
+         1. 특허 배경 그림 (문제 상황·종래 한계 시각화) [필수]
+         2. 종래기술 vs 본 발명 비교도 [필수]
+         3. 활용 가능성·파급효과 그림 (적용 제품·시장·응용) [필수]
+         4. 전체 시스템 구성도
+         5. 공정 흐름도 또는 소자/장치 단면도
 
-         Use matplotlib for technical drawings, Mermaid for flowcharts.
-         Korean font: plt.rcParams['font.family'] = 'Malgun Gothic'"
+         PIPELINE (agent 문서 Step 3-2): 컬러 SVG 1차 생성 → figures_deck.pptx 조립
+         (슬라이드 번호=도면 번호 일치) → 각 슬라이드 600 dpi PNG export(PowerPoint COM
+         우선, svg2png.py --dpi 600 폴백) → diagrams/ 저장 → convert_hwpx.py가 §9 삽입.
+         Korean font: Malgun Gothic. 종래=적색 계열 vs 본 발명=청색 계열 대비."
 )
 ```
 
@@ -773,6 +802,44 @@ manifest 업데이트:
 
 ---
 
+## Step 6d: Critic 검증 게이트 (2026-07-06 신설)
+
+**Agent**: `agents/phase6d-critic.md`
+**Model**: opus
+
+verify_citations.py 게이트 통과 후, HWPX 변환 전에 **작성 lane과 분리된 독립 critic**이
+산출물 전체를 적대적으로 재검증한다. 3개 레인: (A) 인용 문헌·근거 자료 출처 검증(핵심
+문헌 ≥3건 원문 spot 재검증 + **성격 오규정 탐지** + 무근거 수치), (B) 핵심 모순·IFR
+유효성(가짜 모순·물리 성립성·점수-coverage 정합), (C) 대표 청구항 특허성 모의 심사
+(자기선행 배경기술 최우선 신규성 공격 + 조합 진보성 공격 → survive/needs_amendment/reject).
+
+```
+Agent(
+  subagent_type="general-purpose",
+  model="opus",
+  prompt="Read {SKILL_ROOT}/agents/phase6d-critic.md for instructions.
+         Read {output_dir}/: invention_manifest.json, triz_analysis.json, evaluation.json,
+         prior_art.json (self_prior_art 포함), reference_verification.json,
+         그리고 최신 vN.md (§4/§7/§8·부록 A/B/C).
+         Output: {output_dir}/critic_report.json (verdict: PASS|FIX|BLOCK + 레인별 issues)"
+)
+```
+
+### 판정 처리 (오케스트레이터)
+
+| verdict | 조치 |
+|---------|------|
+| **PASS** | Step 7(HWPX) 진행 |
+| **FIX** | required_fixes를 해당 phase(6/6b/6c)가 **1회 자동 보정** → §8 변경 시 Step 6.5 하드닝 재적용 + verify_citations.py 재실행 → critic 재검(1회 한정) |
+| **BLOCK** | critical(성격 오규정·미검증 인용·독립항 reject) — **auto 모드여도 자동 진행 중단**, 사용자에게 issue 목록 제시 후 판단 요청 |
+
+manifest 업데이트:
+```json
+"phase6d": {"status": "completed", "verdict": "PASS|FIX->PASS|BLOCK", "critical": N, "major": M, "output": "critic_report.json"}
+```
+
+---
+
 ## Step 7: HWPX 변환 (Phase 7)
 
 **Agent**: `agents/phase7-hwpx-converter.md`
@@ -847,9 +914,15 @@ manifest 최종 업데이트:
 - 📄 `{output_dir}/(YYYYMMDD 발명자) {발명명칭}vN.md` — Obsidian 호환 마크다운 (9개 섹션 + 부록 3개, 참고문헌은 검증된 순수 서지만)
 - 📋 `{output_dir}/(YYYYMMDD 발명자) {발명명칭}vN.hwpx` — KIMM 양식 한글 파일
 - 🔍 `{output_dir}/{발명명칭}_선행특허분석.md` — KIPRIS 선행특허 분석
-- 🎨 `{output_dir}/diagrams/` — 기술 도면 {N}개
+- 🎨 `{output_dir}/figures/` — 컬러 SVG 벡터 원본 {N}개 / `{output_dir}/figures_deck.pptx` — 도면 슬라이드 덱(슬라이드 N=[도 N])
+- 🖼️ `{output_dir}/diagrams/` — 600 dpi 기술 도면 PNG {N}개
 - 📚 `{output_dir}/reference/` — 인용문헌 원문 PDF {K}건 (학술 논문 + 선행특허)
 - 🧾 `{output_dir}/reference_verification.json` — 인용문헌 정합성 검증 로그 (audit trail)
+- 🧐 `{output_dir}/critic_report.json` — Critic 검증 결과 (verdict {PASS|FIX→PASS} + 레인별 issue {N}건)
+
+### Critic 검증 결과 (Phase 6d)
+- 판정: {verdict} — Lane A 출처 {issues}건 / Lane B 모순·IFR {issues}건 / Lane C 독립항 {survive/needs_amendment/reject 요약}
+- (자기선행 특허 발견 시) self_prior_art: {number 목록 — 개시 요소·공지예외 기한}
 
 > [!important] 파일명 규칙
 > - MD와 HWPX 파일은 `(YYYYMMDD 발명자) 발명명칭vN` 형식으로 명명
@@ -901,6 +974,9 @@ manifest 최종 업데이트:
 | Phase 6c | KIPRIS/CrossRef API 실패 | 해당 인용은 manual_review, 나머지 계속 진행 |
 | Phase 6c | 검증 실패/PDF 제목 불일치 | 해당 문헌 리스트에서 제거 + 본문 재번호 + json에 removed 기록 |
 | Phase 6c | verify_citations.py exit!=0 | Phase 7 차단 — 리스트 정리 후 재실행(exit1) 또는 Phase 6c 재실행(exit2) |
+| Phase 6d | verdict=FIX | 해당 phase 1회 자동 보정 → critic 재검(1회 한정) |
+| Phase 6d | verdict=BLOCK (critical) | auto 모드여도 진행 중단, 사용자 판단 요청 |
+| Phase 6d | 네트워크 불가(spot check 불능) | Lane A degraded 표기, 정합성 대조만 수행 후 진행 |
 | Phase 7 | HWPX 변환 실패 | MD fallback |
 | Phase 7 | validate.py 실패 | MD fallback + 에러 로그 |
 
@@ -918,9 +994,9 @@ manifest 최종 업데이트:
 1. Phase 1 → Phase 2 전환
 2. Phase 4 → Phase 5 → Phase 5.5 전환
 3. Step 5b 중간 진행 보고 (표시만)
-4. Phase 6 → Phase 6.5(자동 점검·자동 수정) → Phase 6b → Phase 6c → Phase 7 전환
+4. Phase 6 → Phase 6.5(자동 점검·자동 수정) → Phase 6b → Phase 6c → Phase 6d(critic) → Phase 7 전환
 
-> [!important] 단, Phase 6c 후 강제 게이트(verify_citations.py)는 **기계 게이트**로 auto-skip 불가하다. exit!=0이면 Phase 7로 진행하지 않고 리스트 정리·재실행한다(자동 진행 모드에서도 예외).
+> [!important] 단, 두 게이트는 auto-skip 불가다. (1) Phase 6c 후 강제 게이트(verify_citations.py)는 **기계 게이트** — exit!=0이면 Phase 7로 진행하지 않는다. (2) Phase 6d critic의 **BLOCK 판정** — critical issue(성격 오규정·미검증 인용·독립항 reject) 발견 시 자동 진행 모드에서도 중단하고 사용자 판단을 요청한다.
 
 ### 자동 진행 모드 활성화 조건
 

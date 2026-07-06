@@ -125,9 +125,11 @@ Phase 6: 발명내용설명서 초안 ────── opus 에이전트
 Phase 6.5: 청구항 하드닝 ────────── (112b·트리·권리범위·거절대응 점검)
   ├─ Gate 6.5: 청구항 확정 ──────── 사용자 판단 [필수]
   │
-Phase 6b: 도면 생성 ─────────────── sonnet 에이전트 (Background 결과 활용)
+Phase 6b: 도면 생성 ─────────────── sonnet 에이전트 (컬러 SVG → PPTX 덱 → 600dpi PNG, Background 결과 활용)
 Phase 6c: 인용문헌 정합성 검증 ──── sonnet 에이전트 (KIPRIS + CrossRef + OpenAlex + Zettelkasten)
   └─ 강제 게이트: verify_citations.py (exit!=0 → Phase 7 차단)
+Phase 6d: Critic 검증 게이트 ────── opus 에이전트 (출처·모순/IFR·청구항 특허성)
+  └─ Gate 6d: critic 판정 처리 ──── PASS 자동 진행 / FIX 1회 보정 / BLOCK 사용자 판단 [BLOCK은 auto-skip 불가]
 Phase 7: HWPX 변환 ──────────────── sonnet 에이전트 (정합 반복 최대 3회)
   └─ Gate 7: 최종 확인 ──────────── 사용자 확인 [auto-skip 가능]
 ```
@@ -144,7 +146,9 @@ Phase 7: HWPX 변환 ──────────────── sonnet 에
     "field": "기술분야",
     "problem": "해결 과제",
     "idea": "핵심 아이디어",
-    "inventor": "발명자명",
+    "inventor": "주발명자명 (하위호환 키 = inventors[0])",
+    "inventors": ["주발명자", "공동발명자1", "..."],
+    "affiliation": "소속기관(출원인 예정, 선택) — Phase 5 Step 0-B 자기선행 특허 조사에 사용. 정보 없으면 사용자 1인 위주 조사",
     "date": "YYYY-MM-DD",
     "references": [],
     "source_files": []
@@ -191,6 +195,7 @@ Phase 7: HWPX 변환 ──────────────── sonnet 에
 | Gate 6 | **불가** | 발명내용설명서 내용 확인은 발명자 책임 |
 | Gate 6.5 | **조건부** (issue 0건 시 skip) | 청구항은 핵심 자산 — issue 1건 이상이면 확인 필수 |
 | (Phase 6c 강제 게이트) | **불가** | verify_citations.py exit!=0 이면 Phase 7 차단 (기계적 게이트, auto-skip 불가) |
+| Gate 6d | **조건부** (PASS 시 skip, FIX는 1회 자동보정) | critic **BLOCK**(critical: 성격 오규정·미검증 인용·독립항 reject)은 auto-skip 불가 — 사용자 판단 필수 |
 | Gate 7 | **가능** (skip) | 이전 Gate에서 이미 승인됨 |
 
 > auto-skip 시에도 Gate 결과는 화면에 표시한다 (응답을 기다리지 않을 뿐).
@@ -558,7 +563,18 @@ Agent(
          
          Input: {manifest.input}
          Output: {output_dir}/prior_art.json
-         Also output: {output_dir}/{발명명칭}_선행특허분석.md"
+         Also output: {output_dir}/{발명명칭}_선행특허분석.md
+
+         MANDATORY (다국가 국제 검색 — 2026-07-06 필수 격상):
+         - 독립항 신규성 앵커 개념을 영문 키워드로 변환하여 Google Patents WebFetch
+           3~5쿼리로 KR/US/JP/EP/WO 검색 (agent 문서 S5 참조). 국내 한정 조사로
+           novel 판정 금지. 검출 문헌의 방식은 원문 WebFetch 로 직접 확인.
+
+         MANDATORY (자기선행 특허 조사 — 2026-07-06 신설, agent 문서 Step 0-B):
+         - manifest input.inventors[](공동발명자)·input.affiliation(소속기관)으로
+           KIPRIS 국내 중심 발명자·출원인 검색(정보 없으면 사용자 1인 위주).
+         - 자기선행의 청구범위 + 배경기술·명세서 개시 요소 파싱, 공지예외 12개월 기한
+           산정 → prior_art.json self_prior_art[] 기록. Gate 5 표시에 포함."
 )
 ```
 
@@ -776,6 +792,9 @@ Gate 6 승인 직후, 도면·HWPX 변환 이전에 청구항 자체를 법적 �
 3. **권리범위 계층**: 독립항이 불필요하게 좁지 않은지(광역 유지), 종속항이 fallback 방어선을 단계적으로 형성하는지.
 4. **선행특허 회피 반영**: Gate 5의 예상 거절 조합에 대응하는 한정 요소가 최소 하나의 종속항으로 준비됐는지.
 5. **수치 한정 위치**: 독립항은 수치 무한정(광역), 수치 한정은 종속항으로 이동됐는지(변리사 메모 반영).
+6. **카테고리 포트폴리오 (2026-07-06)**: 물건+방법 병행(필수) + 소자·시스템(센서/제어 요소 있을 때) 추가 검토 — 최대 4축.
+7. **SMART5/KPAS 활용성·시장성 레버 (2026-07-06)**: §9에 도면부호 목록 테이블(§6·§8 부호와 동기화)과 파급/사업화 블록(적용 시장·후속출원 구조·PCT/삼극 패밀리 플랜)이 실질 내용으로 존재하는지.
+8. **안티게이밍 검사 (2026-07-06)**: 6·7이 자동등급(SMART5/KPAS) 지표용 빈 문구·부풀리기가 아닌지 — 발명사상이 지지하지 않는 카테고리·근거 없는 시장 서술이면 issue 플래그. 자동점수 ≠ 실제 권리강도, 신규성·품질 우선.
 
 ### Gate 6.5 표시
 
@@ -829,9 +848,16 @@ Agent(
 
          도면 유형별 도구 (phase6b 정책표 — 한 도면에 혼용 금지):
          - 흐름도·구성도·상태도·비교표 → Mermaid (MD 인라인 삽입)
-         - 기술 단면도·구조도·schematic → 손코딩 SVG(figures/*.svg) 후
-           'python {SKILL_ROOT}/scripts/svg2png.py --src {output_dir}/figures/ --dst {output_dir}/diagrams/ --dpi 200'
-         - 데이터 플롯 → matplotlib savefig → {output_dir}/diagrams/
+         - 기술 단면도·구조도·schematic → 손코딩 컬러 SVG(figures/*.svg)
+         - 데이터 플롯 → matplotlib(dpi=600) → {output_dir}/diagrams/
+
+         MANDATORY (2026-07-06 개편 — agent 문서 Step 1·3-2):
+         - 필수 3종 포함 최소 5매, 컬러: 특허 배경 그림 + 종래기술 비교도 +
+           활용 가능성·파급효과 그림 (+ 시스템 구성도·단면도 등). 종래=적색 vs 본 발명=청색 대비.
+         - PIPELINE: 컬러 SVG 1차 생성 → {output_dir}/figures_deck.pptx 조립
+           (슬라이드 번호 = 도면 번호 1:1, 표지 없음) → 각 슬라이드 600 dpi PNG export
+           (PowerPoint COM 우선, 'python {SKILL_ROOT}/scripts/svg2png.py --src {output_dir}/figures/
+           --dst {output_dir}/diagrams/ --dpi 600' 폴백) → diagrams/ 취합.
          모든 PNG는 diagrams/로 취합되어 convert_hwpx.py가 알파벳순으로 §9에 삽입한다. 파일명은 fig1_, fig2_ … 접두사.
          Use matplotlib Korean font: plt.rcParams['font.family'] = 'Malgun Gothic'"
 )
@@ -962,6 +988,48 @@ manifest 업데이트:
   "verified": K, "removed": M, "final_reference_count": F
 }
 ```
+
+### Phase 6d: Critic 검증 게이트 + Gate 6d (2026-07-06 신설)
+
+verify_citations.py 게이트 통과 후, HWPX 변환 전에 **작성 lane과 분리된 독립 critic**
+(`{SKILL_ROOT}/agents/phase6d-critic.md`, opus)이 3개 레인으로 적대적 재검증한다:
+(A) 인용·근거 출처 검증(핵심 문헌 ≥3건 원문 spot 재검증 + 성격 오규정 탐지 + 무근거 수치),
+(B) 핵심 모순·IFR 유효성(가짜 모순·물리 성립성·점수-coverage 정합),
+(C) 대표 청구항 특허성 모의 심사(자기선행 배경기술 최우선 공격 → survive/needs_amendment/reject).
+
+```
+Agent(
+  subagent_type="general-purpose",
+  model="opus",
+  prompt="Read {SKILL_ROOT}/agents/phase6d-critic.md for instructions.
+         Read {output_dir}/: invention_manifest.json, triz_analysis.json, evaluation.json,
+         prior_art.json (self_prior_art 포함), reference_verification.json, 최신 vN.md.
+         Output: {output_dir}/critic_report.json (verdict: PASS|FIX|BLOCK + 레인별 issues)"
+)
+```
+
+#### Gate 6d: critic 판정 처리
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🧐 Critic 검증 결과 (Phase 6d)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+판정: {PASS|FIX|BLOCK}
+| Lane | issue | 심각도 |
+|------|-------|--------|
+| A 출처 | {요약} | {critical/major/minor} |
+| B 모순·IFR | {요약} | ... |
+| C 청구항 | {독립항별 verdict} | ... |
+```
+
+- **PASS**: Phase 7 자동 진행 (게이트 표시만).
+- **FIX**: required_fixes를 해당 phase가 1회 자동 보정(§8 변경 시 하드닝 체크 재적용 +
+  verify_citations.py 재실행) → critic 재검(1회 한정) → 결과 표시 후 진행.
+- **BLOCK**: critical(성격 오규정·미검증 인용·독립항 reject) — **auto-proceed 지시가 있어도
+  중단**하고 사용자 판단을 요청한다. 선택: 1. 보정 지시 / 2. 해당 issue 수용하고 진행 /
+  3. Gate 5(선행 재조사)로 회귀.
+
+manifest 업데이트: `"phase6d": {"status": "completed", "verdict": "...", "critical": N, "major": M}`
 
 ### Phase 7 에이전트 호출
 
