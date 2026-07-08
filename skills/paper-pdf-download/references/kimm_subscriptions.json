@@ -1,0 +1,33 @@
+{
+  "_institution": "KIMM (한국기계연구원)",
+  "_source": "library.kimm.re.kr/library/eData — 해외(cntntsSe=2)·해외학술(cntntsSe=3)·국내(cntntsSe=1), 조회 2026-06-20",
+  "_updated": "2026-06-20",
+  "_note": "구독 변동 시 직접 편집(이 파일이 SSOT). 키 = papers.csv 의 publisher 라벨(= download_papers.mjs handlers 키). 접근 모드: oa(항상 무료 자동) / ip(구독·기관망 IP 또는 SSO 로 자동) / manual(접근은 되나 Playwright 봇차단 → 수동 다운로드) / none(진짜 미구독·다운 불가). 그 외 `_subscribed_no_handler` = KIMM 구독이나 자동 핸들러 미구현 → '수동(핸들러없음)'으로 분류(브라우저 수동 다운).",
+  "_access_modes": {
+    "oa": "오픈액세스 — 인증 불요, 자동 다운로드",
+    "ip": "구독 — 기관망(KIMM IP/VPN) IP 인증 또는 SSO 로 자동 다운로드",
+    "manual": "접근권 있음(SSO 등)이나 Playwright 자동이 봇 감지로 차단 → 브라우저에서 수동 다운로드 필요",
+    "none": "기관 미구독 — 다운로드 불가(OA 판만 가능)"
+  },
+  "publishers": {
+    "Nature":     { "access": "ip", "domains": ["nature.com"], "note": "Nature + Chem/Materials/Nanotech/Photonics/Energy 구독" },
+    "Elsevier":   { "access": "ip", "domains": ["sciencedirect.com"], "note": "ScienceDirect (~1690 저널)" },
+    "Wiley_SID":  { "access": "ip", "domains": ["onlinelibrary.wiley.com", "sid.onlinelibrary.wiley.com"], "note": "Wiley(+SID) ~1300 저널" },
+    "ACS":        { "access": "ip", "domains": ["pubs.acs.org"], "note": "ACS 43 저널" },
+    "MDPI":       { "access": "oa", "domains": ["mdpi.com"] },
+    "arXiv":      { "access": "oa", "domains": ["arxiv.org"] },
+    "Optica":     { "access": "manual", "domains": ["opg.optica.org", "opticapublishing.org"], "note": "SSO 접근 가능하나 Playwright 봇차단(2026-06 실측) → 수동 다운로드" },
+    "RSC":        { "access": "manual", "domains": ["pubs.rsc.org"], "note": "SSO 접근 가능하나 Playwright 봇차단(2026-06 실측) → 수동 다운로드" }
+  },
+  "_subscribed_no_handler": {
+    "_note": "KIMM 구독이나 아직 paper-pack 다운 핸들러 미구현 → check_subscriptions/download 가 '수동(핸들러없음)'으로 분류(기관망/SSO 브라우저 수동 다운, 추가구현 대상). 도메인 = 출판사 사이트 + Crossref DOI 프리픽스(doi.org 링크 대비).",
+    "Springer": ["link.springer.com", "10.1007/", "10.1140/"],
+    "IEEE": ["ieeexplore.ieee.org", "10.1109/"],
+    "TaylorFrancis": ["tandfonline.com", "10.1080/"],
+    "Cambridge": ["cambridge.org", "10.1017/"],
+    "IOP": ["iopscience.iop.org", "10.1088/"],
+    "ASME": ["asmedigitalcollection.asme.org", "10.1115/"],
+    "APS": ["journals.aps.org", "10.1103/"],
+    "Science": ["science.org", "sciencemag.org", "10.1126/"]
+  }
+}

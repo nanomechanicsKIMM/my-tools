@@ -14,6 +14,9 @@
 #   -t, --timeout <sec>   dev-browser script timeout. Default: 120.
 #       --login           Visible (headed) window — REQUIRED for bot-protected
 #                         publishers (Radware/Cloudflare detect HeadlessChrome).
+#       --lib <dir>       Library folder for dedup + archival copy.
+#                         Default: $PAPER_DL_LIBRARY or D:/Zettelkasten/References
+#       --no-library      Disable the library dedup check and archival copy.
 set -u
 
 TMP_DIR="$HOME/.dev-browser/tmp"
@@ -22,6 +25,7 @@ JS="$SCRIPT_DIR/download_paper.js"
 
 PDF_URL=""; OUT=""; LANDING=""; DEST="${PAPER_DL_DEST:-.}"
 BROWSER=""; HEADLESS="--headless"; TIMEOUT="120"; CONNECT=""
+LIBRARY="${PAPER_DL_LIBRARY:-D:/Zettelkasten/References}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -31,7 +35,9 @@ while [ $# -gt 0 ]; do
     -t|--timeout) TIMEOUT="$2"; shift 2;;
     --login)      HEADLESS=""; shift;;
     --connect)    CONNECT=1; shift;;
-    -h|--help)    sed -n '2,20p' "$0"; exit 0;;
+    --lib)        LIBRARY="$2"; shift 2;;
+    --no-library) LIBRARY=""; shift;;
+    -h|--help)    sed -n '2,23p' "$0"; exit 0;;
     -*)           echo "unknown option: $1" >&2; exit 2;;
     *) if [ -z "$PDF_URL" ]; then PDF_URL="$1"; elif [ -z "$OUT" ]; then OUT="$1"; fi; shift;;
   esac
@@ -42,6 +48,20 @@ done
 case "$OUT" in *.pdf) ;; *) OUT="$OUT.pdf";; esac
 
 mkdir -p "$TMP_DIR" "$DEST"
+
+# Library is only used when it actually exists (e.g., D: mounted)
+[ -n "$LIBRARY" ] && [ ! -d "$LIBRARY" ] && { echo "note: library not found, skipping dedup: $LIBRARY" >&2; LIBRARY=""; }
+DESTABS="$(cd "$DEST" 2>/dev/null && pwd || echo "$DEST")"
+LIBABS=""; [ -n "$LIBRARY" ] && LIBABS="$(cd "$LIBRARY" && pwd)"
+
+# 0) Dedup: exact filename already in the library? -> no download.
+if [ -n "$LIBRARY" ] && [ -e "$LIBRARY/$OUT" ]; then
+  echo "SKIP (already in library): $LIBRARY/$OUT"
+  if [ "$DESTABS" != "$LIBABS" ] && [ ! -e "$DEST/$OUT" ]; then
+    cp "$LIBRARY/$OUT" "$DEST/$OUT" && echo "COPY library -> $DEST/$OUT"
+  fi
+  exit 0
+fi
 
 printf '{"pdfUrl":%s,"landing":%s,"out":%s}\n' \
   "\"$PDF_URL\"" "\"${LANDING:-$PDF_URL}\"" "\"$OUT\"" > "$TMP_DIR/job.json"
@@ -68,7 +88,16 @@ case "$LINE" in
 esac
 
 SRC="$TMP_DIR/$OUT"
-if [ ! -s "$SRC" ]; then echo "error: output file missing: $SRC" >&2; exit 1; fi
+if [ ! -s "$SRC" ]; then
+  # dev-browser writeFile() sanitizes filenames (spaces/parens/non-ASCII -> "_"),
+  # so the tmp name can differ from $OUT. Fall back to the "path" field it reported.
+  RAWPATH="$(echo "$LINE" | sed -n 's/.*"path":"\([^"]*\)".*/\1/p' | sed 's/\\\\/\//g')"
+  if [ -n "$RAWPATH" ] && [ -s "$RAWPATH" ]; then
+    SRC="$RAWPATH"
+  else
+    echo "error: output file missing: $TMP_DIR/$OUT (and no usable path in result)" >&2; exit 1
+  fi
+fi
 MAGIC="$(head -c 4 "$SRC")"
 if [ "$MAGIC" != "%PDF" ]; then
   echo "error: not a PDF (magic='$MAGIC'). Likely a paywall/login HTML page." >&2
@@ -78,3 +107,8 @@ fi
 
 mv -f "$SRC" "$DEST/$OUT"
 echo "OK -> $DEST/$OUT ($(wc -c < "$DEST/$OUT") bytes)"
+
+# 3) Archival copy: keep the full collection in one library folder.
+if [ -n "$LIBRARY" ] && [ "$DESTABS" != "$LIBABS" ] && [ ! -e "$LIBRARY/$OUT" ]; then
+  cp "$DEST/$OUT" "$LIBRARY/$OUT" && echo "LIB -> $LIBRARY/$OUT"
+fi
