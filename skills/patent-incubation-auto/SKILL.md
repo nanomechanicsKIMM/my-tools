@@ -74,6 +74,7 @@ Phase 6 에이전트가 §1~§9 작성 시, TRIZ 분석 결과를 일반적인 �
 ### 도면 파이프라인 규칙 (HWPX 삽입용, 2026-07-06 개편)
 
 - **SVG(컬러 벡터) 1차 생성 → figures_deck.pptx(슬라이드 N=[도 N] 1:1) → 600 dpi PNG → HWPX** 순서를 표준으로 한다(상세: agents/phase6b-diagram-generator.md Step 3-2).
+- **PPTX 덱은 편집 가능해야 한다(2026-07-06 개정)**: PNG 래스터 삽입 금지. `outline_svg_text.py`로 텍스트를 path로 outline한 SVG를 PowerPoint COM `AddPicture`로 직접 삽입 — 슬라이드에서 "그래픽 도형으로 변환" 편집 가능 + 한글 텍스트 누락 버그(PowerPoint SVG 변환기) 회피. 조립 후 패키지 내 `ppt/media/*.svg` 파트 수 검증.
 - 600 dpi PNG는 PowerPoint COM export(슬라이드 인치×600 픽셀) 우선, `svg2png.py --dpi 600` 폴백. 그래프형 도면의 matplotlib 폴백도 `dpi=600`.
 - `{output_dir}/diagrams/*.png` 에 저장 → convert_hwpx.py의 `--diagrams` 옵션으로 §9에 자동 삽입
 - **컬러 적극 사용**(내부 신고 문서 기준. 출원 도면화 시 흑백 변환 §9 부기), 흰색 배경, 한글 폰트(Malgun Gothic)
@@ -97,6 +98,7 @@ Step 6.5: 청구항 하드닝 (자동 점검+수정) ─ 오케스트레이터 �
 Step 6b: 도면 생성 (Phase 6b) ───────── sonnet 에이전트 (컬러 SVG → PPTX 덱 → 600dpi PNG)
 Step 6c: 인용문헌 정합성 검증 & PDF (Phase 6c) ── sonnet 에이전트 + 강제 게이트
 Step 6d: Critic 검증 게이트 ─────────── opus 에이전트 (출처·모순/IFR·청구항 특허성, PASS/FIX/BLOCK)
+Step 6e: 사업화 Critic ──────────────── opus 에이전트 (삼성전자 전담 변리사 페르소나 — 회피설계·침해 입증·사업 판단, PASS/FIX/ADVISE)
 Step 7: HWPX 변환 (Phase 7) ─────────── sonnet 에이전트
 Step 8: 최종 출력 및 안내 ──────────── 사용자에게 결과 안내
 ```
@@ -602,6 +604,11 @@ manifest 업데이트:
 12. **파급/사업화 블록 존재**: §9에 적용 시장·후속출원(분할/연속) 구조·PCT/삼극 패밀리 플랜이 실질 내용으로 서술됐는지 (KPAS 시장성·SMART5 활용성 레버).
 13. **안티게이밍 검사**: 11·12가 지표용 빈 문구가 아닌지 — 시장·패밀리 서술이 발명 내용과 무관하거나 근거 없는 과장이면 플래그. 자동점수 ≠ 실제 권리강도, 신규성·품질 우선.
 
+**사업화 2항목 (2026-07-10 신설 — claim-drafting.md §11·§12 연동)**:
+
+14. **회피설계 차단 매트릭스**: 각 독립항마다 경쟁사 회피 시나리오(치환·생략·공정변경·공급망 분리·실시주체 분산, E1~E5) 최소 2개가 상정되고, 각각 대응 차단 청구항(상위개념 문언/병렬 독립항/봉쇄 종속항)이 존재하는지. 부록 B.4에 매트릭스(`| 독립항 | 회피 시나리오 | 유형 | 차단 청구항 | 잔여 리스크 |`)가 기록됐는지. 부재 시 §8·§6 내용을 근거로 생성하여 추가(자동 수정).
+15. **침해 검출성 등급**: 모든 청구항에 검출성 등급(A: 제품 관찰 / B: 리버스엔지니어링 / C: 내부 정보 필요)이 부여되고 **최소 1개 독립항이 등급 A/B**인지. 방법 발명은 공정 지문(제품에 남는 구조 흔적) 물건항 병행 여부. 부록 B.5에 검출성 테이블(`| 청구항 | 등급 | 입증 수단 | 비고 |`)이 기록됐는지. 테이블 부재는 자동 수정, 등급 A/B 독립항 부재는 reported issue(청구항 신설은 Phase 6e에서 문안 제안).
+
 ### 자동 처리 방식
 
 - 각 항목을 점검하여 issue 목록을 수집한다.
@@ -616,11 +623,13 @@ Agent(
   subagent_type="general-purpose",
   model="sonnet",
   prompt="§8 청구항을 자동 점검하고 phase6 MD를 직접 보정한다.
-         Read the latest vN.md in {output_dir} for §8 청구범위 and §6/§7.
-         Read {output_dir}/prior_art.json for rejection_combinations.
+         Read the latest vN.md in {output_dir} for §8 청구범위 and §6/§7 및 부록 B.
+         Read {output_dir}/prior_art.json for rejection_combinations and ifr_coverage.
+         Read {SKILL_ROOT}/reference/claim-drafting.md §11(회피설계 차단)·§12(침해 검출성) for 사업화 2항목 판정 기준.
 
-         점검 항목(필수 5 + SMART 8): 위 SKILL 정의 참조.
+         점검 항목(필수 5 + SMART 8 + 사업화 2): 위 SKILL 정의 참조.
          자동 수정 가능한 issue는 MD를 직접 보정(버전 유지), 불가한 issue는 목록으로 반환.
+         부록 B.4 회피설계 차단 매트릭스·B.5 검출성 테이블 부재 시 직접 생성하여 부록 B에 추가한다.
          Output: 보정된 phase6 MD + issues[]{item, severity, action(fixed/reported), detail}"
 )
 ```
@@ -658,9 +667,11 @@ Agent(
          4. 전체 시스템 구성도
          5. 공정 흐름도 또는 소자/장치 단면도
 
-         PIPELINE (agent 문서 Step 3-2): 컬러 SVG 1차 생성 → figures_deck.pptx 조립
-         (슬라이드 번호=도면 번호 일치) → 각 슬라이드 600 dpi PNG export(PowerPoint COM
-         우선, svg2png.py --dpi 600 폴백) → diagrams/ 저장 → convert_hwpx.py가 §9 삽입.
+         PIPELINE (agent 문서 Step 3-2): 컬러 SVG 1차 생성 → outline_svg_text.py로
+         텍스트→path outline(figures/pptx/) → figures_deck.pptx 조립(PowerPoint COM
+         AddPicture로 outlined SVG 직접 삽입 — 편집 가능, PNG 래스터 삽입 금지,
+         슬라이드 번호=도면 번호 일치) → 600 dpi PNG(svg2png.py --dpi 600, 원본 SVG
+         기준) → diagrams/ 저장 → convert_hwpx.py가 §9 삽입.
          Korean font: Malgun Gothic. 종래=적색 계열 vs 본 발명=청색 계열 대비."
 )
 ```
@@ -840,6 +851,53 @@ manifest 업데이트:
 
 ---
 
+## Step 6e: 사업화 Critic — 삼성전자 전담 변리사 페르소나 (2026-07-10 신설)
+
+**Agent**: `agents/phase6e-business-critic.md`
+**Model**: opus
+
+Phase 6d(등록 가능성 critic) 통과 후, HWPX 변환 전에 **등록 후 가치**를 검증하는 두 번째
+독립 critic이다. 삼성전자 IP센터 전담 변리사 페르소나로 "이 특허가 등록돼도 우리는
+회피/무시/협상/존중 중 무엇을 택할 것인가"를 적대적으로 분석하고, avoid/ignore가 나온
+경로를 발명자 개선 재료(청구항 보정·신설 문안)로 되돌려준다. 3개 레인:
+(D1) 회피설계 — 독립항별 회피 경로 5유형(치환·생략·공정변경·공급망 분리·주체 분산)과
+회피 비용, 부록 B.4 매트릭스 검증, (D2) 침해 입증 — 청구항별 검출성 등급(A/B/C) 독립
+재판정 + 공정 지문 후보 발굴, (D3) 사업 판단 — 침해 주체 정합·회피 vs 라이선스 비용·
+독립항별 avoid/ignore/negotiate/respect.
+
+```
+Agent(
+  subagent_type="general-purpose",
+  model="opus",
+  prompt="Read {SKILL_ROOT}/agents/phase6e-business-critic.md for instructions.
+         Read {SKILL_ROOT}/reference/claim-drafting.md §11·§12 for 판정 기준.
+         Read {output_dir}/: invention_manifest.json, prior_art.json (ifr_coverage 포함),
+         critic_report.json (Phase 6d 결과), 그리고 최신 vN.md (§6/§7/§8/§9 + 부록 B).
+         Output: {output_dir}/business_critic_report.json
+         (verdict: PASS|FIX|ADVISE + persona_memo + lane별 결과 + required_fixes[청구항 문안] + advisories)"
+)
+```
+
+### 판정 처리 (오케스트레이터)
+
+| verdict | 조치 |
+|---------|------|
+| **PASS** | Step 7(HWPX) 진행 |
+| **FIX** | required_fixes(보정·신설 청구항 문안)를 phase6가 **1회 자동 보정** → Step 6.5 하드닝 재적용(선행어·트리) → **Phase 6d Lane C 모의 심사 재실행**(신설 청구항의 특허성 확인 — 선행 포섭 차단) → 6e 재검(1회 한정) |
+| **ADVISE** | 보정으로 해소 불가한 전략 한계(원리적 회피 경로·등급 C 계열 유지 판단 등) — 진행은 계속하되 advisories를 Step 8 최종 보고에 **필수 표시** |
+
+> [!note] Phase 6d와의 관계
+> 6d = 등록 가능성(심사관 관점), 6e = 등록 후 가치(침해자 관점). 6e FIX로 청구항이
+> 넓어지거나 신설되면 반드시 6d Lane C를 재실행하여 선행기술 포섭 여부를 확인한다 —
+> 회피 차단을 위해 넓힌 문언이 선행을 밟으면 무효가 되기 때문이다.
+
+manifest 업데이트:
+```json
+"phase6e": {"status": "completed", "verdict": "PASS|FIX->PASS|ADVISE", "fixes_applied": N, "advisories": M, "output": "business_critic_report.json"}
+```
+
+---
+
 ## Step 7: HWPX 변환 (Phase 7)
 
 **Agent**: `agents/phase7-hwpx-converter.md`
@@ -919,10 +977,18 @@ manifest 최종 업데이트:
 - 📚 `{output_dir}/reference/` — 인용문헌 원문 PDF {K}건 (학술 논문 + 선행특허)
 - 🧾 `{output_dir}/reference_verification.json` — 인용문헌 정합성 검증 로그 (audit trail)
 - 🧐 `{output_dir}/critic_report.json` — Critic 검증 결과 (verdict {PASS|FIX→PASS} + 레인별 issue {N}건)
+- 💼 `{output_dir}/business_critic_report.json` — 사업화 Critic 결과 (verdict {PASS|FIX→PASS|ADVISE} + 독립항별 avoid/ignore/negotiate/respect)
 
 ### Critic 검증 결과 (Phase 6d)
 - 판정: {verdict} — Lane A 출처 {issues}건 / Lane B 모순·IFR {issues}건 / Lane C 독립항 {survive/needs_amendment/reject 요약}
 - (자기선행 특허 발견 시) self_prior_art: {number 목록 — 개시 요소·공지예외 기한}
+
+### 사업화 Critic 결과 (Phase 6e — 삼성전자 전담 변리사 페르소나)
+- 판정: {verdict} — 독립항별 {avoid/ignore/negotiate/respect 요약}
+- 회피설계(D1): 최유력 회피 시나리오 {요약} / 차단 여부 / FIX로 신설·보정된 청구항 {N}건
+- 침해 입증(D2): 등급 A/B 독립항 {유/무} / 공정 지문 청구 {유/무} / 등급 재판정 하향 {N}건
+- 사업 판단(D3): 침해 주체 {요약} / 회피 vs 라이선스 {결론}
+- **advisories (전략 한계·후속출원 권고 — 발명심의위 판단 재료)**: {목록 — ADVISE 판정 시 필수 표시}
 
 > [!important] 파일명 규칙
 > - MD와 HWPX 파일은 `(YYYYMMDD 발명자) 발명명칭vN` 형식으로 명명
@@ -977,6 +1043,9 @@ manifest 최종 업데이트:
 | Phase 6d | verdict=FIX | 해당 phase 1회 자동 보정 → critic 재검(1회 한정) |
 | Phase 6d | verdict=BLOCK (critical) | auto 모드여도 진행 중단, 사용자 판단 요청 |
 | Phase 6d | 네트워크 불가(spot check 불능) | Lane A degraded 표기, 정합성 대조만 수행 후 진행 |
+| Phase 6e | verdict=FIX | phase6 1회 자동 보정 → 6.5 하드닝 재적용 → 6d Lane C 재실행 → 6e 재검(1회 한정) |
+| Phase 6e | verdict=ADVISE | 진행 계속 + Step 8 보고에 advisories 필수 표시 |
+| Phase 6e | prior_art degraded (ifr_coverage 부재) | 신설 청구항의 선행 포섭 확인 불가 — required_fixes에 "추가 선행조사 필요" 플래그, D1/D2 분석은 계속 |
 | Phase 7 | HWPX 변환 실패 | MD fallback |
 | Phase 7 | validate.py 실패 | MD fallback + 에러 로그 |
 
@@ -994,7 +1063,7 @@ manifest 최종 업데이트:
 1. Phase 1 → Phase 2 전환
 2. Phase 4 → Phase 5 → Phase 5.5 전환
 3. Step 5b 중간 진행 보고 (표시만)
-4. Phase 6 → Phase 6.5(자동 점검·자동 수정) → Phase 6b → Phase 6c → Phase 6d(critic) → Phase 7 전환
+4. Phase 6 → Phase 6.5(자동 점검·자동 수정) → Phase 6b → Phase 6c → Phase 6d(critic) → Phase 6e(사업화 critic) → Phase 7 전환
 
 > [!important] 단, 두 게이트는 auto-skip 불가다. (1) Phase 6c 후 강제 게이트(verify_citations.py)는 **기계 게이트** — exit!=0이면 Phase 7로 진행하지 않는다. (2) Phase 6d critic의 **BLOCK 판정** — critical issue(성격 오규정·미검증 인용·독립항 reject) 발견 시 자동 진행 모드에서도 중단하고 사용자 판단을 요청한다.
 

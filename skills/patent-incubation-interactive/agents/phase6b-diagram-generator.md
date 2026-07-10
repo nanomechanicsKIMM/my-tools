@@ -153,11 +153,27 @@ figures_deck.pptx — 슬라이드 N = [도 N] 1:1 대응 (표지 슬라이드 �
 diagrams/figN_*.png → convert_hwpx.py가 §9에 삽입
 ```
 
-**(a) PPTX 덱 조립** (`{output_dir}/figures_deck.pptx`):
-- python-pptx로 16:9 슬라이드 생성. **슬라이드 번호 = 도면 번호 1:1 일치**(슬라이드 1=[도 1],
-  슬라이드 2=[도 2], …) — 표지 슬라이드를 만들지 않는다(프레젠테이션 제목·파일명으로 식별).
-- 각 슬라이드: 상단에 `[도 N] 캡션` 텍스트 + 도면 이미지(SVG를 300 dpi 이상 임시 PNG로
-  변환해 삽입, 또는 outlined SVG/EMF 삽입) + 하단에 부호 주석(필요 시).
+**(a) PPTX 덱 조립 — 편집 가능한 SVG 삽입 필수** (`{output_dir}/figures_deck.pptx`, 2026-07-06 개정):
+
+> [!warning] PNG 래스터 삽입 금지 (실측 사고)
+> python-pptx로 PNG를 삽입하면 슬라이드에서 **그림 편집이 불가**하다(래스터). 반드시
+> **SVG를 그림으로 직접 삽입**하여 PowerPoint에서 우클릭 → "그래픽 도형으로 변환"으로
+> 편집 가능하게 한다. 단, PowerPoint의 SVG→도형 변환기는 **한글 텍스트를 강제 누락**하는
+> 알려진 버그가 있으므로(font-family 명시·@font-face 전부 무효 — `reference/svg-figure-creation.md`
+> §5.3), 삽입 전에 반드시 텍스트를 path로 outline한다.
+
+1. **텍스트 outline (필수 선행)**: `python scripts/outline_svg_text.py --src figures/ --dst figures/pptx/`
+   — fontTools로 모든 `<text>`를 Bezier `<path>`로 변환. 도형 변환 시 100% 시각 보존.
+2. **COM 조립 (우선)**: PowerShell/COM으로 `Presentations.Add` → 슬라이드별
+   `Shapes.AddTextbox`(캡션 `[도 N] …`, Malgun Gothic) + `Shapes.AddPicture(<outlined
+   SVG 경로>, LinkToFile=0, SaveWithDocument=-1, x, y, w, h)` — SVG가 벡터 그래픽
+   파트(ppt/media/*.svg)로 저장되어 편집 가능. 16:9(960×540 pt), 도면 900:560 비율 유지.
+   한글 캡션이 있는 ps1 스크립트는 **UTF-8 BOM**으로 저장해 실행한다(PS 5.1 인코딩).
+3. **슬라이드 번호 = 도면 번호 1:1 일치**(슬라이드 1=[도 1], …) — 표지 슬라이드를 만들지
+   않는다(프레젠테이션 제목·파일명으로 식별).
+4. **폴백**(COM 불가 환경만): python-pptx + 고해상 PNG 삽입 — 이 경우 산출 보고에
+   "덱 그림 편집 불가(래스터 폴백)"를 명시한다.
+5. 조립 후 검증: `zipfile`로 패키지 내 `ppt/media/*.svg` 파트 수 = 도면 수 확인.
 - 이 덱 자체가 산출물 — 발명심의 발표·검토·공유용.
 
 **(b) 슬라이드 → 600 dpi PNG export**:
