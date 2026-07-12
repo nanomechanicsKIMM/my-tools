@@ -98,6 +98,11 @@
 <script>
 const CLSMAP={sp500:"미국",nasdaq:"미국",sox:"미국",kospi:"한국",div:"한국",india:"인도",china:"중국",asean:"아세안",gold:"골드",deposit:"안전자산"};
 const NAMEMAP={};Object.keys(DATA.funds).forEach(k=>NAMEMAP[k]=DATA.funds[k].name);NAMEMAP.deposit="과기공제회 예금(4.9%)";
+function tradeOf(k){ // 실제 매매 대상 정식 펀드명·코드 (백테스트 proxy와 구분)
+  if(k==='deposit')return{code:'DEPOSIT',name:'과학기술인공제회 퇴직연금 New 정기예금 1년',proxy:false};
+  const f=DATA.funds[k]||{};const t=f.trade||{code:f.code,name:f.official||f.name};
+  return{code:t.code,name:t.name||f.name,proxy:!!f.proxy,dataName:f.official||''};
+}
 const ALGOS={
   original:{name:"원본 추천 65/35",
     text:"【원본 추천 65/35 — 고정비중】\n위험자산 65% + 예금 35%. 핵심-위성 구조.\n• 미국 S&P500 22%, 나스닥 13%, 반도체 8% (미국 43%)\n• 한국 KOSPI200 15%, 고배당 7% (한국 22%)\n• 예금 35%\n매 분기 리밸런싱. 다중경로 백테스트 88% 1위로 검증된 견고한 기본안.",
@@ -227,7 +232,11 @@ function renderTable(){
   let body='',wsum=0;
   keys.forEach((k,i)=>{
     const w=currentWeights[k],amt=total*w/100,cls=CLSMAP[k];wsum+=w;
-    body+=`<tr><td class="name">${NAMEMAP[k]}</td><td><span class="badge b-${cls}">${cls}</span></td>
+    const t=tradeOf(k);
+    const nameCell=`<div style="font-weight:bold">${NAMEMAP[k]}</div>
+      <div style="font-size:10.5px;color:#1e3c72;margin-top:2px">매매: ${t.name} <span style="color:#888">[${t.code}]</span></div>`+
+      (t.proxy?`<div style="font-size:9.5px;color:#999">※ 그래프 데이터는 유사펀드 proxy: ${t.dataName}</div>`:'');
+    body+=`<tr><td class="name">${nameCell}</td><td><span class="badge b-${cls}">${cls}</span></td>
       <td>${w.toFixed(1)}%</td><td>${total?won(amt):'-'}</td>
       <td><input class="curr-input" id="cur_${k}" type="text" value="${held[k]?held[k].toLocaleString('ko-KR'):'0'}" oninput="calcDiff()" onfocus="this.select()"></td>
       <td id="diff_${k}">-</td></tr>`;
@@ -263,16 +272,17 @@ function logData(){
   const total=getTotal();
   const rows=Object.keys(currentWeights).filter(k=>currentWeights[k]>0.05).map(k=>{
     const cur=Number((document.getElementById('cur_'+k)?.value||'0').replace(/[^0-9]/g,''))||0;
-    const rec=total*currentWeights[k]/100;return{name:NAMEMAP[k],w:currentWeights[k],cur,rec,diff:rec-cur};});
+    const t=tradeOf(k);
+    const rec=total*currentWeights[k]/100;return{name:`${t.name} [${t.code}]`,w:currentWeights[k],cur,rec,diff:rec-cur};});
   return{ts:new Date().toLocaleString('ko-KR'),algo:ALGOS[currentAlgo].name,total,rows};
 }
 function saveLog(){
   const d=logData();let t=`=== DC형 퇴직연금 리밸런싱 로그 ===\n일시: ${d.ts}\n알고리즘: ${d.algo}\n총 투자금액: ${won(d.total)}\n\n`;
-  t+='펀드'.padEnd(26)+'비중'.padStart(7)+'현재보유'.padStart(16)+'추천금액'.padStart(16)+'변동'.padStart(18)+'\n'+''.padEnd(83,'-')+'\n';
+  t+='펀드(정식명 [표준코드])'.padEnd(56)+'비중'.padStart(7)+'현재보유'.padStart(16)+'추천금액'.padStart(16)+'변동'.padStart(18)+'\n'+''.padEnd(113,'-')+'\n';
   d.rows.forEach(r=>{const act=r.diff>=0?`+${won(r.diff)} 매수`:`${won(r.diff)} 매도`;
-    t+=r.name.slice(0,24).padEnd(26)+(r.w.toFixed(1)+'%').padStart(7)+won(r.cur).padStart(16)+won(r.rec).padStart(16)+act.padStart(18)+'\n';});
+    t+=r.name.slice(0,54).padEnd(56)+(r.w.toFixed(1)+'%').padStart(7)+won(r.cur).padStart(16)+won(r.rec).padStart(16)+act.padStart(18)+'\n';});
   const tb=d.rows.filter(r=>r.diff>0).reduce((s,r)=>s+r.diff,0),ts=d.rows.filter(r=>r.diff<0).reduce((s,r)=>s+r.diff,0);
-  t+=''.padEnd(83,'-')+`\n총 매수: ${won(tb)} / 총 매도: ${won(-ts)}\n\n※ 정보 제공 목적, 투자 권유 아님.\n`;
+  t+=''.padEnd(113,'-')+`\n총 매수: ${won(tb)} / 총 매도: ${won(-ts)}\n\n※ 정보 제공 목적, 투자 권유 아님.\n`;
   download(t,`rebalance_${stamp()}.txt`,'text/plain');
   const h=JSON.parse(localStorage.getItem('pf_hist')||'[]');h.push({ts:d.ts,algo:d.algo,total:d.total});localStorage.setItem('pf_hist',JSON.stringify(h));
   document.getElementById('saveMsg').textContent=`저장 완료 (이력 ${h.length}건).`;

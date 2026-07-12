@@ -17,12 +17,12 @@ import pandas as pd
 # 대시보드 핵심 펀드 (5년 데이터 proxy). 필요 시 코드 교체.
 FUNDS = {
     "sp500":  ("K55105BA7360", "미국 S&P500", "미국"),
-    "nasdaq": ("K55301B51580", "미국 나스닥(블루칩)", "미국"),
+    "nasdaq": ("K55301B51580", "미국 나스닥100", "미국"),
     "sox":    ("K55307D05993", "미국 필라델피아반도체", "미국"),
     "kospi":  ("K55105BU5980", "한국 KOSPI200", "한국"),
     "div":    ("K55209CT1721", "한국 신영밸류고배당", "한국"),
     "india":  ("K55301B25428", "인도 인프라", "인도"),
-    "china":  ("K55223BV4542", "중국 본토A주", "중국"),
+    "china":  ("K55223BV4542", "중국 (과창판)", "중국"),
     "asean":  ("K55105BD5817", "아세안", "아세안"),
     "gold":   ("K55366BU9572", "골드(월드골드 UH)", "골드"),
 }
@@ -97,6 +97,14 @@ def analysis_summary():
     return s
 
 
+# 대시보드 키 → 실제 매수/매도 대상 펀드(추천·B안 기준). 미기재 키는 데이터 펀드 = 매매 펀드.
+TRADE_OVERRIDE = {
+    "sp500": "K55210DT4606",    # 신한미국S&P500인덱스(UH) — 데이터는 삼성 proxy
+    "nasdaq": "K55301E64355",   # 미래에셋미국나스닥100인덱스(UH) — 데이터는 블루칩 proxy
+    "china": "K55301DD9983",    # 미래에셋차이나과창판(보유·B안) — 데이터는 본토A proxy
+}
+
+
 def main(panel="panel_adj_nav.csv", out="dashboard/dashboard_data.js"):
     nav = pd.read_csv(panel, index_col=0, parse_dates=True)
     monthly = nav.resample("ME").last()
@@ -104,9 +112,16 @@ def main(panel="panel_adj_nav.csv", out="dashboard/dashboard_data.js"):
     sub = monthly[codes].dropna()          # 전 펀드 공통 5년 구간
     dates = [d.strftime("%Y-%m") for d in sub.index]
     deposit = [round(1000 * (1 + DEPOSIT_RATE) ** (i / 12.0), 2) for i in range(len(sub))]
-    funds = {k: {"code": c, "name": nm, "cls": cls,
-                 "nav": [round(x, 2) for x in sub[c].tolist()]}
-             for k, (c, nm, cls) in FUNDS.items()}
+    official = {f["fundCode"]: f["name"]
+                for f in json.load(open("funds/fund_data.json", encoding="utf-8"))["funds"]}
+    funds = {}
+    for k, (c, nm, cls) in FUNDS.items():
+        tc = TRADE_OVERRIDE.get(k, c)
+        funds[k] = {"code": c, "name": nm, "cls": cls,
+                    "official": official.get(c, ""),               # 백테스트 데이터 펀드 정식명
+                    "trade": {"code": tc, "name": official.get(tc, "")},  # 실제 매매 대상 정식명
+                    "proxy": tc != c,
+                    "nav": [round(x, 2) for x in sub[c].tolist()]}
     payload = {"dates": dates, "funds": funds, "deposit": deposit,
                "summary": analysis_summary(), "holdings": load_holdings()}
     os.makedirs(os.path.dirname(out), exist_ok=True)
