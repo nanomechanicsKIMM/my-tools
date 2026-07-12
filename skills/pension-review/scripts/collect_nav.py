@@ -10,7 +10,12 @@ import csv, os, re, json, time, sys
 from datetime import datetime, timedelta
 import requests
 
-CSV_PATH = "(20260614)_과기공제회_연금_실적배당형상품.csv"
+def _latest_csv():
+    import glob
+    c = glob.glob("data_raw/*_과기공제회_연금_실적배당형상품.csv")
+    return max(c, key=lambda p: re.search(r"(20\d{6})", os.path.basename(p)).group(1)) if c else None
+
+CSV_PATH = _latest_csv() or "data_raw/(20260711)_과기공제회_연금_실적배당형상품.csv"
 OUT_DIR = "nav_history"
 START = "20210613"          # 5년 시작(목표)
 END = datetime.now().strftime("%Y%m%d")

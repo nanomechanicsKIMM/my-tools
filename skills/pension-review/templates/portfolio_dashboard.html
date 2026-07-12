@@ -23,7 +23,7 @@
   td.name,th.name{text-align:left}
   .buy{color:#0a7d2e;font-weight:bold}.sell{color:#c0392b;font-weight:bold}
   .badge{display:inline-block;padding:2px 7px;border-radius:6px;font-size:11px;color:#fff}
-  .b-미국{background:#2980b9}.b-한국{background:#27ae60}.b-인도{background:#e67e22}.b-중국{background:#c0392b}.b-아세안{background:#16a085}.b-안전자산{background:#7f8c8d}
+  .b-미국{background:#2980b9}.b-한국{background:#27ae60}.b-인도{background:#e67e22}.b-중국{background:#c0392b}.b-아세안{background:#16a085}.b-안전자산{background:#7f8c8d}.b-골드{background:#b8860b}
   .btn{padding:12px 20px;background:#2a5298;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:bold;cursor:pointer}
   .btn:hover{background:#1e3c72}.btn-save{background:#0a7d2e}.btn-save:hover{background:#095e23}.btn-sec{background:#7f8c8d}
   .summary{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
@@ -40,12 +40,19 @@
 <body>
 <div class="wrap">
   <h1>📈 DC형 퇴직연금 포트폴리오 백테스트 대시보드</h1>
-  <div class="sub">과학기술인공제회 · 1971년생(만 55세) · 은퇴 2033년 · 공격투자형 · 데이터 2021-06~2026-06(월말, proxy 5년)</div>
+  <div class="sub">과학기술인공제회 · 1971년생(만 55세) · 은퇴 2033년 · 공격투자형 · 데이터 월말 proxy 5년</div>
+
+  <div class="card" id="analysisCard" style="display:none">
+    <h2>📌 분석 요약 (분기 파이프라인 자동 생성)</h2>
+    <div class="summary" id="analysisStats"></div>
+    <div class="note">lifecycle_sim(고갈확률·안전인출)·real_report(실질)·fee_drag(보수)·ips_check 결과 임베드. 정책 아키타입 수준 — 투자 권유 아님.</div>
+  </div>
 
   <div class="card">
     <h2>🧮 투자 알고리즘 선택</h2>
     <select id="algoSelect" onchange="onAlgoChange()">
       <option value="original">원본 추천 65/35 (고정비중)</option>
+      <option value="b2026q3">2026Q3 B안 — 코어-위성 (IPS 목표배분)</option>
       <option value="global">글로벌 분산 재구성 (미국↓+인도·중국)</option>
       <option value="momentum">모멘텀 Top5 (동적·분기)</option>
       <option value="invvol">역변동성 가중 (동적·분기)</option>
@@ -89,12 +96,15 @@
 
 <script src="dashboard_data.js"></script>
 <script>
-const CLSMAP={sp500:"미국",nasdaq:"미국",sox:"미국",kospi:"한국",div:"한국",india:"인도",china:"중국",asean:"아세안",deposit:"안전자산"};
+const CLSMAP={sp500:"미국",nasdaq:"미국",sox:"미국",kospi:"한국",div:"한국",india:"인도",china:"중국",asean:"아세안",gold:"골드",deposit:"안전자산"};
 const NAMEMAP={};Object.keys(DATA.funds).forEach(k=>NAMEMAP[k]=DATA.funds[k].name);NAMEMAP.deposit="과기공제회 예금(4.9%)";
 const ALGOS={
   original:{name:"원본 추천 65/35",
     text:"【원본 추천 65/35 — 고정비중】\n위험자산 65% + 예금 35%. 핵심-위성 구조.\n• 미국 S&P500 22%, 나스닥 13%, 반도체 8% (미국 43%)\n• 한국 KOSPI200 15%, 고배당 7% (한국 22%)\n• 예금 35%\n매 분기 리밸런싱. 다중경로 백테스트 88% 1위로 검증된 견고한 기본안.",
     w:{sp500:22,nasdaq:13,sox:8,kospi:15,div:7,deposit:35}},
+  b2026q3:{name:"2026Q3 B안 — 코어-위성",
+    text:"【2026Q3 B안 — 코어-위성 (IPS 목표배분)】\n검증된 코어 50% + 저상관 위성 15% + 예금 35%. 펀드 7개(IPS 한도 5~7).\n• 코어: S&P500 22%, 나스닥 13%, KOSPI200 15%\n• 위성: 골드 7%(전자산 상관 ≤0.23), 인도 4% + 중국 4% (신흥국 합계 ≤8%)\n• 예금 35%\n리밸: 현금흐름(부담금→언더웨이트) + 밴드 ±5%p. 환헤지: UH 유지(동적 트리거 기각, P2-2).\n근거: reports/2026Q3 개선안 · status/ips_policy.json.",
+    w:{sp500:22,nasdaq:13,kospi:15,gold:7,india:4,china:4,deposit:35}},
   global:{name:"글로벌 분산 재구성",
     text:"【글로벌 분산 — 미국 편중 완화】\n미국 43→33%로 축소, 인도·중국 신규 편입(저상관 분산).\n• 미국 33%(S&P500 18 + 나스닥 10 + 반도체 5)\n• 한국 16%(KOSPI200 13 + 고배당 3)\n• 인도 8% + 중국 5% (신흥국 분산)\n• 예금 35%\n다중경로 Sharpe·MDD 개선. 인도는 환헤지·DCA 권장.",
     w:{sp500:18,nasdaq:10,sox:5,kospi:13,div:3,india:8,china:5,deposit:35}},
@@ -258,8 +268,23 @@ function saveLog(){
 function saveLogCSV(){const d=logData();let t='﻿펀드,비중%,현재보유,추천금액,변동\n';d.rows.forEach(r=>t+=`"${r.name}",${r.w.toFixed(1)},${r.cur},${Math.round(r.rec)},${Math.round(r.diff)}\n`);download(t,`rebalance_${stamp()}.csv`,'text/csv');document.getElementById('saveMsg').textContent='CSV 저장 완료.';}
 function download(c,fn,ty){const b=new Blob([c],{type:ty+';charset=utf-8'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=fn;a.click();URL.revokeObjectURL(u);}
 function stamp(){const d=new Date();return`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;}
+function renderAnalysis(){
+  const s=DATA.summary;if(!s)return;
+  const cards=[];
+  const man=v=>Math.round(v/1e4).toLocaleString('ko-KR')+'만원';
+  if(s.safe_spend_us2003)cards.push({v:man(s.safe_spend_us2003),l:'안전인출액/월 (실질, 고갈≤10%, us2003)',hi:1});
+  if(s.ruin_250_us2003!=null)cards.push({v:(s.ruin_250_us2003*100).toFixed(1)+'%',l:'고갈확률 @월250만 (30년 인출)'});
+  if(s.real_cagr_rec_pi3!=null)cards.push({v:s.real_cagr_rec_pi3.toFixed(1)+'%',l:'추천 실질 CAGR 중앙 (π=3%)'});
+  if(s.p_neg_real_rec_pi3!=null)cards.push({v:(s.p_neg_real_rec_pi3*100).toFixed(0)+'%',l:'P(실질수익<0) (π=3%)'});
+  if(s.ter_current!=null)cards.push({v:s.ter_current.toFixed(2)+'%'+(s.ter_target!=null?' → '+s.ter_target.toFixed(2)+'%':''),l:'가중TER 현재→목표(총자산)'});
+  if(s.ips_pass!=null)cards.push({v:s.ips_pass+'/'+s.ips_total,l:'IPS 컴플라이언스 PASS'});
+  if(!cards.length)return;
+  document.getElementById('analysisCard').style.display='block';
+  document.getElementById('analysisStats').innerHTML=cards.map(c=>`<div class="stat${c.hi?' hi':''}"><div class="v">${c.v}</div><div class="l">${c.l}</div></div>`).join('')
+    +`<div class="stat"><div class="v">${s.generated}</div><div class="l">분석 기준일</div></div>`;
+}
 // init
-onAlgoChange();applyAlgo();
+onAlgoChange();applyAlgo();renderAnalysis();
 </script>
 </body>
 </html>

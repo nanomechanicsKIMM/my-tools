@@ -66,6 +66,11 @@ DC형 퇴직연금 펀드를 **수집→가공→검증→추천→백테스트�
 - `mc_backtest.py`: 구간벡터화 경량엔진 + Stationary Block Bootstrap **다중경로**(강세장 편향 제거). `fast_run`은 NaN 안전(0×NaN 차단).
 - **`fetch_index_history.py` — FDR 장기 실지수 백테스트(직교 강건성)**: 5년 펀드 패널·부트스트랩이 못 보는 *실제 약세장*(2008·2011·2015·2018·2020·2022)에서 정책 아키타입을 검증. FinanceDataReader로 US500(1979~)·IXIC(1979~)·KS200(2010~)·USD/KRW(2003~) 수집→**월간 KRW 언헤지·TR근사** 패널(`index_panel.csv`). 가드: SOX미제공→반도체는 IXIC흡수, 나스닥은 IXIC(종합)대용, US+KR 일별혼합 금지(ME 리샘플), 가격지수+배당수익률 가산(TR근사), 월간 전용 `sim`(ppy=12, forward). 산출: ①아키타입 vs 벤치마크(다자산 2010~/US-only 2003~) ②**위기별 MDD 표**(GFC 추천 −15.0% vs 주식100% −23.3%, 전위기 방어 +2.5~8.3%p) ③**장기 walk-forward(fold 12·18개)**로 WF 통계력 보강 — 위험슬리브 4종 선택이 OOS에서 고정 추천에 동률/패배(FAIL) 재확인. 실행: 작업폴더에서 `python <skill>/scripts/fetch_index_history.py [--refresh]`. **레이블 주의: '추천 펀드'가 아니라 '정책 아키타입의 실약세장 스트레스' — 펀드단위 결론과 구분.**
 
+- **`rebalance_policy.py` — 리밸런싱 정책 비교(P2-1)**: 캘린더(3/6/12M)·밴드(±3/5/7%p)·**현금흐름**(부담금→언더웨이트, 매도 없음) 2버킷 시뮬. 실증: 고갈확률 무차이·회전율 4배차 → **현금흐름+밴드5 채택**(IPS §3). 상세 §16.
+- **`fx_overlay.py` — 환헤지 트리거 실측(P2-2)**: 단계별 동적 헤지(1500~1200원→30~80%) 2003~ 검증 → **기각**(UH 대비 CAGR −1.5~−3.2%p, GFC MDD 2배). **UH 유지가 정책**(IPS §4). 상세 §16.
+- **`stress_lifecycle.py` — 꼬리 시나리오 스트레스(P2-3)**: 은퇴직후 GFC 주입(고갈 3배)·인플레쇼크 6%/10y·저수익10년(고갈 56.6% — 지배 변수)·IMF 1997(KS11, KR 65/35 방어 +18.8%p). 상세 §16.
+- **`lifecycle_sim.py` — 적립·인출 라이프사이클 몬테카를로(P1-1)**: DC를 '자금조달 문제'로 평가 — 월 부담금 적립(~은퇴)→30년 실질 인출을 §13 월간 패널의 위험슬리브 stationary bootstrap(블록 24개월, 기반 `multi2010`/`us2003` 병기)으로 시뮬. 산출: **고갈확률(95%CI·다시드)·자금충족률·sequence risk(첫 60개월 사분위 조건부)·안전인출액(고갈≤10% 이분탐색)**. 게이트: 무현금흐름 손계산 복리 재현 self-test. 실행: `python scripts/lifecycle_sim.py --contrib <월부담금> --w0 <현재자산>` → `lifecycle_results.json`·`lifecycle_sim.png`. 실증: glide(65→40)가 30년 인출에서 고갈확률을 *높임*(디리스킹 ≠ 지속가능성). ⚠ 부담금 기본값 150만원은 가정 — 사용자 실값 입력 필수. 상세 §14.
+
 ## Phase 5 — 알고리즘 비교 + 엄밀 평가
 - `algos.py`(10종: 모멘텀/듀얼/트렌드/역변동성/리스크패리티/최소분산/최대샤프/HRP/HERC/Mean-CVaR)
 - `algos_new.py`(커스텀): 모멘텀가속·단기반전·섹터로테이션 + **TradingAgents 수집 3종**(`regime_gate` 200SMA레짐·`vol_target` 변동성타게팅·`ensemble_vote` MACD+SMA+RSI 앙상블) + `diversified_riskbudget`(분산 inverse-vol 리스크버짓).
@@ -84,8 +89,12 @@ DC형 퇴직연금 펀드를 **수집→가공→검증→추천→백테스트�
 - **정성 교차검증**: 인도/중국 등 신흥국 거시는 `/deep-research`로 고평가·환율·상관 과대평가 검증(백테스트 과적합 방지). 백테스트 일별상관 < 실제 장기상관임에 유의 → 신흥국 비중 보수적(≤8%), 환헤지·DCA 권장.
 
 ## Phase 7 — 리포트
+- **`run_quarterly.py` — 분기 러너(P3-2)**: 신규 CSV 투입 후 1커맨드로 증분수집→가공→검증→추천→백테스트→실질/비용/드리프트/IPS→대시보드 데이터 완주(`--only`/`--skip` 지원, ips_policy의 targets 자동 주입) → `reports/YYYYQn/(날짜)_분기점검_체크리스트.md` 자동 생성. collect_nav/verify는 최신 CSV 자동 선택.
+- **`ips_check.py` — IPS 자동 대조(P3-1)**: `status/ips_policy.json`(기계판독 정책, `templates/ips.md` 쌍) vs 보유내역 6항목 판정(위험·단일·밴드·펀드수·TER·신흥국). FAIL=전환 미완 신호. 상세 §17.
+- **`real_report.py` — 실질수익 병기(P1-2)**: `mc_results.json` 경로 분포를 π=2/3/4% 시나리오로 실질 CAGR 변환(정확식 (1+n)/(1+π)−1), 전략별 **P(실질<0)** 와 예금 실질수익·구매력 침식표(10/20/30년) 출력 → `real_report.json`. **모든 분기 보고서에 명목/실질 병기 의무**.
+- **`fee_drag.py` — 보수 복리 드래그(P1-3)**: 보유(`holdings_*.json`) vs 목표(`--targets`)의 총자산 가중 TER·연간 보수(원)·총수익 3/5/7% 가정 30년 복리 자산 차이 → `fee_drag.json`. 게이트: fund_fees.json 미매칭 코드 0(위반 시 exit 1). **분기 보고서에 비용 드래그 섹션 의무**.
 - **`drift_check.py` — 보유 드리프트 점검**: 사용자 보유내역을 `status/holdings_YYYYMMDD.json`(`{"asof","holdings":[{"name","code","value","kind":"fund|deposit|cash"}]}`)으로 구조화한 뒤 실행. 비중표·위험자산비중·DC 한도(위험70/단일40) 판정, `--targets` JSON(코드→비중%)을 주면 목표 대비 괴리(±5%p 밴드이탈 플래그)까지 출력. ⚠ '기타' 분류(골드·TDF)가 안전으로 집계되어 포털 공시 위험비중과 다를 수 있음 — 포털값 병기 확인.
-- `scripts/extract_dashboard_data.py`: 핵심 펀드(미국/한국/인도/중국/아세안) 월말 NAV → `dashboard_data.js` 생성.
+- `scripts/extract_dashboard_data.py`: 핵심 펀드(미국/한국/인도/중국/아세안/골드) 월말 NAV + **분석 요약 임베드**(lifecycle/real/fee/ips 결과 → 요약 카드: 안전인출액·고갈확률·실질CAGR·TER·IPS PASS) → `dashboard_data.js` 생성. 대시보드에 **B안 코어-위성 프리셋**(IPS 목표배분) 포함.
 - `templates/portfolio_dashboard.html`: 인터랙티브 대시보드.
   - **투자 알고리즘 선택** + 텍스트 규칙 표시(원본추천/글로벌분산/모멘텀Top5/역변동성/사용자정의)
   - **JS 백테스트 + 수익률 그래프**(선택 포트 vs KOSPI200 vs S&P500, CAGR/Sharpe/MDD) — 분기 리밸·동적 펀드선택을 브라우저에서 계산
