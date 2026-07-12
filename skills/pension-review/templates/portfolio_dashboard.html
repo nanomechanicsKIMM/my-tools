@@ -215,18 +215,30 @@ function drawChart(series){
     s[1].forEach((v,i)=>{i?ctx.lineTo(X(i),Y(v)):ctx.moveTo(X(i),Y(v));});ctx.stroke();});
   document.getElementById('legend').innerHTML=ns.map(s=>`<span><span class="lg-box" style="background:${s[2]}"></span>${s[0]} (${s[1][s[1].length-1].toFixed(0)}%)</span>`).join('');
 }
+function heldOf(k){
+  const el=document.getElementById('cur_'+k);
+  if(el){const v=Number(el.value.replace(/[^0-9]/g,''))||0;if(v>0)return v;}   // 사용자 입력 우선 보존
+  return (DATA.holdings&&DATA.holdings.byKey&&DATA.holdings.byKey[k])||0;      // status/holdings_*.json 프리필
+}
 function renderTable(){
   const total=getTotal();
   const keys=Object.keys(currentWeights).filter(k=>currentWeights[k]>0.05);
+  const held={};keys.forEach(k=>held[k]=heldOf(k));
   let body='',wsum=0;
   keys.forEach((k,i)=>{
     const w=currentWeights[k],amt=total*w/100,cls=CLSMAP[k];wsum+=w;
     body+=`<tr><td class="name">${NAMEMAP[k]}</td><td><span class="badge b-${cls}">${cls}</span></td>
       <td>${w.toFixed(1)}%</td><td>${total?won(amt):'-'}</td>
-      <td><input class="curr-input" id="cur_${k}" type="text" value="0" oninput="calcDiff()" onfocus="this.select()"></td>
+      <td><input class="curr-input" id="cur_${k}" type="text" value="${held[k]?held[k].toLocaleString('ko-KR'):'0'}" oninput="calcDiff()" onfocus="this.select()"></td>
       <td id="diff_${k}">-</td></tr>`;
   });
   body+=`<tr class="total-row"><td class="name">합계</td><td></td><td>${wsum.toFixed(0)}%</td><td>${total?won(total):'-'}</td><td></td><td></td></tr>`;
+  if(DATA.holdings&&DATA.holdings.other&&DATA.holdings.other.length){
+    const os=DATA.holdings.other.reduce((s,o)=>s+o.value,0);
+    const names=DATA.holdings.other.map(o=>o.name).join(', ');
+    body+=`<tr><td class="name" colspan="4" style="color:#c0392b" title="${names}">⚠ 대시보드 외 보유 ${DATA.holdings.other.length}종 (매도/정리 대상 — 마우스오버로 목록)</td>
+      <td style="color:#c0392b">${won(os)}</td><td><span class="sell">전환 매도 대상</span></td></tr>`;
+  }
   document.getElementById('pfBody').innerHTML=body;
   calcDiff();updateSummary();
 }
@@ -283,7 +295,12 @@ function renderAnalysis(){
   document.getElementById('analysisStats').innerHTML=cards.map(c=>`<div class="stat${c.hi?' hi':''}"><div class="v">${c.v}</div><div class="l">${c.l}</div></div>`).join('')
     +`<div class="stat"><div class="v">${s.generated}</div><div class="l">분석 기준일</div></div>`;
 }
-// init
+// init — 보유내역(status/holdings_*.json 임베드) 있으면 총액 기본값으로
+if(DATA.holdings&&DATA.holdings.total){
+  document.getElementById('totalAmount').value=DATA.holdings.total.toLocaleString('ko-KR');
+  const sub=document.querySelector('.sub');
+  if(sub)sub.textContent+=` · 보유내역 ${DATA.holdings.asof} (status 폴더 자동 반영)`;
+}
 onAlgoChange();applyAlgo();renderAnalysis();
 </script>
 </body>

@@ -8,8 +8,10 @@
       → dashboard/dashboard_data.js 생성. portfolio_dashboard.html과 같은 폴더에서 로컬 서버로 열기.
 """
 import datetime
+import glob
 import json
 import os
+import re
 import pandas as pd
 
 # 대시보드 핵심 펀드 (5년 데이터 proxy). 필요 시 코드 교체.
@@ -25,6 +27,41 @@ FUNDS = {
     "gold":   ("K55366BU9572", "골드(월드골드 UH)", "골드"),
 }
 DEPOSIT_RATE = 0.049
+
+
+# 보유 표준코드 → 대시보드 키 (동일 자산군 proxy 포함)
+CODE2KEY = {
+    "K55105BA7360": "sp500", "K55210DT4606": "sp500",     # 삼성/신한 S&P500
+    "K55301B51580": "nasdaq", "K55301E64355": "nasdaq",   # 블루칩proxy/나스닥100
+    "K55307D05993": "sox",
+    "K55105BU5980": "kospi",
+    "K55209CT1721": "div",
+    "K55301B25428": "india",
+    "K55223BV4542": "china", "K55301DD9983": "china",     # 본토A/과창판 proxy
+    "K55105BD5817": "asean",
+    "K55366BU9572": "gold", "K55366BU9754": "gold",       # UH/H
+}
+
+
+def load_holdings():
+    """status/holdings_*.json 최신본 → 대시보드 키별 보유액(byKey)·미매핑 목록(other)."""
+    files = glob.glob("status/holdings_*.json")
+    if not files:
+        return None
+    path = max(files, key=lambda p: re.search(r"(20\d{6})", p).group(1))
+    hd = json.load(open(path, encoding="utf-8"))
+    by_key, other, total = {}, [], 0
+    for h in hd["holdings"]:
+        v = h["value"]
+        total += v
+        if h.get("kind", "fund") != "fund":
+            by_key["deposit"] = by_key.get("deposit", 0) + v
+        elif h["code"] in CODE2KEY:
+            k = CODE2KEY[h["code"]]
+            by_key[k] = by_key.get(k, 0) + v
+        else:
+            other.append({"name": h["name"], "value": v})
+    return {"asof": hd.get("asof"), "total": total, "byKey": by_key, "other": other}
 
 
 def analysis_summary():
@@ -70,7 +107,8 @@ def main(panel="panel_adj_nav.csv", out="dashboard/dashboard_data.js"):
     funds = {k: {"code": c, "name": nm, "cls": cls,
                  "nav": [round(x, 2) for x in sub[c].tolist()]}
              for k, (c, nm, cls) in FUNDS.items()}
-    payload = {"dates": dates, "funds": funds, "deposit": deposit, "summary": analysis_summary()}
+    payload = {"dates": dates, "funds": funds, "deposit": deposit,
+               "summary": analysis_summary(), "holdings": load_holdings()}
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w", encoding="utf-8") as f:
         f.write("const DATA = " + json.dumps(payload, ensure_ascii=False) + ";")
