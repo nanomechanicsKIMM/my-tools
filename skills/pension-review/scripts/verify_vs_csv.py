@@ -1,15 +1,33 @@
 # -*- coding: utf-8 -*-
 """
 수집 NAV(KOFIA) vs 원본 CSV 수익률 전수 교차검증.
-- 기준일 D=2026-05-07 (CSV 데이터 기준일; 파일명 0508은 다운로드일)
+- 기본: data_raw/ 최신 CSV 자동 선택, 기준일 D = 파일명 날짜의 직전 영업일(포털 '전영업일 결제기준')
+  한국 공휴일이 낀 경우 --date로 명시 오버라이드.
 - 공시 수익률은 분배 재투자 기준 -> adj_nav 계산값이 일치, raw_nav는 분배락 펀드서 어긋나야 정상
 - 기간시작 = 캘린더 역산 후 직전거래일(asof). CSV 공란이면 스킵.
 """
-import csv, glob, os, bisect
+import argparse, csv, glob, os, re, bisect
 import pandas as pd
 
-D = pd.Timestamp("2026-05-07")
-CSV = "(20260508)_과기공제회_연금_실적배당형상품.csv"
+_ap = argparse.ArgumentParser()
+_ap.add_argument("--csv", default=None, help="원본 CSV 경로 (기본: data_raw/ 최신)")
+_ap.add_argument("--date", default=None, help="기준일 YYYY-MM-DD (기본: 파일명 날짜의 직전 영업일)")
+_a = _ap.parse_args()
+
+if _a.csv:
+    CSV = _a.csv
+else:
+    _cands = glob.glob("data_raw/*_과기공제회_연금_실적배당형상품.csv")
+    if not _cands:
+        raise SystemExit("data_raw/에 원본 CSV가 없습니다")
+    CSV = max(_cands, key=lambda p: re.search(r"(20\d{6})", os.path.basename(p)).group(1))
+_m = re.search(r"(20\d{6})", os.path.basename(CSV))
+if _a.date:
+    D = pd.Timestamp(_a.date)
+else:
+    D = pd.Timestamp(_m.group(1)) - pd.tseries.offsets.BDay(1)
+print("CSV=%s | 기준일 D=%s (직전영업일 자동유도%s)" %
+      (CSV, D.date(), "" if not _a.date else "; 수동지정"))
 COLS = {"1주": 9, "1개월": 10, "3개월": 11, "6개월": 12, "YTD": 13, "1년": 14, "3년": 15}
 OFF = {"1주": pd.DateOffset(weeks=1), "1개월": pd.DateOffset(months=1),
        "3개월": pd.DateOffset(months=3), "6개월": pd.DateOffset(months=6),

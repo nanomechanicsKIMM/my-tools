@@ -37,8 +37,10 @@ DC형 퇴직연금 펀드를 **수집→가공→검증→추천→백테스트�
        encoding="utf-8-sig", na_rep="")
    ```
    - 34컬럼·2줄 헤더 구조. 직전 파일과 비교해 **신규/탈락 펀드** 점검.
-3. **KOFIA 일별 NAV 수집**: `collect_nav.py` (CSV_PATH를 최신 CSV로 지정). dis.kofia.or.kr 무인증 API, 5년치 일별 기준가 → `nav_history/{표준코드}.csv`.
+3. **KOFIA 일별 NAV 수집**: 최초 전체 수집은 `collect_nav.py` (CSV_PATH를 최신 CSV로 지정). dis.kofia.or.kr 무인증 API, 5년치 일별 기준가 → `nav_history/{표준코드}.csv`.
+   **분기 증분 갱신은 `update_nav.py`** — 기존 시계열 말단 이후만 fetch·append하고 신규 펀드는 전체 수집(collect_nav의 resume는 캐시 펀드를 스킵하므로 증분 갱신 불가). CSV_PATH는 collect_nav.py에서 갱신 후 실행.
 4. **분류/수수료 JSON 생성**: data-updater 스킬 또는 `convert_sema_to_legacy.py` 경유로 `funds/fund_data.json`·`fund_fees.json`·`fund_classification.json`.
+   생성 직후 **`fix_classification.py` 필수 실행** — 알려진 자동분류 오류(펀드명에 없는 'gold' 테마 false-positive, (UH)/(H) hedged 필드)를 정정한다(멱등, 분류 JSON의 키=펀드명·name 필드 없음에 주의).
 
 ## Phase 1 — 데이터 가공
 - `adjust_nav.py`: 분배락(1000 리셋) 후방조정 → 수정기준가 `adjusted_nav/`
@@ -46,7 +48,7 @@ DC형 퇴직연금 펀드를 **수집→가공→검증→추천→백테스트�
 - `build_panel.py`: 날짜×코드 패널(NaN 정책, ffill 금지) → `panel_adj_nav.csv`, `panel_ret.csv`
 
 ## Phase 2 — 무결성 검증
-- `verify_vs_csv.py`: 수집 NAV vs 원본 CSV 공시수익률 교차검증. 기준가 0% 오차 확인.
+- `verify_vs_csv.py`: 수집 NAV vs 원본 CSV 공시수익률 교차검증. 기준가 0% 오차 확인. 인자 없이 실행하면 `data_raw/` 최신 CSV와 기준일(파일명 날짜의 직전 영업일, 포털 '전영업일 결제기준')을 자동 선택 — `--csv`/`--date`로 오버라이드(한국 공휴일이 낀 주는 `--date` 명시).
 - `diag_tail_error.py`: 1년/3년 꼬리오차 진단(분배락 탐지 한계는 기준가 데이터의 본질적 한계 — 휴리스틱으로 완전 해결 불가).
 
 ## Phase 3 — 추천 생성 (슬롯 5단계 규칙)
@@ -82,6 +84,7 @@ DC형 퇴직연금 펀드를 **수집→가공→검증→추천→백테스트�
 - **정성 교차검증**: 인도/중국 등 신흥국 거시는 `/deep-research`로 고평가·환율·상관 과대평가 검증(백테스트 과적합 방지). 백테스트 일별상관 < 실제 장기상관임에 유의 → 신흥국 비중 보수적(≤8%), 환헤지·DCA 권장.
 
 ## Phase 7 — 리포트
+- **`drift_check.py` — 보유 드리프트 점검**: 사용자 보유내역을 `status/holdings_YYYYMMDD.json`(`{"asof","holdings":[{"name","code","value","kind":"fund|deposit|cash"}]}`)으로 구조화한 뒤 실행. 비중표·위험자산비중·DC 한도(위험70/단일40) 판정, `--targets` JSON(코드→비중%)을 주면 목표 대비 괴리(±5%p 밴드이탈 플래그)까지 출력. ⚠ '기타' 분류(골드·TDF)가 안전으로 집계되어 포털 공시 위험비중과 다를 수 있음 — 포털값 병기 확인.
 - `scripts/extract_dashboard_data.py`: 핵심 펀드(미국/한국/인도/중국/아세안) 월말 NAV → `dashboard_data.js` 생성.
 - `templates/portfolio_dashboard.html`: 인터랙티브 대시보드.
   - **투자 알고리즘 선택** + 텍스트 규칙 표시(원본추천/글로벌분산/모멘텀Top5/역변동성/사용자정의)
