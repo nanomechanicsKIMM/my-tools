@@ -25,6 +25,11 @@ model: sonnet
 ⭐ **권장 우선순위**: 기술 단면도·schematic은 손코딩 SVG가 가장 강력. 자세한 디자인
 컨벤션·primitives·변환 파이프라인은 `reference/svg-figure-creation.md` 참조.
 
+**라벨 정책 (2026-07-13 신설, NON-NEGOTIABLE — SKILL 규칙 D)**: 모든 도면(SVG·Mermaid·
+matplotlib)의 구성요소 라벨은 **부품 이름 텍스트만** 사용한다 — 참조 부호(10, 100, 110 등)·
+범례 부호열 표기 금지. §9에는 도면 번호([도 N])·번호별 설명 목록을 작성하지 않고 각 도면에
+내용 기반 제목만 단다. 사유: 출원용 정식 도면·부호 체계는 변리사가 별도 작성 — 내부 번호가 오해 유발.
+
 ## 입력
 
 1. `발명내용설명서 MD` (Phase 6 출력) — §6 구성 내용과 §9 도면 목록
@@ -146,7 +151,7 @@ SVG XML을 직접 작성하여 figures/*.svg 파일 생성. 3가지 매체별 �
 ```
 figures/figN_*.svg (컬러 벡터, 1차 산출물)
    ▼
-figures_deck.pptx — 슬라이드 N = [도 N] 1:1 대응 (표지 슬라이드 없음)
+figures_deck.pptx — 슬라이드 N = 도면 N 1:1 대응 (캡션은 제목만, [도 N] 번호 미표기, 표지 슬라이드 없음)
    ▼
 슬라이드별 600 dpi PNG export (PowerPoint COM: 슬라이드 인치 × 600 픽셀)
    ▼
@@ -165,12 +170,18 @@ diagrams/figN_*.png → convert_hwpx.py가 §9에 삽입
 1. **텍스트 outline (필수 선행)**: `python scripts/outline_svg_text.py --src figures/ --dst figures/pptx/`
    — fontTools로 모든 `<text>`를 Bezier `<path>`로 변환. 도형 변환 시 100% 시각 보존.
 2. **COM 조립 (우선)**: PowerShell/COM으로 `Presentations.Add` → 슬라이드별
-   `Shapes.AddTextbox`(캡션 `[도 N] …`, Malgun Gothic) + `Shapes.AddPicture(<outlined
+   `Shapes.AddTextbox`(캡션 = 도면 제목만, `[도 N]` 번호 미표기, Malgun Gothic) + `Shapes.AddPicture(<outlined
    SVG 경로>, LinkToFile=0, SaveWithDocument=-1, x, y, w, h)` — SVG가 벡터 그래픽
    파트(ppt/media/*.svg)로 저장되어 편집 가능. 16:9(960×540 pt), 도면 900:560 비율 유지.
    한글 캡션이 있는 ps1 스크립트는 **UTF-8 BOM**으로 저장해 실행한다(PS 5.1 인코딩).
-3. **슬라이드 번호 = 도면 번호 1:1 일치**(슬라이드 1=[도 1], …) — 표지 슬라이드를 만들지
-   않는다(프레젠테이션 제목·파일명으로 식별).
+3. **슬라이드 순서 = 도면 순서 1:1 일치**(fig1→슬라이드 1, …) — 표지 슬라이드를 만들지
+   않는다(프레젠테이션 제목·파일명으로 식별). 캡션·슬라이드에 `[도 N]` 번호를 노출하지 않는다.
+> [!warning] SaveAs 경로 gotcha (2026-07-13 실측)
+> PowerPoint COM `SaveAs`는 한글·괄호 포함 출력 경로에서 COMException 또는 무한 대기가
+> 발생할 수 있다. `$pp.DisplayAlerts = 1` + ASCII 임시 경로에 `SaveAs(path, 24)` 후 move를
+> 기본으로 하고, 실패 시 잔류 POWERPNT를 kill 후 재시도한다. 또한 `diagrams/captions.json`
+> (`{"figN_*.png": "내용 기반 제목"}`)을 생성해야 convert_hwpx.py가 번호 없는 제목 캡션을 삽입한다.
+
 4. **폴백**(COM 불가 환경만): python-pptx + 고해상 PNG 삽입 — 이 경우 산출 보고에
    "덱 그림 편집 불가(래스터 폴백)"를 명시한다.
 5. 조립 후 검증: `zipfile`로 패키지 내 `ppt/media/*.svg` 파트 수 = 도면 수 확인.
@@ -231,10 +242,29 @@ diagrams/                   # HWPX 임베드용 PNG (matplotlib + SVG→PNG 공�
 
 ---
 
-### Step 4: Python matplotlib 도면 생성 (데이터 플롯 한정)
+### Step 4: Python matplotlib 도면 생성 (데이터 플롯 + 실척·계산 기반 상세 도면)
 
 Mermaid·SVG로 표현하기 어려운 데이터 플롯·그래프는 Python matplotlib로 생성한다.
-**기술 단면도·schematic은 Step 3 (SVG) 사용 권장.**
+**일반 기술 단면도·schematic은 Step 3 (SVG) 사용 권장.**
+
+#### 4-0) 상세·실척 도면 모드 (2026-07-16 신설 — 물리계 발명의 1차 경로 승격) ⭐
+
+발명이 물리 기하(광학·역학·열 등의 실제 배치)로 정의되거나 정량 상충·한계가 명세서 논거의
+중심이면, 손코딩 SVG 대신 **matplotlib 실척·계산 기반 도면**을 1차 경로로 쓴다.
+"박스+화살표" 수준의 개념도는 발명자 회람에서 "상세한 디테일이 생략되어 이해가 어렵다"는
+지적을 받는다(구면 Maxwellian NED v12 실전 — 도면 15종 전면 재생성 사례).
+
+- **실척 좌표계**(실제 mm 치수) + **광선·궤적의 물리 계산**(paraxial 굴절 등) — 도면 작성이 곧 수치 검산
+- 소자 단면은 **전 기능층 적층 + 재료 표기**(§6 소재 문단과 1:1 대응)
+- 정량 주장(모순·한계·동작점)은 **로그축 차트 + 요구 수준선 + 동작점 마커**로 시각화
+- 공통 헬퍼 모듈(fig_common.py 패턴: 팔레트·도메인 프리미티브·물리 함수) + 5매 단위 배치 스크립트
+- 규격: figsize (11~14) in × **dpi 300**(폭 약 3300 px). Malgun Gothic 글리프 함정(≈·− 등 금지,
+  로그축 tick은 FixedLocator+FuncFormatter로 plain 숫자 강제) 주의
+- `plt.rcParams["svg.fonttype"]='path'`로 **SVG 병행 저장** → outline_svg_text.py 없이
+  PowerPoint COM AddPicture 덱 조립 가능(편집 가능 덱 규칙 충족)
+- **렌더 → Read 육안 검증 → 수정 루프 필수** (v12 실전에서 15종 중 3건을 이 루프로 수정)
+
+**상세 가이드**: `reference/detailed-figures.md` (원칙 5, 규격·스타일, 함정, 파이프라인 통합, 골격 코드)
 
 ```python
 import matplotlib.pyplot as plt
@@ -335,9 +365,9 @@ Obsidian에서 바로 렌더링되므로 별도 파일이 필요 없다.
 - 종래기술 vs 본 발명 비교도 (`graph LR` with subgraph)
 - 구성요소 관계도 (`graph TD`)
 
-삽입 형식:
+삽입 형식 (도면 제목만 — `[도 N]` 번호 미표기, 2026-07-13 정책):
 ````markdown
-[도 1] 전체 시스템 구성도
+전체 시스템 구성도
 
 ```mermaid
 graph TD
@@ -347,7 +377,7 @@ graph TD
     end
 ```
 
-[도 2] 공정 흐름도
+공정 흐름도
 
 ```mermaid
 flowchart LR
@@ -379,7 +409,7 @@ HWPX는 Mermaid·SVG를 직접 렌더링할 수 없으므로, **모든 도면의
 
 1. `{output_dir}/발명내용설명서 MD` 업데이트 — §6, §9에 Mermaid 인라인 삽입
 2. `{output_dir}/figures/*.svg` (+ `emf/`, `pptx/`) — 컬러 SVG 벡터 원본 및 PowerPoint 변환본 (1차 산출물)
-3. `{output_dir}/figures_deck.pptx` — 도면 슬라이드 덱 (슬라이드 N = [도 N] 1:1, 발표·검토·공유용)
+3. `{output_dir}/figures_deck.pptx` — 도면 슬라이드 덱 (슬라이드 N = 도면 N 1:1, 캡션 제목만, 발표·검토·공유용)
 4. `{output_dir}/diagrams/*.png` — 600 dpi HWPX 삽입용 PNG (PPTX export 우선, svg2png/matplotlib 폴백)
 5. manifest 업데이트: `"phase6b": {"status": "completed", "output": "diagrams/", "figures": "figures/", "pptx_deck": "figures_deck.pptx", "png_dpi": 600, "diagram_count": N}`
 
@@ -392,8 +422,10 @@ HWPX는 Mermaid·SVG를 직접 렌더링할 수 없으므로, **모든 도면의
 - **HWPX 임베드**: 위 SVG·matplotlib 결과 PNG를 **모두 `diagrams/`로 취합** → convert_hwpx.py가 §9에 자동 삽입
 - **Excalidraw 미사용**: 에이전트가 Excalidraw 파일을 생성하지 않는다 (사용자가 핸드라이팅 시에만 직접 생성)
 - matplotlib 한글 폰트: `plt.rcParams['font.family'] = 'Malgun Gothic'` (Windows)
-- 도면 번호는 [도 1], [도 2] ... 형식으로 통일 (도구 간 번호 중복 금지). **figures_deck.pptx
-  슬라이드 번호 = 도면 번호 1:1 일치**(표지 슬라이드 금지).
+- **도면 번호·부호 미사용 (2026-07-13 — SKILL 규칙 D)**: 문서·캡션에 `[도 N]` 번호를 노출하지
+  않고, 도면 내 구성요소 라벨은 **부품 이름 텍스트만** 사용(참조 부호 10·100 등 금지) — 출원용
+  정식 도면은 변리사가 별도 작성하므로 내부 번호가 오해 유발. 도면 순서는 파일명 `fig1_`, `fig2_`
+  접두사로만 관리하며 **figures_deck.pptx 슬라이드 순서 = 도면 순서 1:1**(표지 슬라이드 금지).
 - **필수 3종(배경·비교·활용/파급효과) 누락 금지** — §9 도면 목록에 반드시 포함.
 - **컬러 스타일(발명내용설명서)**: 컬러 적극 사용(구성 구분·종래 적색 vs 본 발명 청색 대비·경로 강조).
   출원용 정식 도면은 흑백 선도 관행 — §9에 변환 필요 부기.

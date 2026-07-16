@@ -647,6 +647,17 @@ def insert_diagrams_to_section9(cell, diagrams_dir, tmp_dir, cumulative_vert):
         print("   도면 PNG 파일 없음 — 건너뜀")
         return cumulative_vert, []
 
+    # 도면 번호·부호 미사용 정책 (2026-07-13): 캡션은 내용 기반 제목만 사용.
+    # diagrams_dir/captions.json ({"fig1_x.png": "제목", ...}) 이 있으면 그 제목을,
+    # 없으면 파일명 stem 을 캡션으로 쓴다. "[도 N]" 번호는 부여하지 않는다
+    # (출원용 정식 도면·번호 체계는 변리사가 별도 작성 — 내부 번호는 오해 유발).
+    caption_map = {}
+    cap_file = os.path.join(diagrams_dir, "captions.json")
+    if os.path.isfile(cap_file):
+        import json as _json
+        with open(cap_file, encoding="utf-8") as _f:
+            caption_map = _json.load(_f)
+
     sublist = cell.find(f"{{{HP_NS}}}subList")
     if sublist is None:
         return cumulative_vert, []
@@ -670,7 +681,7 @@ def insert_diagrams_to_section9(cell, diagrams_dir, tmp_dir, cumulative_vert):
             cur_w = org_w
             cur_h = org_h
 
-        caption = f"[도 {i+1}] {fname.replace('.png','').replace('_',' ')}"
+        caption = caption_map.get(fname) or fname.replace('.png', '').replace('_', ' ')
         cap_p, cap_lines = make_paragraph(
             escape(caption), "12", "6",
             vert_offset=cumulative_vert, horzsize=horzsize
@@ -690,7 +701,7 @@ def insert_diagrams_to_section9(cell, diagrams_dir, tmp_dir, cumulative_vert):
         shutil.copy2(png_path, os.path.join(bindata_dir, f"{image_id}.png"))
 
         image_items.append((image_id, bin_name, "image/png"))
-        print(f"   [도 {i+1}] {fname} -> {image_id}.png ({cur_w}x{cur_h})")
+        print(f"   {fname} -> {image_id}.png ({cur_w}x{cur_h}) 캡션: {caption}")
 
     csz = cell.find(f"{{{HP_NS}}}cellSz")
     if csz is not None:
