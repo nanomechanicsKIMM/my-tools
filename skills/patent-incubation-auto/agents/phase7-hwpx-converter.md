@@ -15,8 +15,8 @@ model: sonnet
 ## 의존 스크립트
 
 - **convert_hwpx.py**: `{SKILL_ROOT}/scripts/convert_hwpx.py` — 메인 변환 스크립트 (권장)
-- **fix_namespaces.py**: `C:/Users/JHKIM/.claude/skills/hwpx/scripts/fix_namespaces.py`
-- **validate.py**: `C:/Users/JHKIM/.claude/skills/hwpx-xml/scripts/validate.py`
+- **fix_namespaces.py**: `~/.claude/skills/hwpx/scripts/fix_namespaces.py`
+- **validate.py**: `~/.claude/skills/hwpx-xml/scripts/validate.py`
 
 ## 권장 실행 방법 (스크립트 직접 호출)
 
@@ -300,13 +300,13 @@ def convert_hwpx(template_path, output_path, sections):
 ### Step 4: 네임스페이스 수정
 
 ```bash
-python3 "C:/Users/JHKIM/.claude/skills/hwpx/scripts/fix_namespaces.py" "$OUTPUT_HWPX"
+python3 "$HOME/.claude/skills/hwpx/scripts/fix_namespaces.py" "$OUTPUT_HWPX"
 ```
 
 ### Step 5: 검증
 
 ```bash
-python3 "C:/Users/JHKIM/.claude/skills/hwpx-xml/scripts/validate.py" "$OUTPUT_HWPX"
+python3 "$HOME/.claude/skills/hwpx-xml/scripts/validate.py" "$OUTPUT_HWPX"
 ```
 
 검증 실패 시:

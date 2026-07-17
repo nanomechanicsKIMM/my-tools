@@ -16,12 +16,18 @@ KIMM 연구원이 특허 아이디어를 입력하면, TRIZ 방법론으로 체�
 ## Skill Constants
 
 ```
-SKILL_ROOT = C:/Users/JHKIM/.claude/skills/patent-incubation-auto
-HWPX_SKILL = C:/Users/JHKIM/.claude/skills/hwpx
-HWPX_XML_SKILL = C:/Users/JHKIM/.claude/skills/hwpx-xml
-PATENT_STRATEGY_SKILL = C:/Users/JHKIM/.claude/skills/patent-strategy-pro
-KIPRIS_ENV_FILE = C:/Users/JHKIM/Claude_Work/.env
+SKILL_ROOT = ~/.claude/skills/patent-incubation-auto
+HWPX_SKILL = ~/.claude/skills/hwpx
+HWPX_XML_SKILL = ~/.claude/skills/hwpx-xml
+PATENT_STRATEGY_SKILL = ~/.claude/skills/patent-strategy-pro
+KIPRIS_ENV_FILE = ~/Claude_Work/.env
 ```
+
+> [!note] OS별 경로 해석
+> `~`는 홈 디렉토리로 해석한다 (Windows: `C:/Users/JHKIM`, macOS: `/Users/<user>`).
+> `KIPRIS_ENV_FILE`이 존재하지 않으면 환경변수 `KIPRIS_API_KEY`/`KIPRIS_REST_ACCESS_KEY`를
+> 직접 확인하고, 둘 다 없으면 Phase 5/6c는 degraded 모드로 진행한다.
+> Python 실행은 `python3`(PATH 우선)를 사용한다 (Windows에서 미탐지 시 `~/miniconda3/python`).
 
 ---
 
@@ -342,9 +348,10 @@ manifest 업데이트:
 실행 전 KIPRIS API 키를 환경변수로 로드한다:
 
 ```bash
-if [ -f "C:/Users/JHKIM/Claude_Work/.env" ]; then
+KIPRIS_ENV="$HOME/Claude_Work/.env"
+if [ -f "$KIPRIS_ENV" ]; then
   set -a
-  eval "$(cat 'C:/Users/JHKIM/Claude_Work/.env' | sed 's/^[[:space:]]*//' | grep -v '^#')"
+  eval "$(cat "$KIPRIS_ENV" | sed 's/^[[:space:]]*//' | grep -v '^#')"
   set +a
 fi
 
@@ -412,7 +419,7 @@ KIPRIS 검색 실패 시:
 서지 기반 검색만으로 변별력이 부족할 때, 상위 1~3건의 원문 PDF를 받아 청구항 전문을 비교한다.
 
 ```bash
-PYTHONUTF8=1 C:/Users/JHKIM/miniconda3/python \
+PYTHONUTF8=1 python3 \
   ~/.claude/skills/_shared/scripts/download_patent_pdf.py \
   --kr <applno1> <applno2> --out {output_dir}/prior_art_pdfs/ --verify
 ```
@@ -715,9 +722,10 @@ manifest 업데이트:
 ### KIPRIS API 키 로드
 
 ```bash
-if [ -f "C:/Users/JHKIM/Claude_Work/.env" ]; then
+KIPRIS_ENV="$HOME/Claude_Work/.env"
+if [ -f "$KIPRIS_ENV" ]; then
   set -a
-  eval "$(cat 'C:/Users/JHKIM/Claude_Work/.env' | sed 's/^[[:space:]]*//' | grep -v '^#')"
+  eval "$(cat "$KIPRIS_ENV" | sed 's/^[[:space:]]*//' | grep -v '^#')"
   set +a
 fi
 ```
@@ -734,7 +742,7 @@ Agent(
 
          KIPRIS .env file: {KIPRIS_ENV_FILE}
          Patent PDF downloader: ~/.claude/skills/_shared/scripts/download_patent_pdf.py
-         Zettelkasten 로컬 캐시: D:/Zettelkasten/References/ (학술 논문 1차 조회 경로)
+         Zettelkasten 로컬 캐시: D:/Zettelkasten/References/ (Windows) 또는 ~/Zettelkasten/References/ (macOS) — 학술 논문 1차 조회 경로, 미존재 시 skip
 
          Before calling download scripts, load env vars:
          set -a && eval \"$(cat '{KIPRIS_ENV_FILE}' | sed 's/^[[:space:]]*//' | grep -v '^#')\" && set +a

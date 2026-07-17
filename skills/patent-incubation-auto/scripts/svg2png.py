@@ -33,11 +33,30 @@ from reportlab.graphics.shapes import String
 from svglib.svglib import svg2rlg
 from fontTools.ttLib import TTFont as FontInspector
 
-# ── 2) Font registration ────────────────────────────────────────────
+# ── 2) Font registration (Windows/macOS/Linux 후보 중 첫 존재 경로) ──
+def _first_existing(*candidates):
+    for p in candidates:
+        if p and os.path.exists(p):
+            return p
+    return None
+
+
 FONTS = [
-    ("MalgunGothic",      r"C:/Windows/Fonts/malgun.ttf"),
-    ("MalgunGothic-Bold", r"C:/Windows/Fonts/malgunbd.ttf"),
-    ("ArialUnicode",      r"C:/Windows/Fonts/ARIALUNI.TTF"),
+    ("MalgunGothic", _first_existing(
+        r"C:/Windows/Fonts/malgun.ttf",
+        "/System/Library/Fonts/Supplemental/AppleGothic.ttf",
+        os.path.expanduser("~/Library/Fonts/NanumGothic.ttf"),
+        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+    )),
+    ("MalgunGothic-Bold", _first_existing(
+        r"C:/Windows/Fonts/malgunbd.ttf",
+        os.path.expanduser("~/Library/Fonts/NanumGothicBold.ttf"),
+        "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
+    )),
+    ("ArialUnicode", _first_existing(
+        r"C:/Windows/Fonts/ARIALUNI.TTF",
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+    )),
 ]
 
 
@@ -51,10 +70,13 @@ def _load_cmap(path):
 REGISTERED = {}
 CMAPS = {}
 for name, path in FONTS:
-    if os.path.exists(path):
+    if path and os.path.exists(path):
         pdfmetrics.registerFont(TTFont(name, path))
         REGISTERED[name] = path
         CMAPS[name] = _load_cmap(path)
+
+if "MalgunGothic" not in REGISTERED:
+    sys.exit("ERROR: 한글 폰트를 찾지 못했습니다 (malgun.ttf / AppleGothic.ttf / NanumGothic.ttf)")
 
 
 # ── 3) Pre-substitution map (Malgun-friendly cosmetic substitutes) ──

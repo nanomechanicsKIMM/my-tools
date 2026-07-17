@@ -20,7 +20,15 @@ INKSCAPE_PATHS = [
     r"C:/Program Files/Inkscape/bin/inkscape.com",
     r"C:/Program Files (x86)/Inkscape/bin/inkscape.exe",
     r"C:/Users/JHKIM/AppData/Local/Programs/Inkscape/bin/inkscape.exe",
+    "/Applications/Inkscape.app/Contents/MacOS/inkscape",
+    "/opt/homebrew/bin/inkscape",
+    "/usr/bin/inkscape",
 ]
+
+# 플랫폼별 한글 지원 기본 폰트 (Inkscape가 이름으로 해석)
+DEFAULT_KO_FONT = ("Malgun Gothic" if sys.platform.startswith("win")
+                   else "AppleGothic" if sys.platform == "darwin"
+                   else "NanumGothic")
 
 
 def find_inkscape():
@@ -33,7 +41,7 @@ def find_inkscape():
     return None
 
 
-def patch_svg_fonts(svg_text, font="Malgun Gothic"):
+def patch_svg_fonts(svg_text, font=DEFAULT_KO_FONT):
     """Force font-family so Inkscape resolves to a Korean-capable font."""
     svg_text = re.sub(r'font-family\s*=\s*"[^"]*"', f'font-family="{font}"', svg_text)
     svg_text = re.sub(r"font-family\s*:\s*[^;\"']+", f"font-family:{font}", svg_text)

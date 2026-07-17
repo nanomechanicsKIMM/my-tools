@@ -34,8 +34,8 @@ SKILL_ROOT = os.environ.get(
 )
 TEMPLATE_PATH = os.path.join(SKILL_ROOT, "assets", "[KIMM]직무발명내용설명서_양식.hwpx")
 
-HWPX_SKILL = os.environ.get("HWPX_SKILL", "C:/Users/JHKIM/.claude/skills/hwpx")
-HWPX_XML_SKILL = os.environ.get("HWPX_XML_SKILL", "C:/Users/JHKIM/.claude/skills/hwpx-xml")
+HWPX_SKILL = os.environ.get("HWPX_SKILL", os.path.expanduser("~/.claude/skills/hwpx"))
+HWPX_XML_SKILL = os.environ.get("HWPX_XML_SKILL", os.path.expanduser("~/.claude/skills/hwpx-xml"))
 FIX_NS_SCRIPT = os.path.join(HWPX_SKILL, "scripts", "fix_namespaces.py")
 VALIDATE_SCRIPT = os.path.join(HWPX_XML_SKILL, "scripts", "validate.py")
 
@@ -642,7 +642,12 @@ def insert_diagrams_to_section9(cell, diagrams_dir, tmp_dir, cumulative_vert):
         print("   도면 디렉토리 없음 — 건너뜀")
         return cumulative_vert, []
 
-    png_files = sorted(glob.glob(os.path.join(diagrams_dir, "*.png")))
+    # 자연 정렬: fig10이 fig2보다 앞에 오는 알파벳 정렬 버그 방지
+    def _natural_key(path):
+        return [int(t) if t.isdigit() else t.lower()
+                for t in re.split(r"(\d+)", os.path.basename(path))]
+
+    png_files = sorted(glob.glob(os.path.join(diagrams_dir, "*.png")), key=_natural_key)
     if not png_files:
         print("   도면 PNG 파일 없음 — 건너뜀")
         return cumulative_vert, []

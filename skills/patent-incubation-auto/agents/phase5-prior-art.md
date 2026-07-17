@@ -16,7 +16,7 @@ model: sonnet
 
 - **search_patents_kipris.py**: `{SKILL_ROOT}/scripts/search_patents_kipris.py`
 - **KIPRIS API 키**: 환경변수 `KIPRIS_API_KEY` 또는 `KIPRIS_REST_ACCESS_KEY`
-- **API 키 위치**: `C:/Users/JHKIM/Claude_Work/.env`
+- **API 키 위치**: `~/Claude_Work/.env`
 
 ## 작업
 
@@ -108,7 +108,7 @@ KIPRIS 검색식 규칙:
 ```bash
 # KIPRIS API 키 로드
 set -a
-eval "$(cat 'C:/Users/JHKIM/Claude_Work/.env' | sed 's/^[[:space:]]*//' | grep -v '^#')"
+eval "$(cat "$HOME/Claude_Work/.env" | sed 's/^[[:space:]]*//' | grep -v '^#')"
 set +a
 
 # 키워드 검색 (초록 + 대표청구항 포함, 상위 15건 상세 조회)

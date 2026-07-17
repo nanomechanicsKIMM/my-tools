@@ -16,9 +16,9 @@ model: sonnet
 
 - **search_patents_kipris.py**: `{SHARED_SKILL_ROOT}/scripts/search_patents_kipris.py`
 - **KIPRIS API 키**: 환경변수 `KIPRIS_API_KEY` 또는 `KIPRIS_REST_ACCESS_KEY`
-- **API 키 위치**: `C:/Users/JHKIM/Claude_Work/.env`
+- **API 키 위치**: `~/Claude_Work/.env`
 
-> `{SHARED_SKILL_ROOT}` = `C:/Users/JHKIM/.claude/skills/patent-incubation-auto`
+> `{SHARED_SKILL_ROOT}` = `~/.claude/skills/patent-incubation-auto`
 
 ## 작업
 
@@ -76,7 +76,7 @@ model: sonnet
 
 ```bash
 set -a
-eval "$(cat 'C:/Users/JHKIM/Claude_Work/.env' | sed 's/^[[:space:]]*//' | grep -v '^#')"
+eval "$(cat "$HOME/Claude_Work/.env" | sed 's/^[[:space:]]*//' | grep -v '^#')"
 set +a
 
 python "{SHARED_SKILL_ROOT}/scripts/search_patents_kipris.py" \

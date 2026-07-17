@@ -17,7 +17,7 @@
 - `{output_dir}/(YYYYMMDD 발명자) {발명명칭}vN.md` (Phase 6 최신본, Phase 6b 도면 삽입 반영본)
 - `{output_dir}/prior_art.json` (Phase 5 출력, 선행특허 출원번호 메타데이터 확보)
 - `$HOME/Claude_work/.env` (KIPRIS_REST_AccessKey)
-- `D:/Zettelkasten/References/` (사용자 로컬 논문 PDF 캐시, Obsidian 볼트)
+- `D:/Zettelkasten/References/` (Windows) 또는 `~/Zettelkasten/References/` (macOS) — 사용자 로컬 논문 PDF 캐시(Obsidian 볼트), 미존재 시 skip
 
 ## 외부 서비스 및 도구
 
@@ -30,7 +30,7 @@
 | 보고서·웹 문서 | 직접 URL WebFetch | — | WebFetch → PDF URL |
 
 **공용 스크립트**:
-- 특허 다운로드: `C:/Users/JHKIM/.claude/skills/_shared/scripts/download_patent_pdf.py`
+- 특허 다운로드: `~/.claude/skills/_shared/scripts/download_patent_pdf.py`
   - 사용법: `python download_patent_pdf.py --kr <13자리출원번호...> --out <dir> --verify`
   - `--verify` 플래그가 PDF 첫 페이지 텍스트를 추출하여 제목 일치 확인
 - KIPRIS .env 로드: `set -a && eval "$(cat '$HOME/Claude_work/.env' | grep -v '^#')" && set +a`

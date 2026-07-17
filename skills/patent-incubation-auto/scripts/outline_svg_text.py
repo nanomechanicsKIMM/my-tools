@@ -21,9 +21,31 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 from fontTools.ttLib import TTFont
 from fontTools.pens.svgPathPen import SVGPathPen
 
-FONT_REG = r"C:/Windows/Fonts/malgun.ttf"
-FONT_BOLD = r"C:/Windows/Fonts/malgunbd.ttf"
-FONT_FALLBACK = r"C:/Windows/Fonts/ARIALUNI.TTF"
+def _first_existing(*candidates):
+    for p in candidates:
+        if p and os.path.exists(p):
+            return p
+    return None
+
+
+FONT_REG = _first_existing(
+    r"C:/Windows/Fonts/malgun.ttf",
+    "/System/Library/Fonts/Supplemental/AppleGothic.ttf",
+    os.path.expanduser("~/Library/Fonts/NanumGothic.ttf"),
+    "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+)
+FONT_BOLD = _first_existing(
+    r"C:/Windows/Fonts/malgunbd.ttf",
+    os.path.expanduser("~/Library/Fonts/NanumGothicBold.ttf"),
+    "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
+)
+FONT_FALLBACK = _first_existing(
+    r"C:/Windows/Fonts/ARIALUNI.TTF",
+    "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+)
+
+if FONT_REG is None:
+    sys.exit("ERROR: 한글 폰트를 찾지 못했습니다 (malgun.ttf / AppleGothic.ttf / NanumGothic.ttf)")
 
 SVG_NS = "http://www.w3.org/2000/svg"
 ET.register_namespace("", SVG_NS)
