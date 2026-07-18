@@ -21,6 +21,35 @@ Two payoffs, both from the source project:
   where it is not, only structure (event positions, symmetry, ordering) can honestly be compared.
   Say which in the report.
 
+## Step 0b — Draw YOUR reproduction figure with the verdict's resolved parameters ★
+
+Step 0 pins the *published* panel's display DOF. This one is about *your* panel: the reproduction
+figure is itself a computed artifact — it runs the estimator with some window, picker, band, gain —
+and **it must run with the same resolved parameters the verdict uses**, not an exploratory default.
+Otherwise the figure is a *second, silent claim* that can contradict your own text, and the figure is
+what a reader sees first.
+
+> **Case (head-wave Fig. 3).** The verdict was computed with the user-supplied extraction window
+> (M002 = 2800–3500 m/s), but the figure routine had hard-coded the widest *exploratory* window
+> (W1 = 2000–5000) plus the amplitude picker. On W1 the c-independent ~2000 m/s guided contaminant is
+> neither muted nor rejected, so the f-k line fit railed onto it and the panel printed
+> **"2183 / 2201 m/s"** — labels a reader reads as *the reproduction's result*, flatly contradicting
+> the report's own ~3180 m/s verdict. Analysis and verdict were right; only the picture lied.
+
+Rules:
+- The reproduction figure uses the **ledger-resolved / user-supplied** values (R3), the same ones the
+  verdict uses — never a leftover exploratory default, and never a per-figure knob chosen because the
+  picture looks better.
+- **Stamp the parameters on the figure** (window, estimator, resulting number, and the target for
+  reference). A number on a panel with no visible provenance is the same fake-competence tell as an
+  unprovenanced constant in code (R1), one altitude up.
+- Regenerating the figure with the resolved parameters is **not R2 fitting** — you are making the
+  picture show what the verdict already concluded, and the frozen verdict does not move (in the case
+  above, 3179.8 still missed 3200.5 ± 2.0 by 10×). Fitting would be searching *inside* the resolved
+  window for the sub-setting that hits the target; using the resolved window whole is not.
+- Same lesson class as the "N/N pass written from memory" and "display DOF mistaken for physics"
+  cases: **every rendered artifact is a claim, and it must agree with the claim in the text.**
+
 ## Step 1 — Extract the published figure honestly
 
 - Render at **≥600 dpi** (`pdftoppm -r 600`) if vector; if the PDF embeds a bitmap, take it at its

@@ -133,7 +133,11 @@ Details in `references/workflow.md`. Summary:
 5. **compare** — `pcr_compare.py`. See `references/compare.md`. **Pin the figure recipe first**
    (`.pcr/paper_figs/figNN_recipe.md`): every display degree of freedom — axes, grid, normalisation,
    dynamic range/colormap — pinned `@src` or ledgered, so a mismatch on an unpinned display DOF is
-   never mistaken for a physics finding. Then: axis calibration from **evidence, not assumption**;
+   never mistaken for a physics finding. **Draw your reproduction panel with the verdict's resolved
+   parameters** (Step 0b): the ledger-resolved/user-supplied window and estimator the verdict uses,
+   stamped on the figure — not a leftover exploratory default. A figure computed with different
+   parameters silently contradicts your own verdict (head-wave: the panel printed 2183 m/s while the
+   verdict was 3180). Then: axis calibration from **evidence, not assumption**;
    compare at the **coarser native grid**; bound any shift search inside one lattice period; always
    render side-by-side + difference map and **look at it**. Read failure directions against the
    assumptions register first.
