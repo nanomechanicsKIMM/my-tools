@@ -6,6 +6,21 @@ essentially right. Both happened in the source project.
 
 ---
 
+## Step 0 — Pin the figure recipe before comparing ★
+
+Before rendering your own version, write `.pcr/paper_figs/figNN_recipe.md`: every degree of freedom
+that shapes the published panel — axis ranges/units, sampling grid, normalisation (global vs
+per-panel), dynamic range / colormap / log-linear compression, and every number printed on the panel
+(labels are targets too) — each pinned `@src` or entered in the ledger.
+
+Two payoffs, both from the source project:
+- A mismatch on an **unpinned display DOF is a display finding, never a physics finding** — the
+  Fig. 3 colorbar (0–50, units unstated) made pixel-level agreement unjudgeable by construction, and
+  discovering that mid-comparison wasted a round that a recipe would have redirected on day one.
+- The recipe decides **what is judgeable at all**: metrics compare where the recipe is pinned;
+  where it is not, only structure (event positions, symmetry, ordering) can honestly be compared.
+  Say which in the report.
+
 ## Step 1 — Extract the published figure honestly
 
 - Render at **≥600 dpi** (`pdftoppm -r 600`) if vector; if the PDF embeds a bitmap, take it at its

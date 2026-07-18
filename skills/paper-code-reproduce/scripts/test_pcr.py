@@ -11,6 +11,12 @@ running it:
   * citation       -> pcr_extract quoted the start of a two-column line, so the citation pointed at
                       text that did not contain the number (fake provenance)
   * linter         -> must catch untagged constants and must NOT flag tagged/benign ones
+  * status gate    -> pcr_status read `Impact: **HIGH**` as nothing (gate falsely OPEN) and the
+                      re-grade `Impact: HIGH -> MED` as HIGH; the gate must FAIL CLOSED and read the
+                      final grade. This tool guards the whole ledger gate and had NO test before.
+  * test gate      -> guards against "13/13 pass" written from memory while the true state was 11/13:
+                      pairing (untested module named), failure (nonzero run is RED), and freshness
+                      (any file edited after the recorded run voids the pass claim).
 """
 from __future__ import annotations
 import json
@@ -105,6 +111,58 @@ def test_lint(tmp: Path) -> None:
           "A:" not in out and "B:" not in out and "C:" not in out)
 
 
+def test_status_gate_fails_closed(tmp: Path) -> None:
+    """R5 on the gate itself. The gate must FAIL CLOSED: it may never report OPEN on a HIGH unknown
+    it could not parse, and it must read the ledger's own re-grade syntax (`HIGH → MED`) and its
+    trailing-prose Status lines correctly. Every case below is a real formatting the ledger produces.
+    """
+    sys.path.insert(0, str(HERE))
+    import importlib
+    ps = importlib.import_module("pcr_status")
+
+    def gate(entries: str) -> str:
+        root = tmp / "gate"
+        (root / ".pcr").mkdir(parents=True, exist_ok=True)
+        (root / ".pcr" / "missing.md").write_text(entries, encoding="utf-8")
+        (root / ".pcr" / "state.md").write_text("- current: X\n- status: Y\n- rounds used: 0/3\n")
+        (root / ".pcr" / "targets.json").write_text(
+            '{"t": {"value": 1, "tol": 0.1, "load_bearing": true}}')
+        r = subprocess.run([PY, str(HERE / "pcr_status.py"), str(root)],
+                           capture_output=True, text=True)
+        return r.stdout
+
+    # 1. a genuine HIGH + UNRESOLVED blocks
+    check("gate: genuine HIGH+UNRESOLVED blocks",
+          "BLOCKED" in gate("### M1 — x\n- **Impact**: HIGH\n- **Status**: UNRESOLVED\n"))
+    # 2. the ledger's prescribed re-grade `HIGH → MED` reads as MED and does NOT block
+    check("gate: `HIGH → MED` re-grade reads final grade, does not block",
+          "OPEN" in gate("### M1 — x\n- **Impact**: HIGH → MED (re-graded on evidence)\n"
+                         "- **Status**: UNRESOLVED, impact MED (verdict-invariant)\n"))
+    # 3. FAIL CLOSED: emphasis makes impact unparseable → must be treated as HIGH and block
+    #    (this is exactly source-project self-correction #6: `**HIGH**` → None → falsely OPEN)
+    check("gate: unparseable impact fails closed (blocks), never silently OPEN",
+          "BLOCKED" in gate("### M1 — x\n- **Impact**: **HIGH**\n- **Status**: UNRESOLVED\n"))
+    # 4. a cleared item never blocks, even at HIGH impact
+    check("gate: USER-SUPPLIED does not block",
+          "OPEN" in gate("### M1 — x\n- **Impact**: HIGH\n- **Status**: USER-SUPPLIED[2026-01-01]\n"))
+    check("gate: RESOLVED does not block",
+          "OPEN" in gate("### M1 — x\n- **Impact**: HIGH\n- **Status**: RESOLVED[fig, measured]\n"))
+    # 5. an unrecognised Status token is NOT cleared → a HIGH item with it still blocks (+ warns)
+    out5 = gate("### M1 — x\n- **Impact**: HIGH\n- **Status**: UNRESOVLED (typo)\n")
+    check("gate: unrecognised Status is not cleared → HIGH still blocks", "BLOCKED" in out5)
+    # 6. dual-scope grade `LOW ... / HIGH (Fig.5)` — the gate is scoped to THIS run's target, so the
+    #    FIRST (primary) grade wins; a secondary-scope HIGH on the same line must NOT block. This is
+    #    the trap "final grade wins" would fall into — it is an arrow re-grade that means "final",
+    #    a slash/scope split that means "primary". Only the arrow signals a re-grade.
+    check("gate: dual-scope `LOW ... / HIGH (Fig.5)` reads primary LOW, does not block",
+          "OPEN" in gate("### M1 — x\n- **Impact**: LOW for this target / **HIGH** for Fig. 5\n"
+                         "- **Status**: UNRESOLVED\n"))
+    # 7. a multi-step re-grade takes the newest grade after the last arrow
+    check("gate: `HIGH -> MED -> LOW` reads final LOW, does not block",
+          "OPEN" in gate("### M1 — x\n- **Impact**: HIGH -> MED -> LOW (twice re-graded)\n"
+                         "- **Status**: UNRESOLVED\n"))
+
+
 def test_extract_citation_contains_value(tmp: Path) -> None:
     """A citation that does not contain its own number is fake provenance."""
     sys.path.insert(0, str(HERE))
@@ -123,13 +181,58 @@ def test_extract_citation_contains_value(tmp: Path) -> None:
               "raw" in v and isinstance(v["raw"], str))
 
 
+def test_testgate(tmp: Path) -> None:
+    """R5 on the test gate itself: pairing, failure, and freshness must each go RED when planted."""
+    import os
+
+    root = tmp / "tg"
+    (root / "code" / "src").mkdir(parents=True)
+    (root / "code" / "tests").mkdir(parents=True)
+    (root / "code" / "src" / "m.py").write_text("def f():\n    return 1\n")
+    (root / "code" / "tests" / "test_m.py").write_text("# placeholder\n")
+    ok_cmd = f'"{PY}" -c "import sys; sys.exit(0)"'
+    bad_cmd = f'"{PY}" -c "import sys; sys.exit(3)"'
+
+    def gate(*extra: str) -> subprocess.CompletedProcess:
+        return subprocess.run([PY, str(HERE / "pcr_testgate.py"), str(root), *extra],
+                              capture_output=True, text=True)
+
+    # 1. green run: paired + passing cmd + log recorded
+    r = gate("--cmd", ok_cmd)
+    check("testgate: paired + passing run is GREEN", r.returncode == 0 and "GREEN" in r.stdout)
+    check("testgate: run is recorded", (root / ".pcr" / "test_log.json").exists())
+    # 2. --check immediately after: fresh
+    r = gate("--check")
+    check("testgate: --check right after run is GREEN (fresh)", r.returncode == 0)
+    # 3. edit a source file after the run -> the recorded pass is void
+    st = (root / "code" / "src" / "m.py").stat()
+    os.utime(root / "code" / "src" / "m.py", ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
+    r = gate("--check")
+    check("testgate: edit after run makes --check STALE and RED",
+          r.returncode == 1 and "STALE" in r.stdout and "m.py" in r.stdout)
+    # 4. failing suite is RED
+    r = gate("--cmd", bad_cmd)
+    check("testgate: failing run is RED", r.returncode == 1 and "RED" in r.stdout)
+    # 5. an unpaired module is named and blocks even with a passing suite
+    (root / "code" / "src" / "orphan.py").write_text("X = 1\n")
+    r = gate("--cmd", ok_cmd)
+    check("testgate: unpaired module is named and blocks",
+          r.returncode == 1 and "orphan" in r.stdout)
+    # 6. no recorded run at all fails closed
+    (root / ".pcr" / "test_log.json").unlink()
+    r = gate("--check")
+    check("testgate: missing log fails closed", r.returncode == 1)
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         test_compare_recovers_planted_shift(tmp)
         test_compare_flags_boundary(tmp)
         test_lint(tmp)
+        test_status_gate_fails_closed(tmp)
         test_extract_citation_contains_value(tmp)
+        test_testgate(tmp)
     print()
     if FAILED:
         print(f"{len(FAILED)} FAILED: {', '.join(FAILED)}")

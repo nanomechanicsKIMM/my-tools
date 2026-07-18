@@ -74,6 +74,30 @@ Every row needs a citation. A row without one is not a requirement, it is a gues
 | S001 | | [p. §] | | `src/…` |
 """
 
+ASSUMPTIONS = """# .pcr/assumptions.md — core-assumption register
+
+**Every core assumption the paper's claim rests on: written down, quantified, checked in code.**
+Format and rules: skill `references/assumptions.md` (A-1..A-5).
+
+Harvest at spec time from: caveat language ("assuming", "valid when", "we neglect"),
+derivation conditions of every equation used, and definitional statements.
+Status ∈ {HOLDS, MARGINAL, VIOLATED, UNTESTABLE} — always with the computed number.
+A MARGINAL/VIOLATED entry explains a miss (predicted failure direction); it never widens
+a tolerance (R2). Computable checks live in `code/tests/test_assumptions.py`.
+
+---
+
+<!-- ### A001 — <short name>
+- **Statement (verbatim)**: "..." [p.N §X]   <- or Kind: implicit + grounds
+- **Kind**: validity-condition | approximation | idealisation | convention | definitional | implicit
+- **Quantitative form**:
+- **Applies to**: <targets / ledger ids>
+- **Check**: `code/tests/test_assumptions.py::test_a001`  <- computed, not eyeballed
+- **Status**: UNTESTED
+- **Consequence if violated**: <predicted failure direction>
+-->
+"""
+
 DECISIONS = """# .pcr/decisions.md
 
 Adopted / rejected, with grounds. Rejections matter as much as adoptions.
@@ -106,6 +130,7 @@ def main() -> int:
         ".pcr/state.md": STATE.format(pdf=pdf.name),
         ".pcr/missing.md": MISSING,
         ".pcr/spec.md": SPEC,
+        ".pcr/assumptions.md": ASSUMPTIONS,
         ".pcr/decisions.md": DECISIONS,
         ".pcr/targets.json": json.dumps({}, indent=2) + "\n",
         "refs/_manifest.md": "# refs/_manifest.md\n\n| ref | resolves | how obtained |\n|---|---|---|\n",

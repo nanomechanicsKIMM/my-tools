@@ -36,8 +36,8 @@ The user supplies only `paper.pdf` (any filename; first PDF found). Everything e
 ├── code/{src,tests}/ ← implementation; every constant carries a provenance tag
 ├── output/{figures,compare}/ + REPORT.md
 └── .pcr/             ← durable state; state.md is the single source of truth
-    ├── state.md  spec.md  missing.md  targets.json  decisions.md
-    ├── paper_figs/   iterations/NN/
+    ├── state.md  spec.md  missing.md  assumptions.md  targets.json  decisions.md
+    ├── paper_figs/   iterations/NN/   test_log.json
 ```
 
 **`.pcr/state.md` is the only truth.** Never carry state in a prompt.
@@ -67,11 +67,11 @@ Read `references/antifooling.md` for the full case behind each.
 ## Flow
 
 ```
-init → extract → spec + targets(FROZEN) → missing ledger
+init → extract → spec + targets(FROZEN) + assumptions register → missing ledger
                                               │
                              HIGH unresolved? → refs → still? → ★ASK USER (halt)
                                               │
-                                    implement + unit & instrument tests (all pass)
+                      implement + per-module tests (testgate GREEN: paired+passed+fresh)
                                               │
         ┌────────────────→ run figure → compare 1:1 → verdict vs targets.json
         │                                     │
@@ -98,6 +98,14 @@ Details in `references/workflow.md`. Summary:
    captions — not just figures). Set tolerances from the paper's own precision **and freeze them**.
    Widening a tolerance later to pass is R2 fitting.
    > A reported number matching exactly is what identifies which run/config a figure came from.
+   **Then (Phase 1.5) harvest the assumptions register** — `.pcr/assumptions.md`, see
+   `references/assumptions.md`: the paper's validity conditions, approximations, and definitional
+   statements, each with a verbatim citation, a quantitative form, and a computed check in
+   `code/tests/test_assumptions.py`. The register is the backbone of the logical-consistency
+   audit: at verdict time every load-bearing target lists the assumptions it depends on
+   (HOLDS / MARGINAL / VIOLATED / UNTESTABLE), and a MARGINAL/VIOLATED entry must be tested
+   against the observed failure direction — it explains misses, never widens tolerances (R2).
+   A paper whose own setup violates its own assumption is a finding to report, not a knob to fix.
 2. **missing.md — THE GATE.** See `references/ledger.md`. No invented values, ever. Resolution order:
    paper → supplementary → refs → **ask the user**. HIGH+UNRESOLVED blocks the verdict.
 3. **refs** — delegate to the `paper-pdf-download` skill (verified present; it is explicitly built to
@@ -111,18 +119,31 @@ Details in `references/workflow.md`. Summary:
    `refs/_manifest.md` as "user must supply" and continue — an unobtainable reference is a ledger
    entry, not a reason to guess.
 4. **implement + test** — unit tests (known-answer) **and instrument tests** (R5: a measurement
-   function must recover a planted ground truth). All green before any figure verdict.
+   function must recover a planted ground truth). **Every module is paired with its test in the same
+   step that creates it** — `pcr_testgate.py` enforces pairing, runs the suite, and voids any pass
+   claim once a file changes after the recorded run (freshness). Gate order: `pcr_lint.py` clean →
+   `pcr_testgate.py` GREEN → only then a figure verdict.
    Verify success by **artifact existence, never exit code**.
+   Read `references/coding-pitfalls.md` before translating any equation or transform into code — a
+   correctly-sourced constant can still be wrong if a convention (2π, FFT sign, harmonic vs
+   arithmetic mean, angular vs ordinary wavenumber) was silently changed in translation; the linter
+   passes and the physics is wrong. The check: round-trip one of the paper's own worked numbers
+   through your code path.
    > Why: a failed `cd` silently skipped an entire `&&` chain while the trailing `echo` reported 0.
-5. **compare** — `pcr_compare.py`. See `references/compare.md`. Establish axis calibration from
-   **evidence, not assumption**; compare at the **coarser native grid**; bound any shift search
-   inside one lattice period; always render side-by-side + difference map and **look at it**.
+5. **compare** — `pcr_compare.py`. See `references/compare.md`. **Pin the figure recipe first**
+   (`.pcr/paper_figs/figNN_recipe.md`): every display degree of freedom — axes, grid, normalisation,
+   dynamic range/colormap — pinned `@src` or ledgered, so a mismatch on an unpinned display DOF is
+   never mistaken for a physics finding. Then: axis calibration from **evidence, not assumption**;
+   compare at the **coarser native grid**; bound any shift search inside one lattice period; always
+   render side-by-side + difference map and **look at it**. Read failure directions against the
+   assumptions register first.
 6. **iterate (≤3/round)** — each writes `.pcr/iterations/NN/prereg.md` first: hypothesis, prediction,
    falsification device, the **one** variable, and its `@src`. A refutation is a result, not a failure.
 7. **critic (after 3)** — `references/critic.md`. Unprimed: give paper + code + spec **only**.
    Default: **codex and opus crossed**. Verify claims against primary sources — and verify your
    refutations too (check field *names*, not rounded values).
-8. **report** — `output/REPORT.md`: what matched, what didn't, ledger status, **self-corrections**,
+8. **report** — `output/REPORT.md`: what matched, what didn't, ledger status, **assumption audit
+   table** (id, statement, computed status, consequence observed?), **self-corrections**,
    honest limits.
    > The most valuable section of the source project's final report was its list of self-corrections.
 
@@ -143,7 +164,8 @@ geometry reader against independently-stated numbers (SIM-4).
 | `pcr_extract.py` | PDF → text, high-res figures, `targets.json` draft, `spec.md` skeleton |
 | `pcr_lint.py` | **R1 enforcement**: untagged constants / `@missing` still open |
 | `pcr_compare.py` | **1:1**: axis calibration, native-grid resample, bounded shift search, diff map, verdict |
-| `pcr_status.py` | render `.pcr/state.md` summary + **print the gate decision** so it can't be skipped |
+| `pcr_status.py` | render `.pcr/state.md` summary + **print the gate decision** so it can't be skipped; **fails closed** — unparseable impact → HIGH, unrecognised status → not cleared |
+| `pcr_testgate.py` | **per-module test gate**: every `src/` module paired with a test, suite run + recorded, and **freshness** — any file changed after the recorded run voids the pass claim; fails closed on a missing record |
 | `test_pcr.py` | **self-tests for the tools above** — run once before trusting them |
 
 Run with the project's own interpreter; scripts need only numpy/scipy/matplotlib (+PyMuPDF or
@@ -151,14 +173,40 @@ poppler for extraction).
 
 **Run `python scripts/test_pcr.py` first.** R5 applies to this skill's own tools before anything else
 — and it earned its keep immediately: the planted-shift test caught `pcr_compare` reporting **every
-offset with the sign flipped**, and the citation test caught `pcr_extract` quoting the start of a
+offset with the sign flipped**; the citation test caught `pcr_extract` quoting the start of a
 two-column line so the citation pointed at text **not containing its own number** (fake provenance —
-in a skill whose entire premise is provenance). Both were found by running the tests, not by reading
-the code.
+in a skill whose entire premise is provenance); and the gate test caught `pcr_status` reading the
+ledger's own re-grade syntax `Impact: HIGH → MED` as **HIGH** and `Impact: **HIGH**` (bold) as
+**nothing** — the second silently reported the gate OPEN while two HIGH unknowns were still open. All
+were found by running the tests, not by reading the code.
+
+**The gate fails closed.** `pcr_status.py` is a safety device: an entry whose `Impact` it cannot
+parse is treated as **HIGH and blocking**, and any `Status` keyword it does not recognise counts as
+**not cleared**. A gate that opens when it is confused is worse than no gate — it launders "I could
+not read this" into "there is nothing to read." If it blocks on something you believe is resolved,
+fix the entry's *formatting* (see `references/ledger.md`), never loosen the tool.
 
 ## Stop conditions
 
+Reproduction is **graded, not binary.** Separate two verdicts and report both — never let one hide
+the other: the **method** verdict (does the technique qualitatively work — right regime identified,
+physical invariants hold, estimators land in the right neighbourhood?) and the **number** verdict
+(is each `load_bearing` target inside its frozen tolerance?).
+
 - **REPRODUCED**: every `load_bearing` target inside its frozen tolerance.
+- **METHOD-REPRODUCED, TARGET NOT**: the technique demonstrably works (e.g. every estimator lands
+  within a few % of truth and identifies the right physical regime) but a load-bearing number misses
+  its frozen tolerance and no orthogonal axis remains to close it. State **both** — the qualitative
+  success and the exact quantitative miss (e.g. "bone speed recovered to ~1%, but the paper's 0.5 m/s
+  precision is not reproduced: best 3179.8, 20 m/s = 10× the frozen tolerance"). Do **not** widen the
+  tolerance to absorb the miss (R2), and do **not** let "the method works" quietly stand in for
+  "the number reproduced." This is the head-wave outcome; it is a legitimate terminal state.
 - **HONEST LIMIT**: 3 rounds exhausted **and** the Phase-8 checklist passes (orthogonal axes ablated,
   HIGH ledger items escalated to the user, control case checked, failure direction analysed).
 - **BLOCKED**: a HIGH ledger item needs the user. Say so and stop — do not guess to keep moving.
+
+> **Resolving the gate ≠ reproducing the figure.** When the user or a reference supplies a blocking
+> HIGH unknown, the gate opens onto *whatever the verdict actually is* — often
+> METHOD-REPRODUCED-TARGET-NOT, not REPRODUCED. Supplying the missing input removes the *blocker*; it
+> does not make the number match. Re-run the verdict against the frozen tolerance; do not report
+> "unblocked" as if it were "reproduced."

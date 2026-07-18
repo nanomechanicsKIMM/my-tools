@@ -114,10 +114,28 @@ A measurement function is not trusted until it recovers a **planted** ground tru
 6. (head-wave sim) A planted test passed while the tool was broken, because the **plant was cleaner /
    weaker than the real data** — see references/simulation.md SIM-3. The plant has to contain the
    real record's dominant competitor at real strength, or a green test certifies a broken tool.
+7. (head-wave, the skill's OWN gate) `pcr_status.py` — the tool whose entire job is to make the
+   ledger gate un-skippable — read `Impact: **HIGH**` (bold value) as *nothing* and reported the gate
+   **OPEN** while two HIGH unknowns were open, and read the ledger's prescribed re-grade
+   `Impact: HIGH → MED` as **HIGH** (first token, not final). It was the **one tool with no
+   self-test**. A gate that opens when it cannot parse an entry launders "I could not read this" into
+   "there is nothing to read." Fixed two ways: the parser now takes the *final* grade token and
+   **fails closed** (unparseable impact → HIGH; unrecognised status → not cleared), and it grew the
+   planted tests it never had (`test_pcr.py::test_status_gate_fails_closed`).
 
 ⇒ Plant a known answer — at more than one value, and containing the real data's loudest competitor.
-If the tool can't find it, the tool is the finding. For simulation instruments, references/
+If the tool can't find it, the tool is the finding. **The tools that enforce the rules need planted
+tests most of all, and a safety gate must fail closed.** For simulation instruments, references/
 simulation.md (SIM-1..SIM-4) is the fuller treatment.
+
+**The tell — a novel "finding" from your own instrument is a bug until the plant says otherwise.**
+Four separate estimator bugs in the head-wave project each surfaced wearing the face of a physics
+discovery: ~2600, ~2390, ~2000 m/s — clean, plausible, non-random numbers that were *not* in the
+paper. Every one was an instrument defect (an FFT-sign error, an amplitude threshold locking onto
+reverberation, a domain wrap-around). When your code reports something the paper does not — a new
+velocity, an unexpected peak, a surprising asymmetry — the prior is **instrument bug**, not
+serendipitous discovery. Reach for the planted test and the physical invariant *before* you write the
+new number into a finding. A round, plausible number is exactly what a broken instrument produces.
 
 ---
 

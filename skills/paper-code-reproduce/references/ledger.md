@@ -107,6 +107,35 @@ admissible set; the second is selection. If the readings **straddle** the tolera
 some FAIL — the unknown *is* verdict-deciding, stays HIGH, and blocks. See references/simulation.md
 SIM-2 for the better move in that case: a more robust estimator that removes the sensitivity.
 
+### Writing a re-grade so the gate reads it (doc ↔ tool contract)
+
+When you demote on evidence, write it as an **arrow** re-grade — the new grade goes *after* the
+arrow (`→` or `->`), on the same line, and the rationale follows as prose. `pcr_status.py` reads the
+grade after the last arrow as the current one:
+
+```
+- **Impact**: HIGH → MED (re-graded 2026-07-18: all four readings miss the window, so it changes
+  the value but not the verdict)
+```
+
+The arrow matters because a second convention shares the line. A **dual-scope** grade —
+`LOW for this run's target / HIGH for Fig. 5` — has *no* arrow, and the gate (scoped to this run's
+load-bearing target) reads the **first** grade. So: **arrow ⇒ the grade after it wins** (a re-grade
+over time); **no arrow ⇒ the first grade wins** (primary scope). Never write a re-grade without the
+arrow, or it will be read as a dual-scope entry and the *old* grade will stand.
+
+Two more formatting rules the gate depends on, each from a real near-miss:
+- **Never bold or italicise the grade itself.** `**Impact**: **HIGH**` parses to *nothing* — the
+  gate then silently opens on an unknown it should have blocked. Bold the label (`**Impact**:`),
+  never the value.
+- **The `Status` keyword must lead the line**, from the set `RESOLVED` / `USER-SUPPLIED` /
+  `UNRESOLVED` / `UNRESOLVABLE`; trailing prose is fine (`UNRESOLVED, impact MED`). Anything the tool
+  cannot match to that set is treated as **not cleared** and blocks — so a typo fails safe, but check
+  `pcr_status.py`'s warning line rather than assuming the gate is wrong.
+
+The gate **fails closed**: unparseable impact → HIGH; unrecognised status → not cleared. If it blocks
+something you believe is resolved, the entry is mis-formatted; fix the entry, never the tool.
+
 ---
 
 ## The trap this gate exists to prevent
