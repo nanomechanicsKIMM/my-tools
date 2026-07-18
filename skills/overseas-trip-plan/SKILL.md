@@ -514,7 +514,7 @@ Invoke-Item 'C:\path\to\file.hwpx'
 
 ## 🔗 관련 스킬
 
-- `tor` — HWPX 생성 패턴 레퍼런스 (overseas-trip-plan은 tor의 `office/` 모듈을 재사용)
+- `tor` — HWPX 생성 패턴 레퍼런스 (unpack/pack `office/` 모듈은 스킬 내부 자체 복사본을 사용)
 - `hwpx` — 일반 HWPX 편집
 - `pdf-to-md` — Advance Program PDF 텍스트 추출
 - `pdf-to-md-mineru` — 표 구조 보존에 더 강한 PDF 변환

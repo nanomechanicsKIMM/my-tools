@@ -27,7 +27,7 @@ KIMM 구매요구 절차에서 첨부하는 두 가지 한컴 HWPX 양식을 자
 - 견적서가 PDF면 `/pdf-to-md` 스킬을 먼저 호출해 MD로 변환
 
 ```bash
-C:/Users/JHKIM/miniconda3/python -c "import lxml; print(lxml.__version__)"
+python3 -c "import lxml; print(lxml.__version__)"
 ```
 
 ## 워크플로우 (반드시 순서대로)
@@ -114,8 +114,8 @@ C:/Users/JHKIM/miniconda3/python -c "import lxml; print(lxml.__version__)"
 1. `payload.json` 작성 (스키마는 `scripts/build_forms.py` 상단 docstring 참조)
 2. 실행:
    ```bash
-   C:/Users/JHKIM/miniconda3/python \
-     "C:/Users/JHKIM/.claude/skills/purchase-requisition/scripts/build_forms.py" \
+   python3 \
+     "~/.claude/skills/purchase-requisition/scripts/build_forms.py" \
      <payload.json> <output_dir>
    ```
 3. 산출물 명명: `(YYYYMMDD LLM) <품명약식> 규격서.hwpx` / `… 용도설명서.hwpx`

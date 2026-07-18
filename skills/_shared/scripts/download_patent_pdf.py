@@ -9,7 +9,7 @@ Sources:
     --gp  Foreign patent Google Patents ID (e.g., WO2020016250A1, US8088067B2).
 
 Requires:
-    - $HOME/Claude_work/.env containing KIPRIS_REST_AccessKey=...
+    - $HOME/Claude_Work/.env containing KIPRIS_REST_AccessKey=...
     - Python >= 3.9
 """
 
@@ -42,7 +42,7 @@ UA = {
 
 
 def load_env_key(varname: str) -> str:
-    env_path = Path.home() / "Claude_work" / ".env"
+    env_path = Path.home() / "Claude_Work" / ".env"
     if not env_path.exists():
         raise SystemExit(f"missing env file: {env_path}")
     # Accept both the canonical name and the ALL_CAPS underscore variant seen

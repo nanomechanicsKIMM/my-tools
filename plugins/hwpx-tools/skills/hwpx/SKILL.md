@@ -173,8 +173,9 @@ for r in results:
 import shutil, subprocess
 
 # 양식 복사
-TEMPLATE = r"C:/Users/JHKIM/gonggong_hwpxskills/assets/report-template.hwpx"
-WORK = r"C:/Users/JHKIM/Desktop/report.hwpx"  # 원하는 출력 경로로 변경
+from pathlib import Path
+TEMPLATE = str(Path.home() / ".claude/skills/hwpx/assets/report-template.hwpx")
+WORK = "report.hwpx"  # 원하는 출력 경로로 변경
 shutil.copy(TEMPLATE, WORK)
 
 # 1. 표지 + 목차 + 섹션 바 + 제목 (일괄 치환)
@@ -199,7 +200,7 @@ zip_replace_sequential(WORK, WORK,
 
 # 4. 네임스페이스 후처리 (필수!)
 subprocess.run(
-    ["python", r"C:/Users/JHKIM/gonggong_hwpxskills/scripts/fix_namespaces.py", WORK],
+    ["python3", str(Path.home() / ".claude/skills/hwpx/scripts/fix_namespaces.py"), WORK],
     check=True
 )
 
@@ -221,8 +222,8 @@ for r in finder.find_all(tag="t"):
 import shutil, subprocess
 
 # 1. 사용자 양식을 작업 디렉토리로 복사
-USER_TEMPLATE = r"C:/Users/JHKIM/Desktop/사용자양식.hwpx"  # 실제 업로드된 파일 경로로 변경
-WORK = r"C:/Users/JHKIM/Desktop/report.hwpx"  # 원하는 출력 경로로 변경
+USER_TEMPLATE = "사용자양식.hwpx"  # 실제 업로드된 파일 경로로 변경
+WORK = "report.hwpx"  # 원하는 출력 경로로 변경
 shutil.copy(USER_TEMPLATE, WORK)
 
 # 2. 양식 내 텍스트 전수 조사 (★ 필수 단계!)
@@ -246,7 +247,7 @@ zip_replace_sequential(WORK, WORK, "반복되는 텍스트", ["값1", "값2", ..
 
 # 5. 네임스페이스 후처리
 subprocess.run(
-    ["python", r"C:/Users/JHKIM/gonggong_hwpxskills/scripts/fix_namespaces.py", WORK],
+    ["python3", str(Path.home() / ".claude/skills/hwpx/scripts/fix_namespaces.py"), WORK],
     check=True
 )
 
@@ -355,9 +356,10 @@ EXAMPLE_TEXTS_TO_REPLACE = [
 import shutil, subprocess
 from pathlib import Path
 
-TEMPLATE = r"C:/Users/JHKIM/.claude/skills/hwpx/assets/nrf-proposal-template.hwpx"
-OUTPUT   = r"C:/Users/JHKIM/Desktop/NRF_proposal_draft.hwpx"
-FIX_NS   = r"C:/Users/JHKIM/gonggong_hwpxskills/scripts/fix_namespaces.py"
+from pathlib import Path
+TEMPLATE = str(Path.home() / ".claude/skills/hwpx/assets/nrf-proposal-template.hwpx")
+OUTPUT   = "NRF_proposal_draft.hwpx"
+FIX_NS   = str(Path.home() / ".claude/skills/hwpx/scripts/fix_namespaces.py")
 
 shutil.copy(TEMPLATE, OUTPUT)
 
@@ -406,8 +408,9 @@ subprocess.run(["python", FIX_NS, OUTPUT], check=True)
 ZIP-level 치환 후 또는 `doc.save()` 후 반드시 실행:
 
 ```python
+from pathlib import Path
 subprocess.run(
-    ["python", r"C:/Users/JHKIM/gonggong_hwpxskills/scripts/fix_namespaces.py", "output.hwpx"],
+    ["python3", str(Path.home() / ".claude/skills/hwpx/scripts/fix_namespaces.py"), "output.hwpx"],
     check=True
 )
 ```

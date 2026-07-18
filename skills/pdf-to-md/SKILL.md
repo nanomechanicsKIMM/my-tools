@@ -23,14 +23,14 @@ Java 11+가 필요하다. 래퍼 스크립트가 다음 순서로 자동 탐색�
 1. `PATH`의 `java`
 2. `$JAVA_HOME/bin/java.exe`
 3. `<sys.prefix>/Library/bin/java.exe` (현재 Python의 conda env)
-4. `C:/Users/JHKIM/miniconda3/Library/bin/java.exe` (이 시스템 기본 — OpenJDK 21 번들됨)
+4. `~/miniconda3/Library/bin/java.exe` · `~/miniconda3/bin/java` (conda 폴백)
 
 위 4곳 모두에서 못 찾으면 친절한 에러로 종료한다. 그 경우 설치:
 - https://adoptium.net/  또는  `winget install EclipseAdoptium.Temurin.21.JDK`
 
 Python 패키지(`opendataloader_pdf`)가 없으면:
 ```bash
-C:/Users/JHKIM/miniconda3/python -m pip install -U opendataloader-pdf
+python3 -m pip install -U opendataloader-pdf
 ```
 
 ## 핵심 워크플로우
@@ -54,7 +54,7 @@ C:/Users/JHKIM/miniconda3/python -m pip install -U opendataloader-pdf
 `scripts/pdf_to_md.py` 래퍼를 사용한다. 직접 Python을 호출하는 것보다 안전:
 
 ```bash
-C:/Users/JHKIM/miniconda3/python C:/Users/JHKIM/.claude/skills/pdf-to-md/scripts/pdf_to_md.py \
+python3 ~/.claude/skills/pdf-to-md/scripts/pdf_to_md.py \
   --input "D:/Zettelkasten/References/paper.pdf" \
   --output "D:/Zettelkasten/References/" \
   --format markdown-with-images
@@ -62,7 +62,7 @@ C:/Users/JHKIM/miniconda3/python C:/Users/JHKIM/.claude/skills/pdf-to-md/scripts
 
 다중 입력:
 ```bash
-C:/Users/JHKIM/miniconda3/python C:/Users/JHKIM/.claude/skills/pdf-to-md/scripts/pdf_to_md.py \
+python3 ~/.claude/skills/pdf-to-md/scripts/pdf_to_md.py \
   --input "a.pdf" "b.pdf" "folder/" \
   --output "out/"
 ```
@@ -144,10 +144,10 @@ type: pdf-import
 
 ```bash
 # 샘플 PDF로 확인
-C:/Users/JHKIM/miniconda3/python C:/Users/JHKIM/.claude/skills/pdf-to-md/scripts/pdf_to_md.py \
-  --input "C:/Users/JHKIM/opendataloader/samples/pdf/lorem.pdf" \
-  --output "C:/Users/JHKIM/Claude_work/_pdf_test/" \
+python3 ~/.claude/skills/pdf-to-md/scripts/pdf_to_md.py \
+  --input "<샘플 PDF 경로>" \
+  --output "~/Claude_Work/_pdf_test/" \
   --format markdown
 ```
 
-성공 시: `C:/Users/JHKIM/Claude_work/_pdf_test/lorem.md` 생성, 본문 첫 줄에 "Lorem ipsum"이 보임.
+성공 시: `~/Claude_Work/_pdf_test/lorem.md` 생성, 본문 첫 줄에 "Lorem ipsum"이 보임.

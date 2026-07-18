@@ -24,7 +24,7 @@ $ARGUMENTS 에서 PDF 파일 경로와 옵션을 분리한다.
 - 존재하지 않으면 에러 메시지 출력 후 해당 파일 건너뛰기
 
 convert_mineru.py 경로 확인:
-- `C:/Users/JHKIM/my-tools/plugins/mineru-tools/convert_mineru.py`
+- `~/my-tools/plugins/mineru-tools/convert_mineru.py` (클론 위치 기준)
 - 없으면: "convert_mineru.py를 찾을 수 없습니다. my-tools를 설치해주세요." 출력 후 중단
 
 ### 3. 변환 실행
@@ -32,7 +32,7 @@ convert_mineru.py 경로 확인:
 각 PDF 파일에 대해 Bash로 실행:
 
 ```
-"C:/Users/JHKIM/AppData/Local/Programs/Python/Python312/python.exe" "C:/Users/JHKIM/my-tools/plugins/mineru-tools/convert_mineru.py" "파일경로" [-o 출력디렉토리]
+python3 ~/my-tools/plugins/mineru-tools/convert_mineru.py "파일경로" [-o 출력디렉토리]
 ```
 
 - timeout: 600000 (10분)

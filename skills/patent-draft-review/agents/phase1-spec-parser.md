@@ -70,7 +70,7 @@ tools: Bash, Read, Write
 ### Step 1: hwpx_to_md.py 호출
 
 ```bash
-python C:/Users/JHKIM/.claude/skills/patent-draft-review/scripts/hwpx_to_md.py \
+python3 ~/.claude/skills/patent-draft-review/scripts/hwpx_to_md.py \
   "{spec_file}" "{output_dir}"
 ```
 
@@ -137,7 +137,7 @@ sections.json의 `reference_numbers` dict 를 검증:
 | 필수 섹션 누락 | `parsing_metadata.status: "degraded"` + Phase 7 report-writer에 경고 전달 |
 | 청구항 0개 탐지 | degraded + 사용자에게 원본 확인 요청 |
 | 정규식 매칭 실패 | fallback 없이 원본 MD 그대로 `full.md`로 저장 |
-| text_extract import 실패 | hwpx-xml 스킬 미설치 안내 (`C:/Users/JHKIM/.claude/skills/hwpx-xml/` 경로 확인) |
+| text_extract import 실패 | hwpx-xml 스킬 미설치 안내 (`~/.claude/skills/hwpx-xml/` 경로 확인) |
 
 ## 보안 규칙
 

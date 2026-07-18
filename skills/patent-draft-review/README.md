@@ -85,7 +85,7 @@ patent-draft-review/
 ### 재사용 자산 (설치 필요)
 
 - **`hwpx-xml` 스킬**: `scripts/text_extract.py` (HWPX → MD 파싱)
-  - 경로: `C:/Users/JHKIM/.claude/skills/hwpx-xml/scripts/text_extract.py`
+  - 경로: `~/.claude/skills/hwpx-xml/scripts/text_extract.py`
   - `python-hwpx` 패키지 의존
 - **`patent-incubation-auto` 스킬**: TRIZ 레퍼런스 3종
   - 본 스킬의 `reference/triz-*` 는 해당 스킬에서 복사한 사본

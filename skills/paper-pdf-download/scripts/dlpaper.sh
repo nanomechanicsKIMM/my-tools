@@ -25,7 +25,9 @@ JS="$SCRIPT_DIR/download_paper.js"
 
 PDF_URL=""; OUT=""; LANDING=""; DEST="${PAPER_DL_DEST:-.}"
 BROWSER=""; HEADLESS="--headless"; TIMEOUT="120"; CONNECT=""
-LIBRARY="${PAPER_DL_LIBRARY:-D:/Zettelkasten/References}"
+_LIB_DEFAULT="D:/Zettelkasten/References"
+[ -d "$_LIB_DEFAULT" ] || _LIB_DEFAULT="$HOME/Zettelkasten/References"
+LIBRARY="${PAPER_DL_LIBRARY:-$_LIB_DEFAULT}"
 
 while [ $# -gt 0 ]; do
   case "$1" in

@@ -23,10 +23,15 @@ _SKILL_DIR = _SCRIPT_DIR.parent
 TEMPLATE_HWPX_2STEP = _SKILL_DIR / "assets" / "NRF_기술수요조사서_양식.hwpx"
 TEMPLATE_HWPX_3STEP = _SKILL_DIR / "assets" / "NRF_기술수요조사서_양식_3단계.hwpx"
 TEMPLATE_HWPX = TEMPLATE_HWPX_2STEP  # default
-UNPACK_PY = Path("C:/Users/JHKIM/.claude/skills/hwpx-xml/scripts/office/unpack.py")
-PACK_PY = Path("C:/Users/JHKIM/.claude/skills/hwpx-xml/scripts/office/pack.py")
-FIX_NS_PY = Path("C:/Users/JHKIM/.claude/skills/hwpx/scripts/fix_namespaces.py")
-VALIDATE_PY = Path("C:/Users/JHKIM/.claude/skills/hwpx-xml/scripts/validate.py")
+_CLAUDE_SKILLS = Path.home() / ".claude" / "skills"
+UNPACK_PY = _CLAUDE_SKILLS / "hwpx-xml" / "scripts" / "office" / "unpack.py"
+PACK_PY = _CLAUDE_SKILLS / "hwpx-xml" / "scripts" / "office" / "pack.py"
+FIX_NS_PY = _CLAUDE_SKILLS / "hwpx" / "scripts" / "fix_namespaces.py"
+VALIDATE_PY = _CLAUDE_SKILLS / "hwpx-xml" / "scripts" / "validate.py"
+for _p in (UNPACK_PY, PACK_PY, FIX_NS_PY, VALIDATE_PY):
+    if not _p.exists():
+        sys.exit(f"ERROR: 필요한 hwpx 엔진 스크립트가 없습니다: {_p}\n"
+                 "hwpx / hwpx-xml 스킬이 ~/.claude/skills 에 설치되어 있어야 합니다.")
 
 # ── 네임스페이스 ───────────────────────────────────────────
 HP = "http://www.hancom.co.kr/hwpml/2011/paragraph"

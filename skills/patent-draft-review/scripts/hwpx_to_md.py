@@ -50,13 +50,13 @@ HWPX → MD 변환을 수행한 후, 한국 특허 명세서의 9개 표준 섹�
 === 재사용 자산 ===
 
   hwpx-xml 스킬 경로:
-    C:/Users/JHKIM/.claude/skills/hwpx-xml/scripts/text_extract.py
+    ~/.claude/skills/hwpx-xml/scripts/text_extract.py
 
 === Phase 1 에이전트 호출 시나리오 ===
 
   phase1-spec-parser 에이전트가 Bash 도구로 본 스크립트 실행:
 
-    python C:/Users/JHKIM/.claude/skills/patent-draft-review/scripts/hwpx_to_md.py \\
+    python3 ~/.claude/skills/patent-draft-review/scripts/hwpx_to_md.py \\
            <spec_file> <output_dir>
 
   결과 sections.json을 읽어 spec_structure.json에 통합.
@@ -74,9 +74,7 @@ from typing import Any
 # ---------------------------------------------------------------------------
 # hwpx-xml 스킬 경로 (플랜 v1.4 기준)
 # ---------------------------------------------------------------------------
-HWPX_XML_SCRIPTS = Path(
-    "C:/Users/JHKIM/.claude/skills/hwpx-xml/scripts"
-).resolve()
+HWPX_XML_SCRIPTS = (Path.home() / ".claude" / "skills" / "hwpx-xml" / "scripts").resolve()
 
 # ---------------------------------------------------------------------------
 # 한국 특허 명세서 섹션 헤더 정규식 (우선순위 순)

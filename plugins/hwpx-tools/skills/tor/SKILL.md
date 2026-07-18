@@ -124,6 +124,6 @@ PYTHONUTF8=1 uv run python ~/.claude/skills/tor/scripts/build_tor.py \
 ## 주의사항
 
 - `PYTHONUTF8=1` 필수 (Windows 한국어 환경)
-- 작업 디렉토리를 `C:/Users/JHKIM/AI-study/TermsOfReference/`로 설정할 것 (pyproject.toml 위치)
+- 스크립트는 스킬 디렉토리 기준 상대 경로로 동작 (별도 작업 디렉토리 설정 불필요)
 - 기관 로고(`image4.jpg`)는 샘플에서 자동 재사용됨
 - PREFIX 내 치환 대상: "나노디스플레이연구실", "김재현", "뇌졸중 환자 재활훈련 프로그램 개발"

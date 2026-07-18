@@ -113,7 +113,7 @@ Claude 내부 동작:
 
 ## 과거 실사용 예시
 
-`C:/Users/JHKIM/Claude_Work/business_trip_plan/user_input_SID2026.md` 참고.
+`~/Claude_Work/business_trip_plan/user_input_SID2026.md` 참고.
 이 파일은 Display Week 2026을 대상으로 작성된 실제 `conference` 모드 입력 예시이다.
 
 ## 주의사항

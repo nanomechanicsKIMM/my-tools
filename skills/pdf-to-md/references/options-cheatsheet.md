@@ -1,10 +1,10 @@
 # opendataloader-pdf 옵션 치트시트
 
-전체 옵션 schema는 `C:/Users/JHKIM/opendataloader/options.json` 참조.
+전체 옵션 schema는 opendataloader-pdf 배포판의 `options.json` 참조.
 래퍼(`scripts/pdf_to_md.py`)에 노출되지 않은 고급 옵션이 필요하면 직접 CLI를 호출한다:
 
 ```bash
-C:/Users/JHKIM/miniconda3/Scripts/opendataloader-pdf.exe \
+opendataloader-pdf \
   -f markdown-with-images -o out/ paper.pdf
 ```
 

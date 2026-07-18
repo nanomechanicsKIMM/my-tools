@@ -104,7 +104,7 @@ Phase 1이 생성한 `full.md`와 `spec_structure.json`을 입력으로,
 ### Step 1: typo_scanner.py 실행
 
 ```bash
-python C:/Users/JHKIM/.claude/skills/patent-draft-review/scripts/typo_scanner.py \
+python3 ~/.claude/skills/patent-draft-review/scripts/typo_scanner.py \
   "{full_md}" \
   "{output_dir}/typo_raw.json"
 ```

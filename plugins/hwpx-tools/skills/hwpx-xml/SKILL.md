@@ -12,8 +12,8 @@ HWPX는 ZIP 기반 XML 컨테이너(OWPML 표준)이다. python-hwpx API의 서�
 
 ```
 # SKILL_DIR는 이 SKILL.md가 위치한 디렉토리의 절대 경로로 설정
-SKILL_DIR="C:/Users/JHKIM/.claude/skills/hwpx-xml"
-# (scripts/, templates/, examples/, references/는 C:/Users/JHKIM/hwpxskill/ 로 정션 연결됨)
+SKILL_DIR="$HOME/.claude/skills/hwpx-xml"
+# (배포본은 실디렉터리. Windows 개발기에서만 로컬 작업본으로 junction 연결되어 있을 수 있음)
 
 # Python 가상환경 (프로젝트에 맞게 설정)
 VENV="<프로젝트>/.venv/bin/activate"
@@ -30,7 +30,7 @@ source "$VENV"
 ```
 ~/.claude/skills/hwpx-xml/          ← SKILL_DIR
 ├── SKILL.md                              # 이 파일
-├── scripts/        → (junction) C:/Users/JHKIM/hwpxskill/scripts/
+├── scripts/
 │   ├── office/
 │   │   ├── unpack.py                     # HWPX → 디렉토리 (XML pretty-print)
 │   │   └── pack.py                       # 디렉토리 → HWPX
@@ -38,7 +38,7 @@ source "$VENV"
 │   ├── analyze_template.py               # HWPX 심층 분석 (레퍼런스 기반 생성용)
 │   ├── validate.py                       # HWPX 구조 검증
 │   └── text_extract.py                   # 텍스트 추출
-├── templates/      → (junction) C:/Users/JHKIM/hwpxskill/templates/
+├── templates/
 │   ├── base/                             # 베이스 템플릿 (Skeleton 기반)
 │   │   ├── mimetype, META-INF/*, version.xml, settings.xml, Preview/*
 │   │   └── Contents/ (header.xml, section0.xml, content.hpf)
@@ -46,7 +46,7 @@ source "$VENV"
 │   ├── report/                           # 보고서 오버레이
 │   ├── minutes/                          # 회의록 오버레이
 │   └── proposal/                         # 제안서/사업개요 오버레이 (색상 헤더바, 번호 배지)
-├── examples/       → (junction) C:/Users/JHKIM/hwpxskill/examples/
+├── examples/
 │   ├── 01_basic_document.sh              # XML로 기본 문서 빌드
 │   ├── 02_gonmun_example.sh              # 공문 템플릿 사용
 │   ├── 03_report_with_table.sh           # 표 포함 보고서
@@ -54,7 +54,7 @@ source "$VENV"
 │   ├── 05_edit_existing.sh               # unpack→편집→pack
 │   ├── sample_section0.xml               # 주석 달린 section0 예제
 │   └── sample_header.xml                 # 주석 달린 header 예제
-└── references/     → (junction) C:/Users/JHKIM/hwpxskill/references/
+└── references/
     └── hwpx-format.md                    # OWPML XML 요소 레퍼런스
 ```
 

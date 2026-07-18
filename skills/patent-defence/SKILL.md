@@ -70,24 +70,24 @@ pdf/docx 파일을 md로 변환한다. 이미 md인 경우 스킵.
 1. **PDF 다운로드** — `~/.claude/skills/_shared/scripts/download_patent_pdf.py` 사용
    ```bash
    # 한국 특허 (출원번호 13자리)
-   PYTHONUTF8=1 C:/Users/JHKIM/miniconda3/python \
+   PYTHONUTF8=1 python3 \
      ~/.claude/skills/_shared/scripts/download_patent_pdf.py \
      --kr 1020230164912 1020230191689 \
      --out {출력디렉토리}/pdfs/ --verify
 
    # 국외 특허 (Google Patents ID)
-   PYTHONUTF8=1 C:/Users/JHKIM/miniconda3/python \
+   PYTHONUTF8=1 python3 \
      ~/.claude/skills/_shared/scripts/download_patent_pdf.py \
      --gp WO2020016250A1 US8088067B2 \
      --out {출력디렉토리}/pdfs/ --verify
    ```
-   - KR: `$HOME/Claude_work/.env`의 `KIPRIS_REST_AccessKey`로 `getPubFullTextInfoSearch`/`getAnnFullTextInfoSearch` 호출 → PDF 바이너리 직접 다운로드
+   - KR: `$HOME/Claude_Work/.env`의 `KIPRIS_REST_AccessKey`로 `getPubFullTextInfoSearch`/`getAnnFullTextInfoSearch` 호출 → PDF 바이너리 직접 다운로드
    - 국외: Google Patents 페이지에서 `patentimages.storage.googleapis.com` PDF URL 스크레이핑(503 발생 시 재시도+백오프)
    - `--verify`는 첫 페이지 텍스트에서 공개번호/제목을 출력하여 정합성 즉시 확인
 
 2. **MD 변환** — `pdf-to-md` 스킬(`opendataloader-pdf`)로 첫 5~10페이지를 변환
    ```bash
-   PYTHONUTF8=1 C:/Users/JHKIM/miniconda3/python \
+   PYTHONUTF8=1 python3 \
      ~/.claude/skills/pdf-to-md/scripts/pdf_to_md.py \
      --input {출력디렉토리}/pdfs/*.pdf \
      --output {출력디렉토리}/md/ --format markdown --pages "1-10"
@@ -268,3 +268,9 @@ Agent(model: sonnet)에 이번 분석 결과 + 현재 guidelines.md를 전달하
 - 기존 지침을 구체화하는 경우 기존 항목을 업데이트
 - 각 지침에 발견일자 [YYYY-MM-DD] 기재
 - 최대 50건 제한
+
+## 관련 스킬
+
+- `patent-draft-review` — 출원 전 명세서 초안 검토. 해당 건의 초안 검토 이력(청구항 구조 JSON·진보성 논거)이 있으면 Step 5 대비분석 입력으로 재사용해 분석 시간을 줄인다.
+- `patent-incubation-auto` / `patent-incubation-interactive` — 발명내용설명서 생성 단계(모순→청구항 논거의 출발점)
+- `_shared/scripts/download_patent_pdf.py` — 인용발명 공보 PDF 수집 공용 엔진 (Step 1.5에서 사용)

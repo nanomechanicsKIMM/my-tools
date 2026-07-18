@@ -52,8 +52,9 @@ def _ensure_java_on_path() -> None:
         candidates.append(Path(java_home) / "bin" / "java.exe")
     # Same Python's conda env (most common on this machine)
     candidates.append(Path(sys.prefix) / "Library" / "bin" / "java.exe")
-    # Generic conda fallback
-    candidates.append(Path("C:/Users/JHKIM/miniconda3/Library/bin/java.exe"))
+    # Generic conda fallback (any user)
+    candidates.append(Path.home() / "miniconda3" / "Library" / "bin" / "java.exe")
+    candidates.append(Path.home() / "miniconda3" / "bin" / "java")
 
     for cand in candidates:
         if cand.exists():

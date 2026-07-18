@@ -42,7 +42,7 @@ Glob "<input_dir>/*.pdf"
 `pdf-to-md` 스킬의 래퍼 스크립트를 **단일 호출**로 모든 PDF를 한꺼번에 변환한다. JVM 콜드 스타트 비용 때문에 절대 파일별 호출 금지.
 
 ```bash
-C:/Users/JHKIM/miniconda3/python C:/Users/JHKIM/.claude/skills/pdf-to-md/scripts/pdf_to_md.py \
+python3 ~/.claude/skills/pdf-to-md/scripts/pdf_to_md.py \
   --input "<input_dir>/" \
   --output "<input_dir>/md/" \
   --format markdown

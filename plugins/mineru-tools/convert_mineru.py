@@ -47,8 +47,10 @@ def convert_file(input_path: str, output_dir: str | None = None) -> str:
 
     # 1. MinerU 실행 (임시 디렉토리에 출력)
     #    MinerU CLI: mineru -p <path> -o <output> -b pipeline
-    python312 = "C:/Users/JHKIM/AppData/Local/Programs/Python/Python312/python.exe"
-    mineru_exe = str(Path(python312).parent / "Scripts" / "mineru.EXE")
+    mineru_exe = shutil.which("mineru")
+    if not mineru_exe:
+        python312 = os.path.expanduser("~/AppData/Local/Programs/Python/Python312/python.exe")
+        mineru_exe = str(Path(python312).parent / "Scripts" / "mineru.EXE")
     temp_dir = tempfile.mkdtemp(prefix="mineru_")
     try:
         result = subprocess.run(

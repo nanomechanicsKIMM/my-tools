@@ -240,6 +240,6 @@ Claude:
 
 ## 참고
 
-- 설계 플랜 원본: `C:/Users/JHKIM/Claude_Work/patent_A_CLASS/.omc/plans/patent-draft-review-skill-plan.md`
+- 설계 플랜 원본: `~/Claude_Work/patent_A_CLASS/.omc/plans/patent-draft-review-skill-plan.md`
 - 회귀 베이스라인: `tests/regression/P26057KR1-baseline/`
 - 관련 스킬: `patent-incubation-auto`, `patent-incubation-interactive`, `patent-defence`, `patent-strategy-pro`

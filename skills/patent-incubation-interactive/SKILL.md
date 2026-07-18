@@ -1,3 +1,8 @@
+---
+name: patent-incubation-interactive
+description: 사용자 주도형(대화형) TRIZ 발명 인큐베이션 스킬. 발명 아이디어를 단계별로 함께 발전 — TRIZ 시스템 분석, 모순/IFR 도출, 정량 평가, KIPRIS 선행조사, 발명내용설명서(KIMM 양식), 도면, HWPX 변환의 각 Phase마다 사용자가 검토·선택·승인하며 진행한다. '아이디어 같이 발전시키자', '단계별로 발명 검토하며 진행', '인터랙티브 발명 워크플로우', '발명 브레인스토밍부터 신고서까지' 등의 요청에 사용. 입력만 주고 무인 완전 자동 생성을 원하면 patent-incubation-auto 사용.
+---
+
 # patent-incubation: 사용자 주도형 발명 워크플로우
 
 사용자와 긴밀하게 소통하며 발명 아이디어를 체계적으로 발전시키는 스킬. TRIZ 분석 → 모순 도출 → IFR 생성 → 평가 → 선행특허 → 발명내용설명서(KIMM 양식)까지, 모든 단계에서 사용자가 판단하고 선택한다.
@@ -834,7 +839,7 @@ Gate 6 승인 직후, 도면·HWPX 변환 이전에 청구항 자체를 법적 �
 3. 선행특허 재검토 (Gate 5)
 ```
 
-> 참고: 기존 `patent-draft-review` / `review-claims` 스킬을 이 단계에서 호출 가능.
+> 참고: 기존 `patent-draft-review` 스킬을 이 단계에서 호출 가능.
 > auto-proceed 지시가 있어도 issue가 1건 이상이면 1회 사용자 확인을 요청한다.
 
 manifest 업데이트: `phase6_5: {status, issues_found, resolved}`

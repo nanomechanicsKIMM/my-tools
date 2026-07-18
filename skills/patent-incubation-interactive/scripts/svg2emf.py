@@ -19,7 +19,7 @@ INKSCAPE_PATHS = [
     r"C:/Program Files/Inkscape/bin/inkscape.exe",
     r"C:/Program Files/Inkscape/bin/inkscape.com",
     r"C:/Program Files (x86)/Inkscape/bin/inkscape.exe",
-    r"C:/Users/JHKIM/AppData/Local/Programs/Inkscape/bin/inkscape.exe",
+    os.path.expanduser("~/AppData/Local/Programs/Inkscape/bin/inkscape.exe"),
     "/Applications/Inkscape.app/Contents/MacOS/inkscape",
     "/opt/homebrew/bin/inkscape",
     "/usr/bin/inkscape",

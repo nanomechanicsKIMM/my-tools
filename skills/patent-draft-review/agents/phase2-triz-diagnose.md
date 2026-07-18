@@ -28,7 +28,7 @@ tools: Read, Write
   "spec_structure": "C:/.../output/spec_structure.json",
   "output_dir": "C:/.../output/",
   "triz_references": {
-    "principles": "C:/Users/JHKIM/.claude/skills/patent-draft-review/reference/triz-40-principles.md",
+    "principles": "~/.claude/skills/patent-draft-review/reference/triz-40-principles.md",
     "contradiction_matrix": "C:/.../reference/triz-contradiction-matrix.json",
     "separation_principles": "C:/.../reference/triz-separation-principles.md"
   }

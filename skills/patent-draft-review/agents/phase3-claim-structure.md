@@ -101,7 +101,7 @@ Phase 1이 생성한 `spec_structure.json`을 입력으로, 청구항 구조를 
 ### Step 1: claim_parser.py 실행
 
 ```bash
-python C:/Users/JHKIM/.claude/skills/patent-draft-review/scripts/claim_parser.py \
+python3 ~/.claude/skills/patent-draft-review/scripts/claim_parser.py \
   --spec "{spec_structure}" \
   --output "{output_dir}/claim_parse_raw.json"
 ```

@@ -13,9 +13,9 @@ tags: [reference, source, patent-draft-review, sync]
 
 | 파일 | 원본 경로 | 복사일 | 원본 SHA-256 (앞 16자) |
 |------|-----------|--------|------------------------|
-| `triz-40-principles.md` | `C:/Users/JHKIM/.claude/skills/patent-incubation-auto/reference/triz-40-principles.md` | 2026-04-11 | `2f0c24bdbc8cfc7d` |
-| `triz-contradiction-matrix.json` | `C:/Users/JHKIM/.claude/skills/patent-incubation-auto/reference/triz-contradiction-matrix.json` | 2026-04-11 | `97e4e8d7b7bc7559` |
-| `triz-separation-principles.md` | `C:/Users/JHKIM/.claude/skills/patent-incubation-auto/reference/triz-separation-principles.md` | 2026-04-11 | `69e36c3a1e63035f` |
+| `triz-40-principles.md` | `~/.claude/skills/patent-incubation-auto/reference/triz-40-principles.md` | 2026-04-11 | `2f0c24bdbc8cfc7d` |
+| `triz-contradiction-matrix.json` | `~/.claude/skills/patent-incubation-auto/reference/triz-contradiction-matrix.json` | 2026-04-11 | `97e4e8d7b7bc7559` |
+| `triz-separation-principles.md` | `~/.claude/skills/patent-incubation-auto/reference/triz-separation-principles.md` | 2026-04-11 | `69e36c3a1e63035f` |
 
 ## 동기화 규칙
 
@@ -30,7 +30,7 @@ tags: [reference, source, patent-draft-review, sync]
 python -c "
 import hashlib
 from pathlib import Path
-src_dir = Path('C:/Users/JHKIM/.claude/skills/patent-incubation-auto/reference')
+src_dir = Path('~/.claude/skills/patent-incubation-auto/reference')
 for name in ['triz-40-principles.md', 'triz-contradiction-matrix.json', 'triz-separation-principles.md']:
     h = hashlib.sha256((src_dir/name).read_bytes()).hexdigest()[:16]
     print(f'{name}: {h}')

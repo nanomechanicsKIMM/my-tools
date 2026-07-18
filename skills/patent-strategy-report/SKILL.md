@@ -12,6 +12,7 @@ Generates a patent strategy report (Obsidian MD) from an **RFP markdown file** a
 - User has an RFP in markdown and wants a patent strategy or landscape report.
 - User has (or will obtain) a CSV export from Google Patents for the same topic and wants structured analysis.
 - User mentions "특허 전략 보고서", "RFP 특허 검색", "Google Patents 분석", "특허 CSV 분석" in Claude Code.
+- 세부기술 분해·공백기술·OS 매트릭스·IP 창출 전략까지 포함한 심층 보고서가 필요하면 `patent-strategy-pro` 스킬(plugins/patent-tools)을 사용한다 — 본 스킬은 CSV 기반 landscape 통계·핵심특허 분석에 특화.
 
 ## Inputs
 

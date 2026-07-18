@@ -28,7 +28,7 @@ tools: Bash, Read, Write, Edit
   "abstract_drawings": "C:/.../output/abstract_drawings.json (선택, Phase 6 완료 시)",
   "references": "C:/.../output/references.json (선택, Phase 8 완료 시)",
   "invention_id": "P26057KR1_TB26021K",
-  "template_path": "C:/Users/JHKIM/.claude/skills/patent-draft-review/templates/improvement-plan-v1.md"
+  "template_path": "~/.claude/skills/patent-draft-review/templates/improvement-plan-v1.md"
 }
 ```
 
@@ -41,7 +41,7 @@ tools: Bash, Read, Write, Edit
 ### Step 1: render_report.py 호출
 
 ```bash
-python C:/Users/JHKIM/.claude/skills/patent-draft-review/scripts/render_report.py \
+python3 ~/.claude/skills/patent-draft-review/scripts/render_report.py \
   --template "{template_path}" \
   --data spec="{spec_structure}" \
   --data triz="{triz_diagnosis}" \

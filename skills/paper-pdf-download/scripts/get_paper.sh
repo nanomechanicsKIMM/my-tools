@@ -29,10 +29,17 @@ set -u
 
 SDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TMP="$HOME/.dev-browser/tmp"
-PY="${PAPER_DL_PYTHON:-C:/Users/JHKIM/miniconda3/python}"
+PY="${PAPER_DL_PYTHON:-}"
+if [ -z "$PY" ]; then
+  if command -v python3 >/dev/null 2>&1; then PY=python3
+  elif command -v python >/dev/null 2>&1; then PY=python
+  else PY="$HOME/miniconda3/python"; fi
+fi
 
 INPUT=""; OUT=""; DEST="${PAPER_DL_DEST:-.}"; BROWSER="papers"; TIMEOUT="120"; HEADED="--login"; CONNECT=""
-LIBRARY="${PAPER_DL_LIBRARY:-D:/Zettelkasten/References}"; NOLIB=""; NOFAST=""; FORCE=""; LEGACY=""
+_LIB_DEFAULT="D:/Zettelkasten/References"
+[ -d "$_LIB_DEFAULT" ] || _LIB_DEFAULT="$HOME/Zettelkasten/References"
+LIBRARY="${PAPER_DL_LIBRARY:-$_LIB_DEFAULT}"; NOLIB=""; NOFAST=""; FORCE=""; LEGACY=""
 while [ $# -gt 0 ]; do
   case "$1" in
     -d) DEST="$2"; shift 2;;

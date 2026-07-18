@@ -10,7 +10,7 @@
 
 ## 한국 특허 (KIPRIS Plus OpenAPI) — 권장
 
-`$HOME/Claude_work/.env`의 `KIPRIS_REST_AccessKey` 사용.
+`$HOME/Claude_Work/.env`의 `KIPRIS_REST_AccessKey` 사용.
 
 ### 서지정보 조회 (출원번호 기반)
 

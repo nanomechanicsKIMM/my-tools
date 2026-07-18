@@ -19,7 +19,6 @@ KIMM 연구원이 특허 아이디어를 입력하면, TRIZ 방법론으로 체�
 SKILL_ROOT = ~/.claude/skills/patent-incubation-auto
 HWPX_SKILL = ~/.claude/skills/hwpx
 HWPX_XML_SKILL = ~/.claude/skills/hwpx-xml
-PATENT_STRATEGY_SKILL = ~/.claude/skills/patent-strategy-pro
 KIPRIS_ENV_FILE = ~/Claude_Work/.env
 ```
 
@@ -631,7 +630,7 @@ manifest 업데이트:
 - 각 항목을 점검하여 issue 목록을 수집한다.
 - 자동 수정 가능한 issue(선행어 누락, 수치한정 위치, 활용성 서술 누락 등)는 **phase6 MD를 직접 보정**한다(버전 번호 유지).
 - 자동 수정이 어려운 issue(카테고리 재설계 등)는 수정하지 않고 Step 8 보고에 명시한다.
-- 참고: `patent-draft-review` / `review-claims` 스킬을 이 단계에서 호출 가능.
+- 참고: `patent-draft-review` 스킬을 이 단계에서 호출 가능.
 
 ### 에이전트 호출
 

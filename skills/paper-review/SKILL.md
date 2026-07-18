@@ -17,7 +17,7 @@ description: "학술 논문 리뷰 스킬. 논문(docx/pdf)을 분석하고 참�
 
 **실행**:
 ```bash
-PYTHONUTF8=1 C:/Users/JHKIM/miniconda3/python {skill_dir}/scripts/convert_to_md.py --input <파일경로> --output <출력폴더>
+PYTHONUTF8=1 python3 {skill_dir}/scripts/convert_to_md.py --input <파일경로> --output <출력폴더>
 ```
 
 **변환 원칙**:
@@ -38,14 +38,14 @@ PYTHONUTF8=1 C:/Users/JHKIM/miniconda3/python {skill_dir}/scripts/convert_to_md.
 
 **실행**:
 ```bash
-PYTHONUTF8=1 C:/Users/JHKIM/miniconda3/python {skill_dir}/scripts/download_refs.py --input <manuscript.md> --output <refs폴더>
+PYTHONUTF8=1 python3 {skill_dir}/scripts/download_refs.py --input <manuscript.md> --output <refs폴더>
 ```
 
 **다운로드 우선순위** (시행착오를 통해 검증된 순서):
 1. Semantic Scholar API — Open Access PDF URL 확인
-2. Publisher 직접 접근 — DOI resolve 후 출판사별 PDF URL 패턴
-3. sci-hub.vg — sci-hub 페이지에서 iframe PDF URL 추출 후 CDN에서 다운로드
-4. Google Scholar — [PDF] 링크 탐색
+2. Publisher 직접 접근 — DOI resolve 후 출판사별 PDF URL 패턴 (기관 구독 활용)
+3. Google Scholar — [PDF] 링크 탐색
+4. 위 3단계 실패 시 → **paper-pdf-download 스킬로 위임** (실제 인증 브라우저로 봇차단·기관구독 저널 수집; 페이월 우회 사이트는 사용하지 않음)
 
 **주요 출판사별 PDF URL 패턴**:
 - Nature: `{url}.pdf`
@@ -134,5 +134,4 @@ paper-review/
 
 - Windows 환경: 모든 Python 실행 시 `PYTHONUTF8=1` 필수
 - SSL 인증서 경고: `urllib3.disable_warnings()` + `verify=False`
-- sci-hub CDN (`sci.bban.top`) DNS 해석이 간헐적으로 실패할 수 있음 — 재시도로 해결
 - 에이전트 병렬 실행 시 rate limit 주의: 실패 시 그룹 분할 후 재실행

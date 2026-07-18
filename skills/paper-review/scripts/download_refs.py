@@ -2,9 +2,11 @@
 
 다운로드 우선순위 (검증된 순서):
 1. Semantic Scholar — Open Access PDF
-2. Publisher 직접 접근 — 출판사별 PDF URL 패턴
-3. sci-hub.vg — iframe에서 CDN PDF URL 추출
-4. Google Scholar — [PDF] 링크 탐색
+2. Publisher 직접 접근 — 출판사별 PDF URL 패턴 (기관 구독 활용)
+3. Google Scholar — [PDF] 링크 탐색
+
+여기서 실패한 DOI는 paper-pdf-download 스킬(인증 브라우저 경로)로 위임한다.
+페이월 우회 사이트(Sci-Hub 등)는 사용하지 않는다.
 
 사용법:
     PYTHONUTF8=1 python download_refs.py --input doi_list.txt --output ./refs
@@ -139,35 +141,7 @@ def try_publisher(doi):
     return None
 
 
-# --- Source 3: sci-hub.vg ---
-def try_scihub(doi):
-    try:
-        r = session.get(f"https://sci-hub.vg/{doi}", timeout=30)
-        if r.status_code != 200:
-            return None
-
-        # Extract iframe src (PDF URL)
-        iframes = re.findall(r'<iframe[^>]+src=["\']([^"\'\s]+)["\']', r.text)
-        if iframes:
-            pdf_url = iframes[0].split("#")[0] + "?download=true"
-            pr = session.get(pdf_url, timeout=60, headers={"Referer": "https://sci-hub.vg/"})
-            if pr.status_code == 200 and is_pdf(pr.content):
-                return pr.content
-
-        # Fallback: save button URL
-        save_urls = re.findall(r"location\.href='([^']+)'", r.text)
-        for save_url in save_urls:
-            save_url = save_url.replace("\\/", "/")
-            if "pdf" in save_url.lower():
-                pr = session.get(save_url, timeout=60, headers={"Referer": "https://sci-hub.vg/"})
-                if pr.status_code == 200 and is_pdf(pr.content):
-                    return pr.content
-    except Exception:
-        pass
-    return None
-
-
-# --- Source 4: Google Scholar ---
+# --- Source 3: Google Scholar ---
 def try_google_scholar(doi):
     try:
         r = session.get(
@@ -192,7 +166,6 @@ def try_google_scholar(doi):
 SOURCES = [
     ("SemanticScholar", try_semantic_scholar),
     ("Publisher", try_publisher),
-    ("Sci-Hub", try_scihub),
     ("GoogleScholar", try_google_scholar),
 ]
 
