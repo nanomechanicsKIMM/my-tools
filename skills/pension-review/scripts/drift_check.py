@@ -6,6 +6,8 @@
    "holdings": [{"name": "...", "code": "K5...|DEPOSIT|CASH", "value": 12345, "kind": "fund|deposit|cash"}]}
 목표(선택): --targets JSON 경로 {"코드 또는 DEPOSIT": 비중%}
 출력: 비중표 · 위험자산비중(fund_classification 기반) · 한도판정(위험≤70/단일≤40) · 목표 대비 괴리
+괴리 플래그 = 5/25 규칙(Daryanani 2008·Swedroe): 임계 = min(절대 5%p, 목표×25%), 하한 0.5%p.
+  절대 ±5%p 단독은 소액 위성(골드7/인도4%)에 트리거 불능 — 상대밴드로 보완. --band-pp/--band-rel로 조정.
 주의: 분류 기반 위험비중은 포털 공시치와 다를 수 있음(TDF 혼합형 처리 차이) — 병기 확인.
 """
 import argparse, glob, json, os, re
@@ -13,6 +15,8 @@ import argparse, glob, json, os, re
 ap = argparse.ArgumentParser()
 ap.add_argument("--holdings", default=None)
 ap.add_argument("--targets", default=None)
+ap.add_argument("--band-pp", type=float, default=5.0, help="절대 밴드 %%p (5/25의 5)")
+ap.add_argument("--band-rel", type=float, default=0.25, help="상대 밴드 비율 (5/25의 25%%)")
 a = ap.parse_args()
 
 path = a.holdings or max(glob.glob("status/holdings_*.json"),
@@ -62,10 +66,11 @@ if a.targets:
     for h in hs:
         key = h["code"] if h.get("kind", "fund") == "fund" else h["code"]
         cur[key] = cur.get(key, 0) + h["value"] / total * 100
-    print("\n목표 대비 괴리 (양수=초과보유):")
+    print("\n목표 대비 괴리 (양수=초과보유, 밴드=5/25 규칙 min(±%.0f%%p, 목표×%.0f%%)):" % (a.band_pp, a.band_rel * 100))
     keys = sorted(set(cur) | set(tg), key=lambda k: -(cur.get(k, 0)))
     for k in keys:
         c, t = cur.get(k, 0.0), float(tg.get(k, 0.0))
         nm = code2name.get(k, k)[:36]
-        flag = " ←밴드이탈" if abs(c - t) >= 5 else ""
+        thr = max(min(a.band_pp, a.band_rel * t), 0.5)
+        flag = " ←밴드이탈(±%.1f%%p)" % thr if abs(c - t) > thr else ""
         print("  %-38s 현재 %6.2f%% / 목표 %6.2f%% / 괴리 %+6.2f%%p%s" % (nm, c, t, c - t, flag))
