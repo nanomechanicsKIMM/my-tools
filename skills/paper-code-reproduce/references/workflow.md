@@ -239,12 +239,35 @@ unknown *opens the gate onto this verdict* — resolving the blocker is not repr
   stated together (e.g. "method reproduced — bone speed to ~1%; headline 0.5 m/s precision NOT
   reproduced — best miss 20 m/s = 10× the frozen tolerance"). A reader must not be able to come away
   with only the half that flatters the result.
+- **1:1 figure comparison — REQUIRED, and it is the deliverable's centre.** For every target figure,
+  embed a **side-by-side image**: the *original* paper panel (from `.pcr/paper_figs/`, the ≥600 dpi
+  extract) next to *your* reproduction, at matched axes/colormap/dynamic range where the paper's are
+  known, row-aligned by quantity. A reader must be able to *see* what matched and what did not without
+  running anything. Rules that keep it honest:
+  - **Same colormap and dynamic range on both sides** where the paper states them; if the paper's
+    range is unknown, say so under the figure rather than matching by eye (matching by eye
+    manufactures agreement — R2/R6).
+  - **Crop a multi-panel published figure to the panel you actually reproduced** (e.g. one column of a
+    6-map composite) so the comparison is genuinely 1:1, not your one panel beside six.
+  - **Caption each comparison with what matches AND what does not** — qualitative agreement is not
+    quantitative agreement; a B-mode that "looks similar" while the frozen widths miss must say so.
+    Never present a flattering crop or an enhanced image (R6: report metrics **and** pixels **and**
+    the picture).
+  - If a target figure **cannot** be reproduced (unreleased data / random realisation), show the
+    original with an explicit "not reproducible — [reason]" panel in its place, not a lookalike.
+  - Generate these composites with a small script under `code/` (reuse the figure recipe of
+    references/compare.md); verify each by **looking at it** before it goes in the report.
 - What matched / what didn't (verdict table vs `targets.json`)
 - Ledger status — including what remains unresolved and why it could not be resolved
 - **Assumption audit table** — id, statement, computed status, and whether its predicted consequence
   was observed; MARGINAL/VIOLATED entries beside the misses they explain
 - **Self-corrections** — every claim you made and later overturned, with what it damaged
 - Honest limits, and what information would resolve them
+- **If the run compared against the authors' released code** (a distinct, later phase — never during
+  the blind build): a code-comparison table (choice · our blind value · author value · MATCH/DIFFER)
+  and its lessons. A DIFFER on undocumented numerical *conditioning* (a prior's normalisation, a
+  solver's stopping rule, a caption parameter the code contradicts) is often the real story — see
+  antifooling R3, coding-pitfalls CP-6.
 
 > The most valuable section of the source project's final report was its **15 self-corrections** —
 > above all the ones where a *previous correction* was itself wrong, and where a *rule* had been built

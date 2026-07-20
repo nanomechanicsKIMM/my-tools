@@ -54,6 +54,18 @@ when candidates *bracket* the target, the metric cannot discriminate and choosin
 made CF land on 1.50 — *exactly* the paper's value — by coincidence. Had that been read as success,
 a real bug would have been shipped as a reproduction. **One metric hitting is not evidence.**
 
+**Case E — don't invent a mechanism to fit a miss (IMPACT).** Our point targets came out ~15%
+sharper than the paper's Table II. To explain it we hypothesised an unstated image-formation
+f-number (ledger M027) — but *no single f-number reproduced both depths*, so we **refused to fit
+one** and reported the gap as unexplained-and-bounded. The later code comparison proved the
+hypothesised mechanism **does not exist** — the authors image full-aperture exactly as we did, and
+their own code would miss Table II identically. Two lessons: (i) when every *modelled* stage matches
+the released code but a metric still misses, the gap is in the **paper's reported number /
+measurement definition** — bound and attribute it, do not manufacture a mechanism to close it; and
+(ii) *hypothesising* a cause is fine — **fitting** a cause you cannot independently support is the
+banned move. Had we tuned an aperture to hit 0.20 mm, we would have shipped a mechanism the code
+confirms is not there.
+
 ---
 
 ## R3 — Source hierarchy
@@ -67,6 +79,16 @@ consecutive iterations"* — exactly the implemented criterion. A config value h
 that the figure was actually described by.
 
 ⇒ Configs and logs describe *a* run. The paper body describes *the* claim.
+
+**Case (the caption lied, and it was the whole story) — IMPACT.** The Fig.3 caption stated the prior
+weight **γ = 1.0** (pure smoothness). Following it faithfully, our tomography **diverged**. The
+released code runs **γ = 0.25** (75% a layered projection that structurally forbids the lateral
+spikes that broke us). The caption contradicted the code, and that single contradiction was the
+entire instability — supplied the code's γ, our own blind code ran stably. A **figure caption is a
+label like an axis** (CP-1): a config parameter printed in a caption can be contradicted by the
+released code, and a mixture/weighting parameter is load-bearing enough to decide whether the method
+runs at all. Cross-check any caption-stated parameter against every other statement of it, and treat
+a mixture weight as a first-class HIGH ledger unknown, not a settled constant.
 
 ---
 
@@ -122,6 +144,17 @@ A measurement function is not trusted until it recovers a **planted** ground tru
    "there is nothing to read." Fixed two ways: the parser now takes the *final* grade token and
    **fails closed** (unparseable impact → HIGH; unrecognised status → not cleared), and it grew the
    planted tests it never had (`test_pcr.py::test_status_gate_fails_closed`).
+
+8. (IMPACT — a decisive-looking number from an *invalid* test) To identify which released map a
+   figure used, we measured each map's aberrator-layer thickness and compared it to the source
+   paper's per-specimen ranges. One map gave a clean, decisive mismatch — and it was **meaningless**:
+   the number we measured was the simulation's own embedding depth (varying 0.6 mm across the field),
+   not the specimen's anatomical thickness (which varies 3–7 mm). The observable did not *behave*
+   like the physical quantity it was standing in for. Caught before it was reported, by asking
+   whether the observable's **variance** matched the physical quantity's, not just whether its mean
+   landed plausibly. ⇒ **A test that yields a confident number is not thereby a valid test.** Before
+   trusting a discriminating measurement, confirm the observable actually varies the way the thing it
+   proxies varies.
 
 ⇒ Plant a known answer — at more than one value, and containing the real data's loudest competitor.
 If the tool can't find it, the tool is the finding. **The tools that enforce the rules need planted

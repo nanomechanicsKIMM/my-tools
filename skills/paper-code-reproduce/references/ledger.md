@@ -62,6 +62,26 @@ Required fields: `Needed for`, `Paper says`, `Candidates + grounds`, `Impact`, `
 
 ---
 
+## Two entry-authoring traps (IMPACT)
+
+**Decompose a regulariser / solver into separate entries — shape is a quarter of the spec.** When the
+paper names a prior, regulariser, or iterative solver, one ledger entry for "the prior" hides three
+or four independent unknowns. IMPACT stated a "3 mm Gaussian" prior and "conjugate gradient" and left
+*unstated*: the prior amplitude, whether the kernel is normalised, the noise scale, the CG stopping
+rule, and the reconstruction grid — each of which moves the numerical **conditioning**, and the
+stopping rule turned out to *be* the regularisation. Register each as its own `@missing`:
+`M-Qamp` (prior amplitude), `M-Qnorm` (kernel normalisation), `M-Rscale` (noise scale),
+`M-CGstop` (stopping rule), `M-grid` (reconstruction grid) — not one `M-prior`. A single entry
+whose "shape" is sourced clean lets the linter pass while the conditioning is wrong (coding-pitfalls
+CP-6).
+
+**A candidate can itself be an unverified assumption — existence-check it.** An IMPACT entry proposed
+resolving a metric ROI by "measuring the lesion in the released ground-truth scatterer field." There
+was **no released scatterer field**; the proposed route could never have run. The *conclusions* in a
+ledger get scrutiny; the *candidate resolutions* need the same "does this actually exist / is this
+actually stated?" check. A candidate resting on a non-existent artifact is as much an invention as an
+untagged constant.
+
 ## The gate
 
 Before any figure verdict is issued:

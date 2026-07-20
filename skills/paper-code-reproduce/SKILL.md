@@ -146,10 +146,14 @@ Details in `references/workflow.md`. Summary:
 7. **critic (after 3)** — `references/critic.md`. Unprimed: give paper + code + spec **only**.
    Default: **codex and opus crossed**. Verify claims against primary sources — and verify your
    refutations too (check field *names*, not rounded values).
-8. **report** — `output/REPORT.md`: what matched, what didn't, ledger status, **assumption audit
-   table** (id, statement, computed status, consequence observed?), **self-corrections**,
-   honest limits.
+8. **report** — `output/REPORT.md`: graded verdict, **1:1 side-by-side figure comparisons**
+   (original paper panel next to your reproduction, matched axes/colormap, honestly captioned —
+   REQUIRED, see `references/workflow.md` Phase 8), what matched / what didn't, ledger status,
+   **assumption audit table** (id, statement, computed status, consequence observed?),
+   **self-corrections**, honest limits, and — if a later phase compared against the authors' released
+   code — the code-comparison table + lessons.
    > The most valuable section of the source project's final report was its list of self-corrections.
+   > The reader must be able to *see* the reproduction beside the original, not just read numbers.
 
 **If you build the forward model yourself** (simulating the data from a geometry the paper only
 draws — k-Wave/FDTD/any solver — then running the paper's estimator on it), read
