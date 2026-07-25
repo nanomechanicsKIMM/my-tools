@@ -91,6 +91,7 @@ setup은 `skills/`와 각 플러그인의 스킬을 `~/.claude/skills/`·`~/.cod
 | 스킬 | 기능 | 이렇게 말하면 실행 |
 |------|------|------------------|
 | **frontend-slides** | 무의존성 애니메이션 HTML 프레젠테이션 제작·PPTX 변환·PDF export | "이 내용으로 웹 슬라이드 만들어줘" |
+| **pptx-layout-kits** | PptxGenJS 재사용 레이아웃 10종(minimal~datasheet)으로 편집 가능한 네이티브 PPTX 덱을 코드로 생성. 콘텐츠 한 번 작성 후 이름 문자열 하나로 룩 전환, 색 토큰으로 라이트/다크 자동 적응 | "datasheet 레이아웃으로 보고 덱 만들어줘" |
 | **pension-review** | DC형 퇴직연금 전 과정 자동화 — KOFIA NAV 수집→분배락 보정→슬롯 추천→forward-pricing 백테스트→부트스트랩 강건성→글로벌 분산→HTML 대시보드 (8단계, 분기 러너 `run_quarterly.py`) | "퇴직연금 포트폴리오 분기 점검해줘" |
 
 ## 플러그인
@@ -116,6 +117,7 @@ setup은 `skills/`와 각 플러그인의 스킬을 `~/.claude/skills/`·`~/.cod
 | hwpx / tor / purchase-requisition 등 HWPX 계열 | `python-hwpx`, `lxml` |
 | patent-strategy-report / -pro | `pandas`, `scikit-learn`, `requests`, `beautifulsoup4` |
 | pension-review | `pandas`, `numpy`, `openpyxl` |
+| pptx-layout-kits | Node.js + `pptxgenjs` 4.x (+선택: LibreOffice·poppler — 이미지 QA용) |
 | visual-generator 렌더링 | `google-genai`, `Pillow` + `GEMINI_API_KEY` |
 
 > Windows에서는 `PYTHONUTF8=1` 환경변수 필수(한국어 인코딩). python 호출은 전 스킬 `python3` PATH 우선.
