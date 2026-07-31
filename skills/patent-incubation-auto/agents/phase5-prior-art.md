@@ -15,8 +15,8 @@ model: sonnet
 ## 의존 스크립트
 
 - **search_patents_kipris.py**: `{SKILL_ROOT}/scripts/search_patents_kipris.py`
-- **KIPRIS API 키**: 환경변수 `KIPRIS_API_KEY` 또는 `KIPRIS_REST_ACCESS_KEY`
-- **API 키 위치**: `~/Claude_Work/.env`
+- **KIPRIS API 키**: 스크립트가 자동 해결 — `--key` → `KIPRIS*KEY` 형태 환경변수(대소문자 무시) → `.env` 직접 파싱
+- **API 키 위치**: `~/Claude_Work/.env` (환경변수 `KIPRIS_ENV_FILE`로 변경 가능)
 
 ## 작업
 
@@ -105,20 +105,24 @@ KIPRIS 검색식 규칙:
 
 ### Step 2: KIPRIS 검색 실행
 
-```bash
-# KIPRIS API 키 로드
-set -a
-eval "$(cat "$HOME/Claude_Work/.env" | sed 's/^[[:space:]]*//' | grep -v '^#')"
-set +a
+API 키는 스크립트가 스스로 해결하므로 `.env` 셸 로드는 필요 없다(`--key` → `KIPRIS*KEY` 환경변수 → `~/Claude_Work/.env` 직접 파싱 순, 경로는 `KIPRIS_ENV_FILE`로 변경 가능).
 
+```bash
 # 키워드 검색 (초록 + 대표청구항 포함, 상위 15건 상세 조회)
-python "{SKILL_ROOT}/scripts/search_patents_kipris.py" \
+python3 "{SKILL_ROOT}/scripts/search_patents_kipris.py" \
   --keyword "$KIPRIS_KEYWORD" \
   --max-results 50 \
   --with-detail \
   --max-detail 15 \
   -o "$OUTPUT_DIR/kipris_raw_results.csv"
 ```
+
+> [!warning] `--keyword`(freeSearchInfo)는 정밀도가 낮다
+> 실측(2026-07-31): `--keyword "마이크로LED*전사"` → 13,375건이 잡히고 `sortSpec=AD desc` 정렬 탓에 상위에 무관 문헌(예: 방광염 치료제)이 올라온다. **선행특허 스크리닝은 필드 검색을 1차로 쓴다** — `--title` / `--abstract` / `--claims` / `--ipc` / `--applicant` / `--inventor`. 필드 간에는 AND가 적용된다(실측: 초록 "전사" + 출원인 "한국기계연구원" = 178건).
+
+필드 검색 시 유의:
+- `--ipc`는 **쓴 그대로 매칭**한다. `H01L33`(24건)과 `H01L 33/00`(22건)은 다른 질의이므로 두 표기를 모두 시도한다.
+- 0건이 나와도 API 오류가 아닐 수 있다(조합이 실제로 공집합). 오류는 exit 2로 구분된다.
 
 검색 결과가 적은 경우 (< 10건):
 - 키워드를 축소하여 재검색 (AND 항목 줄이기)
@@ -127,6 +131,9 @@ python "{SKILL_ROOT}/scripts/search_patents_kipris.py" \
 검색 결과가 너무 많은 경우 (> 200건):
 - IPC 코드 추가로 범위 축소
 - AND 키워드 추가
+
+> [!important] exit 2 = KIPRIS API 오류 (출력 파일 없음)
+> degraded 모드로 넘기기 전에 `--selftest`로 원인을 확인한다. exit 0 + 0건은 "검색은 정상, 해당 없음"이다.
 
 ### Step 3: TF-IDF 유사도 분석
 
@@ -190,8 +197,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 ### Graceful Degradation
 
-KIPRIS API 실패 시:
-1. 환경변수 `KIPRIS_API_KEY` / `KIPRIS_REST_ACCESS_KEY` 확인
+KIPRIS API 실패 시(**exit 2 또는 exit 1**. exit 0 + 0건은 실패가 아니므로 degraded로 처리하지 않는다):
+1. `--selftest`를 실행해 키·엔드포인트·응답 형태를 한 번에 확인
 2. API 키 누락 또는 만료 시 → 사용자에게 안내:
    - "KIPRIS API 접속 실패. 선행특허 섹션은 수동으로 보완해 주세요."
    - §3, §4, §8에 `[선행특허 수동 보완 필요]` 플레이스홀더 삽입

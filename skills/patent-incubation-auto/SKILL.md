@@ -24,8 +24,8 @@ KIPRIS_ENV_FILE = ~/Claude_Work/.env
 
 > [!note] OS별 경로 해석
 > `~`는 홈 디렉토리로 해석한다 (Windows: `C:/Users/JHKIM`, macOS: `/Users/<user>`).
-> `KIPRIS_ENV_FILE`이 존재하지 않으면 환경변수 `KIPRIS_API_KEY`/`KIPRIS_REST_ACCESS_KEY`를
-> 직접 확인하고, 둘 다 없으면 Phase 5/6c는 degraded 모드로 진행한다.
+> KIPRIS 키는 스크립트가 `--key` → `KIPRIS*KEY` 환경변수(대소문자·언더스코어 무시) → `KIPRIS_ENV_FILE`
+> 순으로 직접 해결한다. 모두 없으면 Phase 5/6c는 degraded 모드로 진행한다.
 > Python 실행은 `python3`(PATH 우선)를 사용한다 (Windows에서 미탐지 시 `~/miniconda3/python`).
 
 ---
@@ -342,22 +342,22 @@ manifest 업데이트:
 **Agent**: `agents/phase5-prior-art.md`
 **Model**: sonnet
 
-### KIPRIS API 키 로드
+### KIPRIS API 키 (셸 로드 불필요, 2026-07-31 개정)
 
-실행 전 KIPRIS API 키를 환경변수로 로드한다:
+`search_patents_kipris.py`가 키를 스스로 해결한다: `--key` → `KIPRIS*KEY` 형태의 환경변수(대소문자·언더스코어 무시) → `.env` 파일 직접 파싱 순. `.env` 기본 경로는 `~/Claude_Work/.env`이며 `KIPRIS_ENV_FILE`로 덮어쓸 수 있다.
+
+> 이전 절차(`set -a; eval "$(cat "$KIPRIS_ENV")"`)는 셸 변수명이 대소문자를 구분해 `.env`의 `KIPRIS_REST_AccessKey`를 `KIPRIS_REST_ACCESS_KEY` 검사로 잡지 못했고, `.env` 안의 `NAME = value`(등호 앞 공백) 줄에서 `command not found`를 냈다. 셸 로드는 이제 선택 사항이다.
+
+### 실행 전 점검 (권장)
 
 ```bash
-KIPRIS_ENV="$HOME/Claude_Work/.env"
-if [ -f "$KIPRIS_ENV" ]; then
-  set -a
-  eval "$(cat "$KIPRIS_ENV" | sed 's/^[[:space:]]*//' | grep -v '^#')"
-  set +a
-fi
-
-if [ -z "$KIPRIS_API_KEY" ] && [ -z "$KIPRIS_REST_ACCESS_KEY" ]; then
-  echo "WARNING: KIPRIS API key not set. Phase 5 will run in degraded mode."
-fi
+python3 "{SKILL_ROOT}/scripts/search_patents_kipris.py" --selftest
 ```
+
+두 엔드포인트의 응답 형태·페이지네이션·상세조회를 알려진 질의로 검증한다. exit 0 = 정상, 1 = 실패 항목 있음.
+
+> [!warning] exit code 2는 "선행특허 없음"이 아니다
+> KIPRIS가 오류(잘못된 키, 서비스 장애 등)를 반환하면 스크립트는 **출력 파일을 쓰지 않고 exit 2**로 종료한다. 빈 결과 파일과 API 실패를 구분하기 위한 것이므로, exit 2를 degraded 모드로 넘기기 전에 원인을 확인한다.
 
 ### 에이전트 호출
 
@@ -372,8 +372,8 @@ Agent(
          KIPRIS search script: {SKILL_ROOT}/scripts/search_patents_kipris.py
          KIPRIS .env file: {KIPRIS_ENV_FILE}
 
-         Before calling the KIPRIS script, load env vars:
-         set -a && eval \"$(cat '{KIPRIS_ENV_FILE}' | sed 's/^[[:space:]]*//' | grep -v '^#')\" && set +a
+         The script resolves the KIPRIS key itself (--key -> KIPRIS*KEY env var,
+         case-insensitive -> {KIPRIS_ENV_FILE}). Do NOT shell-load the .env.
 
          Input: {manifest.input}
          Output: {output_dir}/prior_art.json
@@ -718,16 +718,9 @@ manifest 업데이트:
 >
 > 배경: 실전 run에서 Phase 6c가 누락됐는데 작성 에이전트가 참고문헌 20건 전부에 `(정합 확인!)`을 임의 부착 → CrossRef 재검증 시 학술 DOI 6건이 404/무관논문/제목오류로 판명된 환각 사고가 있었다. 자동 모드일수록 사용자 검토가 없어 기계 게이트(verify_citations.py)가 더 절실하다.
 
-### KIPRIS API 키 로드
+### KIPRIS API 키
 
-```bash
-KIPRIS_ENV="$HOME/Claude_Work/.env"
-if [ -f "$KIPRIS_ENV" ]; then
-  set -a
-  eval "$(cat "$KIPRIS_ENV" | sed 's/^[[:space:]]*//' | grep -v '^#')"
-  set +a
-fi
-```
+셸 로드 불필요 — `search_patents_kipris.py`와 `download_patent_pdf.py` 모두 `.env`(`~/Claude_Work/.env`)를 직접 파싱한다.
 
 ### 에이전트 호출
 
@@ -743,8 +736,8 @@ Agent(
          Patent PDF downloader: ~/.claude/skills/_shared/scripts/download_patent_pdf.py
          Zettelkasten 로컬 캐시: D:/Zettelkasten/References/ (Windows) 또는 ~/Zettelkasten/References/ (macOS) — 학술 논문 1차 조회 경로, 미존재 시 skip
 
-         Before calling download scripts, load env vars:
-         set -a && eval \"$(cat '{KIPRIS_ENV_FILE}' | sed 's/^[[:space:]]*//' | grep -v '^#')\" && set +a
+         The script resolves the KIPRIS key itself (--key -> KIPRIS*KEY env var,
+         case-insensitive -> {KIPRIS_ENV_FILE}). Do NOT shell-load the .env.
 
          Input: {manifest.input}
          Outputs:

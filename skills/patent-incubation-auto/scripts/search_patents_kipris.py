@@ -23,12 +23,32 @@ Usage:
   # JSON output
   python search_patents_kipris.py --keyword "자율주행" --format json -o results.json
 
+  # Verify both endpoints still behave as expected (no -o needed)
+  python search_patents_kipris.py --selftest
+
+Search mode selection:
+  --keyword hits freeSearchInfo. It is LOW PRECISION — "마이크로LED*전사" matches
+  13k+ documents and, sorted by application date, surfaces unrelated art. Prefer
+  the field search (--title/--abstract/--claims/--ipc/--applicant/--inventor),
+  which ANDs its fields, for prior-art screening.
+
+  --ipc matches the code as written: "H01L33" and "H01L 33/00" are different
+  queries. Try both.
+
+Exit codes:
+  0  success (0 hits is a valid success — the query simply matched nothing)
+  1  bad usage / missing API key / --selftest found a failure
+  2  KIPRIS returned an API error; NO output file is written, so an API failure
+     is never mistaken for "no prior art found"
+
 Requires:
   pip install requests
 
-Environment variables:
-  KIPRIS_API_KEY=<your_api_key>    (from plus.kipris.or.kr or data.go.kr)
-  KIPRIS_REST_ACCESS_KEY=<key>     (alternative env var name)
+API key resolution (first match wins):
+  --key CLI argument
+  any environment variable whose name contains "kipris" and "key"
+    (case- and underscore-insensitive, e.g. KIPRIS_API_KEY, KIPRIS_REST_AccessKey)
+  the .env file at DEFAULT_ENV_FILE, overridable via KIPRIS_ENV_FILE
 
 KIPRIS limits: ~1000 API calls/month (free tier), max ~30 results per page.
 """
@@ -96,18 +116,55 @@ CSV_COLUMNS = [
 # ── API key ──────────────────────────────────────────────────────────────────
 
 
+DEFAULT_ENV_FILE = Path.home() / "Claude_Work" / ".env"
+
+
+def _key_from_env_file(env_file: Path) -> str | None:
+    """Read a KIPRIS key straight from a .env file.
+
+    Shell `set -a; eval $(cat .env)` loading is case-sensitive and chokes on
+    `NAME = value` spacing, so the key silently goes missing. Parsing here makes
+    the script independent of how (or whether) the caller sourced the file.
+    """
+    if not env_file.is_file():
+        return None
+    try:
+        text = env_file.read_text(encoding="utf-8-sig")
+    except OSError:
+        return None
+
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, _, value = line.partition("=")
+        name = name.strip().lower().replace("_", "")
+        if "kipris" in name and "key" in name:
+            value = value.strip().strip("'\"")
+            if value:
+                return value
+    return None
+
+
 def get_api_key(cli_key: str | None = None) -> str:
-    """Resolve KIPRIS API key from CLI arg or environment."""
-    key = (
-        cli_key
-        or os.environ.get("KIPRIS_API_KEY")
-        or os.environ.get("KIPRIS_REST_ACCESS_KEY")
-    )
+    """Resolve KIPRIS API key from CLI arg, environment, or the .env file."""
+    key = cli_key
+    if not key:
+        for name, value in os.environ.items():
+            flat = name.lower().replace("_", "")
+            if "kipris" in flat and "key" in flat and value.strip():
+                key = value.strip()
+                break
+    if not key:
+        env_file = Path(os.environ.get("KIPRIS_ENV_FILE", DEFAULT_ENV_FILE))
+        key = _key_from_env_file(env_file)
+
     if not key:
         print(
             "KIPRIS API key required.\n"
-            "Set environment variable KIPRIS_API_KEY or KIPRIS_REST_ACCESS_KEY,\n"
-            "or use --key CLI argument.\n"
+            "Set environment variable KIPRIS_API_KEY (any KIPRIS*KEY name works),\n"
+            f"or put it in {DEFAULT_ENV_FILE} (override with KIPRIS_ENV_FILE),\n"
+            "or use the --key CLI argument.\n"
             "\n"
             "Register at: https://plus.kipris.or.kr or https://www.data.go.kr\n",
             file=sys.stderr,
@@ -126,38 +183,76 @@ def _text(el: ET.Element | None) -> str:
     return (el.text or "").strip()
 
 
+class KiprisApiError(RuntimeError):
+    """Raised when KIPRIS returns a non-success resultCode."""
+
+
+# The two KIPRIS endpoints return DIFFERENT XML shapes. Verified 2026-07-31:
+#   freeSearchInfo   -> <TotalSearchCount> + <PatentUtilityInfo> with PascalCase children
+#   getAdvancedSearch-> <totalCount>       + <item>              with camelCase children
+# Parsing only the free shape silently yields 0 results for advanced search.
+_FREE_FIELDS = {
+    "application_number": "ApplicationNumber",
+    "title": "InventionName",
+    "applicant": "Applicant",
+    "application_date": "ApplicationDate",
+    "abstract": "Abstract",
+    "open_number": "OpeningNumber",
+    "open_date": "OpeningDate",
+    "register_number": "RegistrationNumber",
+    "register_date": "RegistrationDate",
+    "publication_number": "PublicNumber",
+    "publication_date": "PublicDate",
+    "ipc": "InternationalpatentclassificationNumber",
+    "status": "RegistrationStatus",
+    "drawing_path": "DrawingPath",
+    "thumbnail_path": "ThumbnailPath",
+}
+
+_ADVANCED_FIELDS = {
+    "application_number": "applicationNumber",
+    "title": "inventionTitle",
+    "applicant": "applicantName",
+    "application_date": "applicationDate",
+    "abstract": "astrtCont",
+    "open_number": "openNumber",
+    "open_date": "openDate",
+    "register_number": "registerNumber",
+    "register_date": "registerDate",
+    "publication_number": "publicationNumber",
+    "publication_date": "publicationDate",
+    "ipc": "ipcNumber",
+    "status": "registerStatus",
+    "drawing_path": "drawing",
+    "thumbnail_path": "bigDrawing",
+}
+
+
 def _parse_search_response(xml_text: str) -> tuple[int, list[dict]]:
-    """Parse KIPRIS search response XML into (total_count, items)."""
+    """Parse either KIPRIS search response shape into (total_count, items)."""
     root = ET.fromstring(xml_text)
 
-    # Check for error
     result_code = _text(root.find(".//resultCode"))
     if result_code and result_code != "00":
         result_msg = _text(root.find(".//resultMsg"))
-        print(f"KIPRIS API error: [{result_code}] {result_msg}", file=sys.stderr)
-        return 0, []
+        raise KiprisApiError(f"[{result_code}] {result_msg or 'unknown error'}")
 
-    total_count = int(_text(root.find(".//TotalSearchCount")) or "0")
+    free_nodes = list(root.iter("PatentUtilityInfo"))
+    if free_nodes:
+        nodes, fields = free_nodes, _FREE_FIELDS
+    else:
+        nodes, fields = list(root.iter("item")), _ADVANCED_FIELDS
+
+    total_raw = (
+        _text(root.find(".//TotalSearchCount"))
+        or _text(root.find(".//totalCount"))
+        or "0"
+    )
+    total_count = int(total_raw or "0")
 
     items = []
-    for item in root.iter("PatentUtilityInfo"):
-        record = {
-            "application_number": _text(item.find("ApplicationNumber")),
-            "title": _text(item.find("InventionName")),
-            "applicant": _text(item.find("Applicant")),
-            "application_date": _text(item.find("ApplicationDate")),
-            "abstract": _text(item.find("Abstract")),
-            "open_number": _text(item.find("OpeningNumber")),
-            "open_date": _text(item.find("OpeningDate")),
-            "register_number": _text(item.find("RegistrationNumber")),
-            "register_date": _text(item.find("RegistrationDate")),
-            "publication_number": _text(item.find("PublicNumber")),
-            "publication_date": _text(item.find("PublicDate")),
-            "ipc": _text(item.find("InternationalpatentclassificationNumber")),
-            "status": _text(item.find("RegistrationStatus")),
-            "drawing_path": _text(item.find("DrawingPath")),
-            "thumbnail_path": _text(item.find("ThumbnailPath")),
-        }
+    for node in nodes:
+        record = {key: _text(node.find(tag)) for key, tag in fields.items()}
         if record["application_number"]:
             items.append(record)
 
@@ -185,12 +280,14 @@ def _parse_detail_response(xml_text: str) -> dict:
         or _text(item.find(".//astrtCont"))
     )
 
-    # Inventor
-    inventor = (
-        _text(item.find(".//InventorInfo"))
-        or _text(item.find(".//inventorInfo"))
-        or _text(item.find(".//invntNm"))
-    )
+    # Inventor — <inventorInfo> is a CONTAINER (address/code/country/engName/name),
+    # so its own .text is empty. Collect the <name> child of each block.
+    names = []
+    for block in root.iter("inventorInfo"):
+        nm = _text(block.find("name")) or _text(block.find("engName"))
+        if nm and nm not in names:
+            names.append(nm)
+    inventor = "; ".join(names) or _text(item.find(".//invntNm"))
 
     # Claim count
     claim_count = _text(item.find(".//claimCount")) or "0"
@@ -257,7 +354,7 @@ def search_free(
             print(f"KIPRIS request failed (page {page}): {e}", file=sys.stderr)
             break
 
-        count, items = _parse_search_response(resp.text)
+        count, items = _parse_search_response(resp.text)  # may raise KiprisApiError
         if page == 1:
             total_count = count
             if total_count == 0:
@@ -297,10 +394,12 @@ def search_advanced(
     total_count = 0
 
     while len(all_items) < max_results:
+        # getAdvancedSearch pages with numOfRows/pageNo — it silently IGNORES
+        # docsStart/docsCount and always returns page 1 (verified 2026-07-31).
         params: dict = {
             "ServiceKey": api_key,
-            "docsStart": (page - 1) * PAGE_SIZE + 1,
-            "docsCount": PAGE_SIZE,
+            "numOfRows": PAGE_SIZE,
+            "pageNo": page,
             "sortSpec": sort_by,
             "descSort": str(desc).lower(),
             "patent": "true",
@@ -309,13 +408,14 @@ def search_advanced(
         if title:
             params["inventionTitle"] = title
         if abstract:
-            params["abstCont"] = abstract
+            params["astrtCont"] = abstract
         if claims:
             params["claimScope"] = claims
         if applicant:
             params["applicant"] = applicant
         if inventor:
-            params["inventor"] = inventor
+            # Field is "inventors"; "inventor"/"inventorName" return resultCode 10.
+            params["inventors"] = inventor
         if ipc:
             params["ipcNumber"] = ipc
         if app_date_from and app_date_to:
@@ -483,10 +583,16 @@ def build_parser() -> argparse.ArgumentParser:
     a = p.add_argument_group("Authentication")
     a.add_argument("--key", help="KIPRIS API key (overrides env var)")
 
+    # Diagnostics
+    p.add_argument(
+        "--selftest", action="store_true",
+        help="Probe both endpoints with known-good queries and exit (no -o needed)",
+    )
+
     # Output
     p.add_argument(
-        "-o", "--output", required=True,
-        help="Output file path (.csv or .json)",
+        "-o", "--output",
+        help="Output file path (.csv or .json). Required unless --selftest.",
     )
     p.add_argument(
         "--format", choices=["csv", "json"], default=None,
@@ -502,39 +608,36 @@ def main() -> None:
 
     api_key = get_api_key(args.key)
 
-    # Determine search mode
-    use_advanced = any([args.title, args.abstract, args.claims, args.ipc])
+    if args.selftest:
+        sys.exit(run_selftest(api_key))
 
-    if use_advanced:
-        print("Using KIPRIS advanced search...", file=sys.stderr)
-        total, items = search_advanced(
-            api_key,
-            title=args.title,
-            abstract=args.abstract,
-            claims=args.claims,
-            applicant=args.applicant,
-            inventor=args.inventor,
-            ipc=args.ipc,
-            app_date_from=args.date_from,
-            app_date_to=args.date_to,
-            max_results=args.max_results,
-            sort_by=args.sort,
-            desc=not args.asc,
+    if not args.output:
+        parser.error("-o/--output is required unless --selftest is given")
+
+    # Determine search mode
+    use_advanced = any(
+        [args.title, args.abstract, args.claims, args.ipc, args.inventor]
+    )
+
+    try:
+        total, items = _dispatch_search(args, api_key, use_advanced)
+    except KiprisApiError as e:
+        print(f"KIPRIS API error: {e}", file=sys.stderr)
+        print(
+            "Aborting without writing an output file — an empty result file would "
+            "be indistinguishable from 'no prior art found'.",
+            file=sys.stderr,
         )
-    elif args.keyword:
-        print("Using KIPRIS free-text search...", file=sys.stderr)
-        total, items = search_free(
-            api_key,
-            keyword=args.keyword,
-            max_results=args.max_results,
-            sort_by=args.sort,
-            desc=not args.asc,
-        )
-    else:
-        parser.error("Provide --keyword for free search or --title/--abstract/--ipc for advanced search")
-        return
+        sys.exit(2)
 
     print(f"Total found: {total}, retrieved: {len(items)}", file=sys.stderr)
+    if total == 0:
+        print(
+            "WARNING: zero hits. Check field syntax (AND=*, OR=+, NOT=!) and note "
+            "that ipcNumber matches the code as written — 'H01L 33/00' and 'H01L33' "
+            "are different queries.",
+            file=sys.stderr,
+        )
 
     # Enrich with detail (abstract + representative claim) if requested
     if args.with_detail and items:
@@ -553,6 +656,111 @@ def main() -> None:
         write_json(items, args.output)
     else:
         write_csv(items, args.output)
+
+
+def _dispatch_search(args, api_key: str, use_advanced: bool) -> tuple[int, list[dict]]:
+    """Route to the advanced or free-text search based on supplied filters."""
+    if use_advanced:
+        print("Using KIPRIS advanced search...", file=sys.stderr)
+        return search_advanced(
+            api_key,
+            title=args.title,
+            abstract=args.abstract,
+            claims=args.claims,
+            applicant=args.applicant,
+            inventor=args.inventor,
+            ipc=args.ipc,
+            app_date_from=args.date_from,
+            app_date_to=args.date_to,
+            max_results=args.max_results,
+            sort_by=args.sort,
+            desc=not args.asc,
+        )
+    if args.keyword:
+        print("Using KIPRIS free-text search...", file=sys.stderr)
+        return search_free(
+            api_key,
+            keyword=args.keyword,
+            max_results=args.max_results,
+            sort_by=args.sort,
+            desc=not args.asc,
+        )
+
+    print(
+        "Provide --keyword for free search, or --title/--abstract/--claims/"
+        "--ipc/--inventor for advanced search.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+
+# ── Self-test ────────────────────────────────────────────────────────────────
+
+
+def run_selftest(api_key: str) -> int:
+    """Probe both endpoints with known-good queries. Returns a shell exit code.
+
+    Guards the response-shape and pagination assumptions that silently broke
+    advanced search before 2026-07-31.
+    """
+    failures = []
+
+    def check(label: str, condition: bool, detail: str = "") -> None:
+        mark = "PASS" if condition else "FAIL"
+        print(f"  [{mark}] {label}{(' — ' + detail) if detail else ''}")
+        if not condition:
+            failures.append(label)
+
+    print("KIPRIS self-test")
+
+    try:
+        total, items = search_free(api_key, keyword="전사", max_results=5)
+        check("free-text search returns items", bool(items), f"total={total}, got={len(items)}")
+        check(
+            "free-text records carry a title",
+            bool(items and items[0].get("title")),
+            (items[0].get("title", "")[:30] if items else "no items"),
+        )
+    except (KiprisApiError, requests.RequestException) as e:
+        check("free-text search", False, str(e))
+
+    try:
+        total, items = search_advanced(api_key, title="레이저*전사", max_results=5)
+        check("advanced search returns items", bool(items), f"total={total}, got={len(items)}")
+        check(
+            "advanced records parse camelCase fields",
+            bool(items and items[0].get("title") and items[0].get("applicant")),
+            (items[0].get("title", "")[:30] if items else "no items"),
+        )
+    except (KiprisApiError, requests.RequestException) as e:
+        check("advanced search", False, str(e))
+
+    try:
+        total, items = search_advanced(api_key, title="레이저*전사", max_results=25)
+        nums = [i["application_number"] for i in items]
+        check(
+            "advanced pagination yields distinct records",
+            len(nums) == len(set(nums)),
+            f"{len(nums)} records, {len(set(nums))} unique",
+        )
+    except (KiprisApiError, requests.RequestException) as e:
+        check("advanced pagination", False, str(e))
+
+    try:
+        total, items = search_advanced(api_key, inventor="김재현", max_results=3)
+        check("advanced inventor field accepted", total > 0, f"total={total}")
+    except (KiprisApiError, requests.RequestException) as e:
+        check("advanced inventor field accepted", False, str(e))
+
+    try:
+        detail = fetch_detail(api_key, "1020130047695")
+        check("detail returns representative claim", bool(detail.get("representative_claim")))
+        check("detail returns inventor name", bool(detail.get("inventor")), detail.get("inventor", "")[:30])
+    except requests.RequestException as e:
+        check("detail fetch", False, str(e))
+
+    print(f"\n{'ALL PASS' if not failures else str(len(failures)) + ' FAILED: ' + ', '.join(failures)}")
+    return 0 if not failures else 1
 
 
 if __name__ == "__main__":
