@@ -1,0 +1,7 @@
+interface:
+  display_name: "Graph Patent Incubation"
+  short_description: "그래프 기반 특허 후보 도출 및 신고서 자동 작성"
+  default_prompt: "Use $patent-incubation-graph to derive patent candidates from a technology graph and draft a KIMM invention disclosure."
+
+policy:
+  allow_implicit_invocation: true
