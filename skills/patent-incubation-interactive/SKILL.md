@@ -354,10 +354,13 @@ Agent(
          Read {SHARED_SKILL_ROOT}/reference/triz-contradiction-matrix.json for matrix lookup.
          Read {SHARED_SKILL_ROOT}/reference/triz-40-principles.md for principle details.
          Read {SHARED_SKILL_ROOT}/reference/triz-separation-principles.md for separation laws.
+         Read {SHARED_SKILL_ROOT}/reference/contradiction-deepening.md for the deepening protocol (P1~P10) — apply to 핵심 contradictions.
          Read {output_dir}/triz_system.json for Phase 1 output.
          Input: {manifest.input}
          Output: {output_dir}/triz_analysis.json
-         CRITICAL: Generate at least 10 IFRs. Each IFR must cite applied principle numbers."
+         CRITICAL: Generate at least 10 IFRs. Each IFR must cite applied principle numbers.
+         CRITICAL: For each quantitative limit claim, tag approx_level (geo|gaussian|wave|measured)
+         and provisional (true/false) per deepening protocol P6."
 )
 ```
 
@@ -410,7 +413,14 @@ Agent(
 3. 특정 모순이 부적절함 → 수정/삭제 지정
 4. 모순의 중요도 순서를 조정하고 싶음
 5. 시스템 분석으로 되돌아가기 (Gate 1) → 파라미터 변경
+6. 모순 심화 요청 → 심화 프로토콜(다중 렌즈·불변량·공리 분해·배율 회계) 적용 후 재제시
 ```
+
+**모순 심화(선택지 6)**: `{SHARED_SKILL_ROOT}/reference/contradiction-deepening.md`의 P1~P5를
+지정 모순에 적용 — TC↔PC↔근저 PC 3렌즈 순환, 불변량(보존곱) 검사, 공리 분해표(실현측 A/요구측 B),
+요구비·갭의 수치 확정과 배율 회계. 심화 결과의 정량 한계에는 근사 계층 태그(P6)를 붙이고,
+잠정(provisional) 한계가 핵심 우위 논거이면 Phase 6 진입 전 사전 등록 수치 검증(P7, 베이스라인
+동시 재측정 P8 포함)을 제안한다. 전 IFR에 자기모순 감사(P9) 1줄, 기각분은 반대심문 기록(P10)으로 보존.
 
 **피드백 반영**: 모순 추가/수정/삭제 → `triz_analysis.json` 업데이트. 모순 변경 시 해당 IFR도 재생성.
 

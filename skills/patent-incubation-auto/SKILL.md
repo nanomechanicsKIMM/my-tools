@@ -225,11 +225,14 @@ Agent(
          Read {SKILL_ROOT}/reference/triz-contradiction-matrix.json for matrix lookup.
          Read {SKILL_ROOT}/reference/triz-40-principles.md for principle details.
          Read {SKILL_ROOT}/reference/triz-separation-principles.md for separation laws.
+         Read {SKILL_ROOT}/reference/contradiction-deepening.md for the deepening protocol (P1~P10) — apply to 핵심 contradictions.
          Read {output_dir}/triz_system.json for Phase 1 output.
          Input: {manifest.input}
          Output: {output_dir}/triz_analysis.json
 
-         CRITICAL: Generate at least 10 IFRs. Each IFR must cite applied principle numbers."
+         CRITICAL: Generate at least 10 IFRs. Each IFR must cite applied principle numbers.
+         CRITICAL: For each quantitative limit claim, tag approx_level (geo|gaussian|wave|measured)
+         and provisional (true/false) per deepening protocol P6."
 )
 ```
 
@@ -243,6 +246,16 @@ Agent(
 생성된 `triz_analysis.json`의 `ifr_count`가 10 미만이면:
 - 에이전트를 재호출하여 추가 모순 쌍 탐색 (최대 2회 재시도)
 - 재시도 후에도 10개 미만이면 현재 결과로 진행 (사용자에게 안내)
+
+### 모순 심화 프로토콜 (2026-08-08 신설 — `reference/contradiction-deepening.md`)
+
+핵심 모순(purpose_relation=핵심)에는 심화 프로토콜 P1~P10을 적용한다. 오케스트레이터 준수 사항:
+
+- **P6 게이트**: `triz_analysis.json`에서 `provisional: true`인 정량 한계는 Phase 6 발명내용설명서의
+  정량 문안에 넣지 않는다(§9 검증 필요 사항으로만 기재). 기하 근사 한계가 명세서에 실리면
+  파동광학 검증에서 4~5배 오차로 뒤집힌 실사례가 있다(구면 NED 2026-08-08).
+- **P7 게이트**: 잠정 한계가 발명의 핵심 우위 논거이면 Phase 6 진입 전 사전 등록 수치 검증
+  (계획 고정 → 실행 → 게이트 판정)을 사용자에게 제안한다. 검증 시 베이스라인 동시 재측정(P8) 필수.
 
 ---
 
