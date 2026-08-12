@@ -10,10 +10,10 @@ description: "그래프 기반 특허 도출 스킬. 기술문서·아이디어�
 ## Skill Constants
 
 ```
-SKILL_ROOT = ~/.codex/skills/patent-incubation-graph
-AUTO_SKILL_ROOT = ~/.codex/skills/patent-incubation-auto
-HWPX_SKILL = ~/.codex/skills/hwpx
-HWPX_XML_SKILL = ~/.codex/skills/hwpx-xml
+SKILL_ROOT = ~/.claude/skills/patent-incubation-graph
+AUTO_SKILL_ROOT = ~/.claude/skills/patent-incubation-auto
+HWPX_SKILL = ~/.claude/skills/hwpx
+HWPX_XML_SKILL = ~/.claude/skills/hwpx-xml
 KIPRIS_ENV_FILE = ~/Claude_Work/.env
 ```
 
@@ -97,6 +97,25 @@ Scope -> document fan-out extraction -> reduce/canonicalize -> gap lens fan-out
 -> candidate synthesis -> candidate/prior-art fan-out -> edge verification
 -> selection -> disclosure draft -> claim/figure/citation/critic gates -> HWPX
 ```
+
+## Model Routing (2026-08-12 신설)
+
+에이전트 호출 시 phase별 기본 모델 배치. fan-out 물량 단계는 저비용 모델, 창의 핵심·적대 검증은 고성능 모델로 비대칭 배치하여 품질을 유지하면서 비용·시간을 절감한다. `Agent(model=...)` 파라미터로 지정한다.
+
+| 단계 | 작업 | model |
+|------|------|-------|
+| G1 스키마 | 노드/엣지 타입·동의어 사전·claim_element 규칙 정의 | sonnet |
+| G2 추출 (fan-out) | 문서별 1차 원자 주장 추출 — corpus 문서 수만큼 병렬 | haiku |
+| G2 정규화 (reduce) | canonicalize·중복 병합·coverage gate 판정 | sonnet |
+| G3 공백 탐색 | gap/브리지/회피설계 기회 발굴 | opus |
+| G4 후보 생성 | 발명 후보 경로 창출 — 창의 핵심 단계 | **fable** |
+| G5 포트폴리오 평가 | 6축 채점 + devil's advocate 문단 | opus |
+| G6 선행조사 병합 | KIPRIS/Google Patents 검색·그래프 병합 | sonnet |
+| Step 7 QA gates | edge gate 검증 (schema/ID 무결성 등 결정적 검사는 코드로 처리) | sonnet |
+| D1 명세 작성 | 발명내용설명서 + claim_graph_map — 청구항 포함 최고가치 산출물 | **fable** |
+| Step 10 하드닝/도면/인용 | Phase 6.5·6b·6c 재사용 | sonnet |
+| Step 10 critic 2단 | Phase 6d(등록 가능성)·6e(사업화) 재사용 | opus |
+| Step 11 HWPX | convert_hwpx.py 변환 | sonnet |
 
 ## Workflow
 

@@ -34,8 +34,8 @@ SKILL_ROOT = os.environ.get(
 )
 TEMPLATE_PATH = os.path.join(SKILL_ROOT, "assets", "[KIMM]직무발명내용설명서_양식.hwpx")
 
-HWPX_SKILL = os.environ.get("HWPX_SKILL", os.path.expanduser("~/.codex/skills/hwpx"))
-HWPX_XML_SKILL = os.environ.get("HWPX_XML_SKILL", os.path.expanduser("~/.codex/skills/hwpx-xml"))
+HWPX_SKILL = os.environ.get("HWPX_SKILL", os.path.expanduser("~/.claude/skills/hwpx"))
+HWPX_XML_SKILL = os.environ.get("HWPX_XML_SKILL", os.path.expanduser("~/.claude/skills/hwpx-xml"))
 FIX_NS_SCRIPT = os.path.join(HWPX_SKILL, "scripts", "fix_namespaces.py")
 VALIDATE_SCRIPT = os.path.join(HWPX_XML_SKILL, "scripts", "validate.py")
 

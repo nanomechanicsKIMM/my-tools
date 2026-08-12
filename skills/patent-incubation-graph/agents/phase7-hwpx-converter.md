@@ -15,8 +15,8 @@ model: sonnet
 ## 의존 스크립트
 
 - **convert_hwpx.py**: `{SKILL_ROOT}/scripts/convert_hwpx.py` — 메인 변환 스크립트 (권장)
-- **fix_namespaces.py**: `~/.codex/skills/hwpx/scripts/fix_namespaces.py`
-- **validate.py**: `~/.codex/skills/hwpx-xml/scripts/validate.py`
+- **fix_namespaces.py**: `~/.claude/skills/hwpx/scripts/fix_namespaces.py`
+- **validate.py**: `~/.claude/skills/hwpx-xml/scripts/validate.py`
 
 ## 권장 실행 방법 (스크립트 직접 호출)
 

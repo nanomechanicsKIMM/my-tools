@@ -102,13 +102,13 @@ Phase 6 에이전트가 §1~§9 작성 시, TRIZ 분석 결과를 일반적인 �
 ```
 Step 0: 입력 수집 ──────────────────── 사용자 상호작용
 Step 1: TRIZ 시스템 분석 (Phase 1) ─── sonnet 에이전트
-Step 2: 모순 + IFR 생성 (Phase 2) ──── opus 에이전트
+Step 2: 모순 + IFR 생성 (Phase 2) ──── fable 에이전트
 Step 3: 사용자 검토 게이트 ──────────── 사용자 상호작용 (결과 표시 + 선택)
-Step 4: 정량 평가 (Phase 4) ─────────── sonnet 에이전트
+Step 4: 정량 평가 (Phase 4) ─────────── haiku 에이전트
 Step 5: 선행특허 조사 (Phase 5) ─────── sonnet 에이전트 (자기공지 논문 + 자기선행 특허 조사 포함)
-Step 5.5: 특허성 재채점 ────────────── sonnet 에이전트 (Phase 5 반영 + 반대심문)
+Step 5.5: 특허성 재채점 ────────────── opus 에이전트 (Phase 5 반영 + 반대심문)
 Step 5b: 중간 진행 보고 ────────────── 사용자에게 진행 상황 표시
-Step 6: 발명내용설명서 작성 (Phase 6) ── opus 에이전트
+Step 6: 발명내용설명서 작성 (Phase 6) ── fable 에이전트
 Step 6.5: 청구항 하드닝 (자동 점검+수정) ─ 오케스트레이터 자동 처리
 Step 6b: 도면 생성 (Phase 6b) ───────── sonnet 에이전트 (컬러 SVG → PPTX 덱 → 600dpi PNG)
 Step 6c: 인용문헌 정합성 검증 & PDF (Phase 6c) ── sonnet 에이전트 + 강제 게이트
@@ -117,6 +117,17 @@ Step 6e: 사업화 Critic ──────────────── opus 
 Step 7: HWPX 변환 (Phase 7) ─────────── sonnet 에이전트
 Step 8: 최종 출력 및 안내 ──────────── 사용자에게 결과 안내
 ```
+
+### 모델 라우팅 원칙 (2026-08-12 개정)
+
+생성(저비용)↔검증(고성능)의 비대칭 배치로 품질을 유지하면서 비용·시간을 절감한다.
+
+| 모델 | 역할 | 배치 Phase |
+|------|------|-----------|
+| **fable** | 발명 창의 핵심·최고가치 산출물 — 모순/IFR 창출, 청구항 포함 명세 작성 | Phase 2, Phase 6 |
+| **opus** | 적대적 검증·법률/전략 추론 — 반대심문, critic 2단 | Step 5.5, Phase 6d, Phase 6e |
+| **sonnet** | 표준 구조화·도구 실행 — 분석, 검색, 하드닝, 도면, 인용 검증, HWPX 변환 | Phase 1, 5, 6.5, 6b, 6c, 7 |
+| **haiku** | 템플릿 기반 채점·경량 기계 작업 (Step 5.5의 opus 재채점이 특허성 축을 보정) | Phase 4 |
 
 ---
 
@@ -215,12 +226,12 @@ Agent(
 ## Step 2: 모순 도출 + IFR 생성 (Phase 2)
 
 **Agent**: `agents/phase2-contradiction-ifr.md`
-**Model**: opus
+**Model**: fable — 모순 도출과 IFR 창출은 발명의 창의 핵심 단계
 
 ```
 Agent(
   subagent_type="general-purpose",
-  model="opus",
+  model="fable",
   prompt="Read {SKILL_ROOT}/agents/phase2-contradiction-ifr.md for instructions.
          Read {SKILL_ROOT}/reference/triz-contradiction-matrix.json for matrix lookup.
          Read {SKILL_ROOT}/reference/triz-40-principles.md for principle details.
@@ -329,12 +340,12 @@ manifest 업데이트:
 ## Step 4: 정량 평가 & 순위화 (Phase 4)
 
 **Agent**: `agents/phase4-evaluator.md`
-**Model**: sonnet
+**Model**: haiku — evaluation-matrix.md 템플릿 기반 채점(경량). 특허성 축은 Step 5.5에서 opus가 선행특허 실측으로 재채점·반대심문하므로 채점 편향이 보정된다.
 
 ```
 Agent(
   subagent_type="general-purpose",
-  model="sonnet",
+  model="haiku",
   prompt="Read {SKILL_ROOT}/agents/phase4-evaluator.md for instructions.
          Read {output_dir}/triz_analysis.json for IFR list.
          Read {SKILL_ROOT}/templates/evaluation-matrix.md for scoring template.
@@ -450,7 +461,7 @@ manifest 업데이트:
 
 ## Step 5.5: 특허성 재채점 (Phase 5 반영)
 
-**Model**: sonnet
+**Model**: opus — 재채점·반대심문은 적대적 법률 추론 (haiku 채점 대비 강한 검증 레인)
 **목적**: Phase 4가 특허성(0.20)을 선행특허 조사(Phase 5) **이전에** 채점했으므로, 조사 결과(신규성/진보성 실측)를 반영해 특허성 축을 재채점한다. 단일 평가자 + LLM 낙관 편향으로 인한 점수 인플레이션을 반대심문(devil's advocate) 레인으로 교정한다.
 
 > [!note] degraded 시 스킵
@@ -461,7 +472,7 @@ manifest 업데이트:
 ```
 Agent(
   subagent_type="general-purpose",
-  model="sonnet",
+  model="opus",
   prompt="특허성 재채점 및 반대심문을 수행한다.
          Read {output_dir}/evaluation.json for current patentability scores.
          Read {output_dir}/prior_art.json for ifr_coverage(novel/partial/disclosed) and rejection_combinations.
@@ -522,12 +533,12 @@ Phase 4~5 완료 후, Phase 6 진입 전에 사용자에게 중간 진행 상황
 ## Step 6: 발명내용설명서 최종 작성 (Phase 6)
 
 **Agent**: `agents/phase6-disclosure-writer.md`
-**Model**: opus
+**Model**: fable — 청구항을 포함한 최고가치 산출물 작성
 
 ```
 Agent(
   subagent_type="general-purpose",
-  model="opus",
+  model="fable",
   prompt="Read {SKILL_ROOT}/agents/phase6-disclosure-writer.md for instructions.
          Read {SKILL_ROOT}/templates/disclosure-report.md for MD template.
          Read {SKILL_ROOT}/reference/user-philosophy.md for inventor philosophy.

@@ -119,7 +119,7 @@ Phase 0: 발명 씨앗 대화 ─────────── 사용자 주도
 Phase 1: 시스템 분석 ────────────── sonnet 에이전트
   ├─ Gate 1: 시스템 모델 검토 ───── 사용자 판단 [auto-skip 가능]
   │
-Phase 2: 모순 도출 + IFR 생성 ──── opus 에이전트
+Phase 2: 모순 도출 + IFR 생성 ──── fable 에이전트
   ├─ Gate 2A: 모순 검토 ─────────── 사용자 판단 [필수]
   │  └─ Background: KIPRIS 예비 검색 시작
   ├─ Gate 2B: IFR 선별 ──────────── 사용자 선택 [필수]
@@ -131,7 +131,7 @@ Phase 4: IFR 정량 평가 ──────────── sonnet 에이전
 Phase 5: 선행특허 조사 ──────────── sonnet 에이전트 (Background 결과 활용)
   ├─ Gate 5: 차별성 전략 결정 ───── 사용자 판단 [필수]
   │
-Phase 6: 발명내용설명서 초안 ────── opus 에이전트
+Phase 6: 발명내용설명서 초안 ────── fable 에이전트
   ├─ Gate 6: 섹션별 검토 ────────── 사용자 판단 [필수]
   │  └─ Background: 도면 선행 생성
   │
@@ -148,6 +148,20 @@ Phase 6e: 사업화 Critic ─────────── opus 에이전트 (
 Phase 7: HWPX 변환 ──────────────── sonnet 에이전트 (정합 반복 최대 3회)
   └─ Gate 7: 최종 확인 ──────────── 사용자 확인 [auto-skip 가능]
 ```
+
+### 모델 라우팅 원칙 (2026-08-12 개정)
+
+생성(저비용)↔검증(고성능)의 비대칭 배치로 품질을 유지하면서 비용·시간을 절감한다.
+
+| 모델 | 역할 | 배치 |
+|------|------|------|
+| **fable** | 발명 창의 핵심·최고가치 산출물 — 모순/IFR 창출(Gate 2A/2B 수정 반영 포함), 청구항 포함 명세 작성 | Phase 2, Phase 6 |
+| **opus** | 적대적 검증·법률/전략 추론 — critic 2단 | Phase 6d, Phase 6e |
+| **sonnet** | 표준 구조화·도구 실행 — 분석, 평가(Gate 4 사용자 검토용 근거 서술), 선행조사, 도면, 인용 검증, HWPX 변환 | Phase 1, 4, 5, 6b, 6c, 7, Background 도면 선행 생성 |
+| **haiku** | 경량 백그라운드 작업 — 키워드 추출 + 스크립트 실행 (본조사는 Phase 5 sonnet이 수행) | KIPRIS 예비/정밀 Background Prefetch |
+
+> Phase 4를 auto 스킬과 달리 sonnet으로 유지하는 이유: interactive는 Gate 4에서 사용자가
+> scoring_rationale을 직접 검토하며, auto의 Step 5.5(opus 재채점) 보정 단계가 없다.
 
 ---
 
@@ -349,7 +363,7 @@ manifest 업데이트: `current_gate: "gate_2a"`, `gates.gate_1: {iterations, de
 ```
 Agent(
   subagent_type="general-purpose",
-  model="opus",
+  model="fable",
   prompt="Read {SKILL_ROOT}/agents/phase2-contradiction-ifr.md for instructions.
          Read {SHARED_SKILL_ROOT}/reference/triz-contradiction-matrix.json for matrix lookup.
          Read {SHARED_SKILL_ROOT}/reference/triz-40-principles.md for principle details.
@@ -431,7 +445,7 @@ Gate 2A 제시 **직후**, 사용자 검토 중에 KIPRIS 예비 검색을 backg
 ```
 Agent(
   subagent_type="general-purpose",
-  model="sonnet",
+  model="haiku",
   prompt="KIPRIS 예비 검색. manifest.input의 기술분야/아이디어에서 핵심 키워드 3-5개를 추출하여 검색.
          Script: {SHARED_SKILL_ROOT}/scripts/search_patents_kipris.py
          .env: {KIPRIS_ENV_FILE}
@@ -477,7 +491,7 @@ IFR(이상적 해결 방안) 목록 — {N}개 생성
 
 **피드백 유형별 처리**:
 - **선택적 채택**: 선택된 IFR만 `triz_analysis.json`에 `selected: true` 표시
-- **수정/합치기**: opus 에이전트에 수정 지시 → IFR 업데이트
+- **수정/합치기**: fable 에이전트에 수정 지시 → IFR 업데이트
 - **새 아이디어 추가**: 사용자 아이디어를 IFR 형식으로 변환
 - **되돌아가기**: Gate 2A로 복귀, `triz_analysis.json` IFR 부분 무효화
 
@@ -488,7 +502,7 @@ Gate 2B 제시 **직후**, 확정된 모순 기반으로 정밀 검색 시작:
 ```
 Agent(
   subagent_type="general-purpose",
-  model="sonnet",
+  model="haiku",
   prompt="KIPRIS 정밀 검색. 확정된 모순의 핵심 키워드 + IFR 키워드로 검색.
          이전 예비 검색 결과: {output_dir}/kipris_prefetch.json (있으면 참조)
          Script: {SHARED_SKILL_ROOT}/scripts/search_patents_kipris.py
@@ -683,7 +697,7 @@ PYTHONUTF8=1 python3 \
 ```
 Agent(
   subagent_type="general-purpose",
-  model="opus",
+  model="fable",
   prompt="Read {SKILL_ROOT}/agents/phase6-disclosure-writer.md for instructions.
          Read {SHARED_SKILL_ROOT}/templates/disclosure-report.md for MD template.
          Read {SHARED_SKILL_ROOT}/reference/user-philosophy.md for inventor philosophy.
