@@ -19,6 +19,19 @@
 
 LLM이 SVG XML을 직접 작성하는 것이 특허 도면 작성에 가장 효과적이다.
 
+> [!warning] 2026-08-08 개정 — 기본 경로를 patent_svg 래퍼(drawsvg)로 교체
+> 위 표의 "외부 라이브러리 기각" 판정은 구면 NED 세션 실측으로 뒤집혔다: 손코딩 좌표 암산의
+> 기하 오류(광학 비평 issue 9건), 파라미터 변경 시 전면 재작도(R 30→43), 파이프라인 이원화.
+> **신규 기본 경로 = `scripts/patent_svg/`** (계산-렌더 분리: geometry 물리 좌표 계산 →
+> primitives/annotations 렌더 → validators QA 게이트(라벨 충돌·지시선 관통·viewBox·글리프)
+> 0건 → exporters 저장+FigureSpec 동반). 의존성: `pip install drawsvg svgpathtools cairosvg`
+> (전부 경량 MIT). 손코딩 SVG는 구성요소 5개 이하의 1회성 도면 fallback으로만 유지한다.
+> 파일럿 검증(2026-08-08, 구면 NED v17 개념도 3매): validators 0건, 비평 issue 9건→1건(경미),
+> SVG `<use>` 0건(PowerPoint 도형 변환 안전), 파라미터 교체 재실행으로 전 도면 자동 갱신.
+> 폰트 주의: font-family는 **따옴표 없는 목록**("Apple SD Gothic Neo, AppleGothic, Malgun
+> Gothic, sans-serif") — cairosvg가 quoted 목록을 해석하지 못함. µ(U+00B5)는 미렌더 —
+> mm 환산 표기. 근거 문서: my-tools 루트 `(20260808) ... SVG 도면 생성 개선방안`.
+
 ---
 
 ## 2. 디자인 컨벤션 (KIMM 발명 도면 표준)

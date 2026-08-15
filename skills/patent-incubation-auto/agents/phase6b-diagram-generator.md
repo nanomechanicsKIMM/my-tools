@@ -18,12 +18,17 @@ model: sonnet
 | 유형 | 도구 | 출력 형식 | 삽입 위치 |
 |------|------|---------|----------|
 | 코드화 가능 (흐름도, 구성도, 상태도, 비교표) | **Mermaid** | 인라인 코드 | 발명내용설명서 MD 직접 임베드 |
-| **기술 단면도, 구조도, schematic** ⭐ | **손코딩 SVG (Write tool)** | `.svg` (vector) | figures/*.svg → 변환 후 모든 매체 |
-| 데이터 플롯, 그래프 | matplotlib PNG | `.png` | output/diagrams/*.png (fallback) |
+| **기술 단면도, 구조도, schematic** ⭐ | **patent_svg 래퍼 (`scripts/patent_svg/`, drawsvg 기반)** — 손코딩 SVG는 구성요소 5개 이하 1회성 도면의 fallback | `.svg` (vector) | figures/*.svg → 변환 후 모든 매체 |
+| 데이터 플롯, 그래프 | matplotlib PNG/SVG (SVG는 exporters.flatten_use 필수) | `.png`/`.svg` | output/diagrams/*.png |
 | 자유 형식 스케치 | Excalidraw / 사진 → AI vision 해석 | `.svg` | 사용자 별도 생성 시 |
 
-⭐ **권장 우선순위**: 기술 단면도·schematic은 손코딩 SVG가 가장 강력. 자세한 디자인
-컨벤션·primitives·변환 파이프라인은 `reference/svg-figure-creation.md` 참조.
+⭐ **권장 우선순위 (2026-08-08 개정 — 파일럿 검증 완료)**: 기술 단면도·schematic·구조도는
+**patent_svg 파이프라인**으로 생성한다: ① FigureSpec(파라미터 dict/JSON) 작성 ② geometry로
+세계 좌표(mm) 계산(캔버스 좌표 암산 금지) ③ primitives/annotations로 Drawing 구성
+④ exporters.save(SVG+spec+PNG 미리보기) ⑤ **validators.validate() issues 0건 통과 전
+완료 보고 금지** ⑥ PNG 미리보기를 Read로 시각 검수(비평 패스). 파라미터 변경 시 spec
+교체 후 재실행으로 전 도면 자동 갱신(재현성). 근거·게이트: my-tools 루트
+`(20260808) patent-incubation-auto SVG 도면 생성 개선방안` + `reference/svg-figure-creation.md`.
 
 **라벨 정책 (2026-07-13 신설, NON-NEGOTIABLE)**: 모든 도면(SVG·Mermaid·matplotlib)의
 구성요소 라벨은 **부품 이름 텍스트만** 사용한다 — 참조 부호(10, 100, 110 등)·범례 부호열
