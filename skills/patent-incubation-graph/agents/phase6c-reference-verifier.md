@@ -23,14 +23,14 @@
 
 | 유형 | 1차 조회 | 2차 조회 | PDF 확보 |
 |------|---------|---------|---------|
-| KR 특허 | KIPRIS Plus OpenAPI | KIPRIS 웹 | `~/.codex/skills/_shared/scripts/download_patent_pdf.py --kr` |
-| 외국 특허 | Google Patents | Espacenet | `~/.codex/skills/_shared/scripts/download_patent_pdf.py --gp` |
+| KR 특허 | KIPRIS Plus OpenAPI | KIPRIS 웹 | `~/.claude/skills/_shared/scripts/download_patent_pdf.py --kr` |
+| 외국 특허 | Google Patents | Espacenet | `~/.claude/skills/_shared/scripts/download_patent_pdf.py --gp` |
 | DOI 논문 | CrossRef API | OpenAlex API | OA URL 직접 GET, Zettelkasten 복사 |
 | 논문(제목만) | Semantic Scholar | Google Scholar (WebFetch) | OpenAlex OA URL, arXiv |
 | 보고서·웹 문서 | 직접 URL WebFetch | — | WebFetch → PDF URL |
 
 **공용 스크립트**:
-- 특허 다운로드: `~/.codex/skills/_shared/scripts/download_patent_pdf.py`
+- 특허 다운로드: `~/.claude/skills/_shared/scripts/download_patent_pdf.py`
   - 사용법: `python download_patent_pdf.py --kr <13자리출원번호...> --out <dir> --verify`
   - `--verify` 플래그가 PDF 첫 페이지 텍스트를 추출하여 제목 일치 확인
 - KIPRIS .env 로드: `set -a && eval "$(cat '$HOME/Claude_Work/.env' | grep -v '^#')" && set +a`
@@ -73,7 +73,7 @@ Phase 6 MD를 파싱하여 아래 영역에서 인용을 수집한다. **없는 
 # download_patent_pdf.py --kr 사용
 # --verify 플래그가 자동으로 PDF 첫 페이지 텍스트 추출 후 제목/출원인 비교
 subprocess.run([
-    "python", "~/.codex/skills/_shared/scripts/download_patent_pdf.py",
+    "python", "~/.claude/skills/_shared/scripts/download_patent_pdf.py",
     "--kr", applno_list,
     "--out", f"{output_dir}/reference/",
     "--verify"
@@ -90,7 +90,7 @@ subprocess.run([
 
 ```python
 subprocess.run([
-    "python", "~/.codex/skills/_shared/scripts/download_patent_pdf.py",
+    "python", "~/.claude/skills/_shared/scripts/download_patent_pdf.py",
     "--gp", gp_id_list,  # 예: US10573627B2
     "--out", f"{output_dir}/reference/",
     "--verify"
