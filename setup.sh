@@ -5,6 +5,10 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGINS_DIR="$HOME/.claude/plugins"
 
+# git-bash 경로(/c/...)를 Windows python이 열 수 있는 네이티브 경로로 변환
+winpath() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s
+' "$1"; fi; }
+
 # ─── 1. Skills → Claude Code ──────────────────────────────────────────────────
 install_claude_skills() {
     local claude_skills="$HOME/.claude/skills"
@@ -82,29 +86,31 @@ update_plugin_registries() {
 
     local PY
     if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
-    "$PY" - <<EOF
-import json
+    # 경로는 환경변수로 전달 (Windows python은 /c/... 를 못 열고, C:\ 는 소스 보간 시 escape 문제)
+    IP_FILE="$(winpath "$ip_file")" KM_FILE="$(winpath "$km_file")"     PLUGIN_KEY="$plugin_key" INSTALL_PATH="$(winpath "$install_path")"     VERSION="$version" NOW="$now" SHA="$sha"     MARKETPLACE="$marketplace" GITHUB_REPO="$github_repo"     INSTALL_LOC="$(winpath "$PLUGINS_DIR/marketplaces/$marketplace")"     "$PY" - <<'EOF'
+import json, os
+e = os.environ
 
 # installed_plugins.json
-ip = json.load(open('$ip_file'))
-ip['plugins']['$plugin_key'] = [{
+ip = json.load(open(e['IP_FILE'], encoding='utf-8'))
+ip['plugins'][e['PLUGIN_KEY']] = [{
     'scope': 'user',
-    'installPath': '$install_path',
-    'version': '$version',
-    'installedAt': '$now',
-    'lastUpdated': '$now',
-    'gitCommitSha': '$sha'
+    'installPath': e['INSTALL_PATH'],
+    'version': e['VERSION'],
+    'installedAt': e['NOW'],
+    'lastUpdated': e['NOW'],
+    'gitCommitSha': e['SHA']
 }]
-json.dump(ip, open('$ip_file', 'w'), indent=2, ensure_ascii=False)
+json.dump(ip, open(e['IP_FILE'], 'w', encoding='utf-8'), indent=2, ensure_ascii=False)
 
 # known_marketplaces.json
-km = json.load(open('$km_file'))
-km['$marketplace'] = {
-    'source': {'source': 'github', 'repo': '$github_repo'},
-    'installLocation': '$PLUGINS_DIR/marketplaces/$marketplace',
-    'lastUpdated': '$now'
+km = json.load(open(e['KM_FILE'], encoding='utf-8'))
+km[e['MARKETPLACE']] = {
+    'source': {'source': 'github', 'repo': e['GITHUB_REPO']},
+    'installLocation': e['INSTALL_LOC'],
+    'lastUpdated': e['NOW']
 }
-json.dump(km, open('$km_file', 'w'), indent=2, ensure_ascii=False)
+json.dump(km, open(e['KM_FILE'], 'w', encoding='utf-8'), indent=2, ensure_ascii=False)
 EOF
     echo "  Registry updated."
 }
@@ -123,7 +129,8 @@ install_bkit() {
     local version
     local cfg="$temp_dir/bkit.config.json"
     if [[ -f "$cfg" ]]; then
-        version="$(python3 -c "import json; print(json.load(open('$cfg'))['version'])" 2>/dev/null || python -c "import json; print(json.load(open('$cfg'))['version'])")"
+        # Windows python 호환: 경로는 env 전달, 실패 시 sha 폴백 (set -e 중단 방지)
+        version="$(CFG="$(winpath "$cfg")" python3 -c "import json,os; print(json.load(open(os.environ['CFG'],encoding='utf-8'))['version'])" 2>/dev/null || CFG="$(winpath "$cfg")" python -c "import json,os; print(json.load(open(os.environ['CFG'],encoding='utf-8'))['version'])" 2>/dev/null || echo "${sha:0:12}")"
     else
         version="${sha:0:12}"
     fi
@@ -158,7 +165,7 @@ install_local_plugin() {
     fi
 
     local version
-    version="$(python3 -c "import json; print(json.load(open('$plugin_src/.claude-plugin/plugin.json'))['version'])" 2>/dev/null || python -c "import json; print(json.load(open('$plugin_src/.claude-plugin/plugin.json'))['version'])")"
+    version="$(CFG="$(winpath "$plugin_src/.claude-plugin/plugin.json")" python3 -c "import json,os; print(json.load(open(os.environ['CFG'],encoding='utf-8'))['version'])" 2>/dev/null || CFG="$(winpath "$plugin_src/.claude-plugin/plugin.json")" python -c "import json,os; print(json.load(open(os.environ['CFG'],encoding='utf-8'))['version'])")"
     local install_path="$cache_dir/$version"
 
     if [[ -d "$install_path" ]]; then
